@@ -95,7 +95,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 
 .bar-brand{
   display:flex;align-items:center;gap:9px;font-weight:800;font-size:14px;
-  flex:1;min-width:0;padding-left:2px;letter-spacing:-.2px;
+  flex:1;min-width:0;padding-left:14px;letter-spacing:-.2px;
 }
 .bar-brand .brand-mark{
   width:32px;height:32px;border-radius:10px;
@@ -425,7 +425,7 @@ body.reader-open .search-bar{display:none!important}
   z-index:80;pointer-events:none;opacity:0;transition:opacity .25s;
 }
 .reader-ui.visible{opacity:1}
-.reader-top,.reader-bottom{
+.reader-top{
   pointer-events:auto;display:flex;align-items:center;justify-content:space-between;
   padding:calc(8px + var(--safe-top)) 10px 8px;
   background:color-mix(in srgb,var(--surface) 94%,transparent);
@@ -433,8 +433,23 @@ body.reader-open .search-bar{display:none!important}
   border-bottom:1px solid var(--border);
 }
 .reader-bottom{
-  padding:8px 10px calc(8px + var(--safe-bottom));
+  pointer-events:auto; display:flex; flex-direction: column; align-items: stretch; gap: 12px;
+  padding:12px 14px calc(12px + var(--safe-bottom));
+  background:color-mix(in srgb,var(--surface) 94%,transparent);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border-top:1px solid var(--border);border-bottom:0;
+}
+.scrubber-row{
+  display: flex; align-items: center; gap: 10px; width: 100%;
+}
+.scrubber-row input[type=range]{
+  flex: 1; accent-color: var(--accent); height: 4px; margin: 0; cursor: pointer;
+}
+.scrubber-label{
+  font-size: 11px; font-weight: 800; color: var(--muted); min-width: 24px; text-align: center;
+}
+.bottom-actions-row{
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
 }
 .reader-title{
   max-width:56%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -447,7 +462,6 @@ body.reader-open .search-bar{display:none!important}
 }
 .reader-icon:hover{background:var(--surface-hover)}
 .reader-icon svg{width:19px;height:19px}
-.reader-progress{font-size:12px;color:var(--muted);font-weight:800}
 .reader-center-actions{display:flex;gap:2px}
 
 /* ============================================================
@@ -542,7 +556,7 @@ body.reader-open .search-bar{display:none!important}
 .textarea{min-height:110px;resize:vertical;font-family:inherit;line-height:1.5}
 
 .range-row{display:grid;grid-template-columns:1fr 68px;gap:10px;align-items:center}
-.range-row input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:24px}
+.range-row input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:24px; cursor:pointer;}
 .range-row input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--surface-hover);border-radius:99px}
 .range-row input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
@@ -728,9 +742,6 @@ body.reader-open .search-bar{display:none!important}
        TOP APP BAR
        ============================================================ -->
   <header class="app-bar" id="app-bar">
-    <button class="bar-btn" id="btn-menu" aria-label="Abrir menu">
-      <i data-lucide="menu"></i>
-    </button>
     <div class="bar-brand">
       <div class="brand-mark"><i data-lucide="book-open"></i></div>
       <span>Lumina Reader</span>
@@ -850,13 +861,19 @@ body.reader-open .search-bar{display:none!important}
         </div>
       </div>
       <div class="reader-bottom">
-        <div class="reader-center-actions">
-          <button class="reader-icon" id="btn-reader-bookmark" title="Marcar página"><i data-lucide="bookmark"></i></button>
-          <button class="reader-icon" id="btn-reader-annotations" title="Minhas marcações"><i data-lucide="sticky-note"></i></button>
+        <div class="scrubber-row">
+           <span class="scrubber-label" id="scrubber-current">1</span>
+           <input type="range" id="reader-page-slider" min="0" max="100" value="0">
+           <span class="scrubber-label" id="scrubber-total">1</span>
         </div>
-        <div class="reader-progress" id="reader-progress-text">Página 1 de 1</div>
-        <div class="reader-center-actions">
-          <button class="reader-icon" id="btn-reader-settings" title="Personalizar"><i data-lucide="sliders-horizontal"></i></button>
+        <div class="bottom-actions-row">
+          <div class="reader-center-actions">
+            <button class="reader-icon" id="btn-reader-bookmark" title="Marcar página"><i data-lucide="bookmark"></i></button>
+            <button class="reader-icon" id="btn-reader-annotations" title="Minhas marcações"><i data-lucide="sticky-note"></i></button>
+          </div>
+          <div class="reader-center-actions">
+            <button class="reader-icon" id="btn-reader-settings" title="Personalizar"><i data-lucide="sliders-horizontal"></i></button>
+          </div>
         </div>
       </div>
     </div>
@@ -945,6 +962,9 @@ body.reader-open .search-bar{display:none!important}
         <button data-orientation="landscape">Paisagem</button>
       </div>
     </div>
+    <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
+      <button class="soft-btn" id="btn-restore-settings"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
+    </div>
   </div>
 </section>
 
@@ -1026,8 +1046,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 const Utils={
   id:()=>crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36),
   esc:s=>{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML},
-  toast:(msg,icon='check')=>{
-    const t=document.createElement('div');t.className='toast';
+  toast:(msg,icon='check',id=null)=>{
+    if(id){
+      const ex=document.getElementById(id);
+      if(ex){
+        ex.innerHTML=`<i data-lucide="${icon}" style="width:15px;height:15px"></i><span>${Utils.esc(msg)}</span>`;
+        lucide.createIcons({root:ex});
+        return;
+      }
+    }
+    const t=document.createElement('div');t.className='toast';if(id)t.id=id;
     t.innerHTML=`<i data-lucide="${icon}" style="width:15px;height:15px"></i><span>${Utils.esc(msg)}</span>`;
     document.getElementById('toast-wrap').appendChild(t);
     lucide.createIcons({root:t});
@@ -1054,7 +1082,6 @@ const Utils={
     order:Number.isFinite(b.order)?b.order:Date.now(),
     manualOrder:!!b.manualOrder
   }),
-  // FIX: unified annotation type — library filters use plural, storage uses singular
   normalizeType:t=>t==='notes'?'note':t==='quotes'?'quote':t==='bookmarks'?'bookmark':t
 };
 window.addEventListener('unhandledrejection',e=>{console.error(e.reason);Utils.hideLoader()});
@@ -1119,7 +1146,6 @@ class DBManager{
   async addAnnotation(id,a){
     const b=await this.getBook(id);
     if(!b)return;
-    // normalize incoming type
     b.annotations.push({...a,type:Utils.normalizeType(a.type),id:Utils.id(),createdAt:Date.now()});
     await this.updateBook(b);
   }
@@ -1142,7 +1168,6 @@ class DBManager{
   async getSettings(){
     return this._exec('settings','readonly',s=>s.get('global')).then(s=>({...AppDefaults.settings,...(s||{})}));
   }
-  /* --- PAGINATION CACHE --- */
   async getPageCache(key){return this._exec('pagecache','readonly',s=>s.get(key))}
   async setPageCache(key,data){return this._exec('pagecache','readwrite',s=>s.put({key,...data,createdAt:Date.now()}))}
   async clearBookCache(bookId){
@@ -1467,22 +1492,63 @@ class ReaderEngine{
       const sel=window.getSelection();
       if(sel&&!sel.isCollapsed&&String(sel).trim())return;
       const rect=this.readerStage.getBoundingClientRect();const x=e.clientX-rect.left;
-      if(x<rect.width*.25)this.flip(-1);
-      else if(x>rect.width*.75)this.flip(1);
+      
+      // Ampliado a área de UI para 80% e deixado 10% de cada borda para avançar/retroceder.
+      if(x<rect.width*.10)this.flip(-1);
+      else if(x>rect.width*.90)this.flip(1);
       else this.ui.classList.contains('visible')?this.hideUI():this.showUI();
     });
+    
+    // Suporte Pinch-to-zoom & Swipe
     const tz=document.getElementById('reader-touch');
     let sx=0,sy=0,sw=false;
-    tz.addEventListener('touchstart',e=>{const t=e.changedTouches[0];sx=t.clientX;sy=t.clientY;sw=false},{passive:true});
-    tz.addEventListener('touchmove',e=>{const t=e.changedTouches[0];if(Math.abs(t.clientX-sx)>12)sw=true},{passive:true});
+    let isPinching = false;
+    let pinchStartDist = 0;
+    let pinchStartSize = 18;
+    let currentPinchSize = 18;
+
+    tz.addEventListener('touchstart',e=>{
+      if(e.touches.length === 2) {
+        isPinching = true;
+        pinchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        pinchStartSize = this.state.settings.fontSize || 18;
+        return;
+      }
+      if(e.touches.length === 1) {
+        const t=e.changedTouches[0];sx=t.clientX;sy=t.clientY;sw=false;
+      }
+    },{passive:false});
+
+    tz.addEventListener('touchmove',e=>{
+      if(isPinching && e.touches.length === 2) {
+        e.preventDefault();
+        const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        const scale = dist / pinchStartDist;
+        currentPinchSize = Utils.clamp(Math.round(pinchStartSize * scale), 12, 40);
+        Utils.toast(`Fonte: ${currentPinchSize}px`, 'type', 'pinch-toast');
+        return;
+      }
+      if(e.touches.length === 1) {
+        const t=e.changedTouches[0];if(Math.abs(t.clientX-sx)>12)sw=true;
+      }
+    },{passive:false});
+
     tz.addEventListener('touchend',e=>{
+      if(isPinching && e.touches.length < 2) {
+        isPinching = false;
+        if(currentPinchSize !== pinchStartSize) {
+          App.updateSetting('fontSize', currentPinchSize);
+        }
+        return;
+      }
       if(!sw)return;
       const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
       if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.3){
         this.suppress=true;setTimeout(()=>this.suppress=false,300);
         this.flip(dx<0?1:-1);
       }
-    },{passive:true});
+    },{passive:false});
+
     document.addEventListener('keydown',e=>{
       if(!document.getElementById('view-reader').classList.contains('active'))return;
       if(e.key==='ArrowRight')this.flip(1);
@@ -1507,6 +1573,20 @@ class ReaderEngine{
       document.querySelectorAll('.sel-color').forEach(x=>x.classList.remove('active'));
       btn.classList.add('active');
     });
+    
+    // Scrubber da interface de leitura rápida
+    const scrubber = document.getElementById('reader-page-slider');
+    if(scrubber) {
+      scrubber.addEventListener('input', e => {
+        document.getElementById('scrubber-current').textContent = Number(e.target.value) + 1;
+      });
+      scrubber.addEventListener('change', e => {
+        if(this.pageFlip) {
+           this.pageFlip.turnToPage(Number(e.target.value));
+        }
+      });
+    }
+
     document.addEventListener('mouseup',()=>setTimeout(()=>this.captureSelection(),0));
     document.addEventListener('touchend',()=>setTimeout(()=>this.captureSelection(),40),{passive:true});
     window.addEventListener('resize',Utils.debounce(()=>{
@@ -1589,7 +1669,6 @@ class ReaderEngine{
     this.totalChapters=numPages;
     this.chapterTitles=Array.from({length:numPages},(_,i)=>`Página ${i+1}`);
     this.chapterStarts=Array.from({length:numPages},(_,i)=>i);
-    // lazy placeholders
     this.pagesData=Array.from({length:numPages},(_,i)=>
       `<div class="pdf-page-wrap" data-pdf-page="${i+1}"><div class="pdf-loading"><div class="spinner"></div><span>Carregando página ${i+1}...</span></div></div>`
     );
@@ -1627,14 +1706,12 @@ class ReaderEngine{
     const sig=this.pagSignature(book,w,h);
     const cached=await this.db.getPageCache(sig);
     if(cached&&cached.pagesData){
-      // FAST PATH
       this.pagesData=cached.pagesData;
       this.pageMeta=cached.pageMeta;
       this.chapterStarts=cached.chapterStarts;
       this.chapterTitles=cached.chapterTitles;
       this.totalChapters=cached.totalChapters;
     }else{
-      // SLOW PATH
       const parsed=await EPUBParser.parse(buffer);
       this.currentExtractor=parsed.extractor;
       this.totalChapters=parsed.totalChapters;
@@ -1703,6 +1780,13 @@ class ReaderEngine{
       swipeDistance:30
     });
     this.pageFlip.loadFromHTML(Array.from(this.container.querySelectorAll('.page')));
+    
+    // Atualização do slider (scrubber) com o total de páginas
+    const slider = document.getElementById('reader-page-slider');
+    const totalMax = Math.max(0, this.pagesData.length - 1);
+    if(slider) slider.max = totalMax;
+    document.getElementById('scrubber-total').textContent = this.pagesData.length;
+
     this.pageFlip.on('flip',e=>{
       const i=e.data;
       this.updateProgressText(i);
@@ -1728,7 +1812,9 @@ class ReaderEngine{
     }
   }
   updateProgressText(i){
-    document.getElementById('reader-progress-text').textContent=`Página ${i+1} de ${this.pagesData.length}`;
+    const slider = document.getElementById('reader-page-slider');
+    if(slider) slider.value = i;
+    document.getElementById('scrubber-current').textContent = i + 1;
   }
   async flip(dir){
     if(!this.pageFlip||this.navigating)return;
@@ -2002,7 +2088,11 @@ class LibraryManager{
     document.getElementById('btn-organize').onclick=()=>this.openOrganizer(this.allBooks[0]||null);
     document.getElementById('btn-search-toggle').onclick=()=>App.openSearch();
     document.getElementById('btn-close-search').onclick=()=>App.closeSearch();
-    document.getElementById('btn-menu').onclick=()=>App.openDrawer();
+    
+    // Suporte se houver hamburger no futuro
+    const btnMenu = document.getElementById('btn-menu');
+    if (btnMenu) btnMenu.onclick = () => App.openDrawer();
+    
     document.getElementById('btn-close-drawer').onclick=()=>App.closeDrawer();
     document.getElementById('tab-more').onclick=()=>App.openDrawer();
     document.querySelectorAll('#bottom-nav [data-filter]').forEach(btn=>{
@@ -2251,7 +2341,6 @@ class LibraryManager{
     lucide.createIcons({root:container});
   }
   renderAnnotationsList(container,type){
-    // type is now singular ('note' | 'quote')
     const items=[];
     this.allBooks.forEach(b=>b.annotations.filter(a=>a.type===type).forEach(a=>items.push({book:b,a})));
     items.sort((a,b)=>(b.a.createdAt||0)-(a.a.createdAt||0));
@@ -2493,14 +2582,20 @@ const App={
   applySettings(){
     const s=this.state.settings;
     document.body.dataset.theme=s.theme;
-    const root=document.documentElement.style;
+    
+    // As cores costumizadas são postas diretamente no body para anular o tema padrão
+    const bodyStyle = document.body.style;
+    bodyStyle.setProperty('--reader-bg',s.readerBg);
+    bodyStyle.setProperty('--reader-text',s.readerText);
+    
+    const root = document.documentElement.style;
     root.setProperty('--reader-font',s.fontFamily);
+    const lh = Number(s.lineHeight) || AppDefaults.settings.lineHeight;
     root.setProperty('--reader-size',`${s.fontSize}px`);
-    root.setProperty('--reader-line',s.lineHeight);
+    root.setProperty('--reader-line', lh);
     root.setProperty('--reader-margin',`${s.margin}%`);
     root.setProperty('--reader-brightness',`${s.brightness/100}`);
-    root.setProperty('--reader-bg',s.readerBg);
-    root.setProperty('--reader-text',s.readerText);
+    
     document.querySelectorAll('.theme-option').forEach(b=>b.classList.toggle('active',b.dataset.themeValue===s.theme));
     document.querySelectorAll('#font-grid button').forEach(b=>b.classList.toggle('active',b.dataset.font===s.fontFamily));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.classList.toggle('active',b.dataset.orientation===s.orientation));
@@ -2508,7 +2603,7 @@ const App={
       const el=document.getElementById(`set-${k}`),val=document.getElementById(`val-${k}`);
       if(!el||!val)return;
       const key=k==='font-size'?'fontSize':k;
-      el.value=s[key];
+      el.value=s[key] || AppDefaults.settings[key];
       val.textContent=k==='font-size'?`${s[key]}px`:k==='line-height'?Number(s[key]).toFixed(2):k==='margin'?`${s[key]}%`:`${s[key]}%`;
     });
     const bg=document.getElementById('set-reader-bg');
@@ -2535,6 +2630,19 @@ const App={
     const txt=document.getElementById('set-reader-text');
     if(bg)bg.oninput=e=>this.updateSetting('readerBg',e.target.value);
     if(txt)txt.oninput=e=>this.updateSetting('readerText',e.target.value);
+    
+    const btnRestore = document.getElementById('btn-restore-settings');
+    if(btnRestore) {
+      btnRestore.onclick = () => {
+        this.state.settings = {...AppDefaults.settings};
+        this.persistSettings();
+        this.applySettings();
+        if(this.reader && document.getElementById('view-reader').classList.contains('active')) {
+          this.reader.triggerRePagination();
+        }
+        Utils.toast('Configurações padrão restauradas.', 'rotate-ccw');
+      };
+    }
   },
   setupScrollBehavior(){
     const views=document.querySelectorAll('.view');
