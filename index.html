@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Veredas Reader</title>
-<meta name="theme-color" content="#f7f7f5">
+<meta name="theme-color" content="#176B67">
+<!-- MANIFEST E ÍCONES PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192x192.png">
+
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -98,12 +102,12 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   display:flex;align-items:center;gap:9px;font-weight:800;font-size:14px;
   flex:1;min-width:0;padding-left:14px;letter-spacing:-.2px;
 }
-.bar-brand .brand-mark{
-  width:32px;height:32px;border-radius:10px;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  color:#fff;display:grid;place-items:center;flex-shrink:0;
+.brand-mark {
+  width: 34px; height: 34px; border-radius: 8px; 
+  display: grid; place-items: center; flex-shrink: 0; overflow: hidden;
+  background: transparent;
 }
-.bar-brand .brand-mark svg{width:16px;height:16px}
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 .bar-brand span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ============================================================
@@ -167,12 +171,6 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   padding:6px 8px 14px;margin-bottom:8px;
   border-bottom:1px solid var(--border);
 }
-.sidebar-head .brand-mark{
-  width:34px;height:34px;border-radius:11px;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  color:#fff;display:grid;place-items:center;flex-shrink:0;
-}
-.sidebar-head .brand-mark svg{width:17px;height:17px}
 .sidebar-head strong{font-size:14px;letter-spacing:-.2px;display:block}
 .sidebar-head small{color:var(--muted);font-size:11px}
 .sidebar-head .bar-btn{margin-left:auto;width:38px;height:38px}
@@ -375,7 +373,7 @@ body.bar-hidden .bottom-nav{transform:translateY(100%)}
 .bottom-nav button:hover{background:var(--surface-hover)}
 
 /* ============================================================
-   READER
+   READER (NOVO MOTOR DE ANIMAÇÃO)
    ============================================================ */
 body.reader-open .app-bar,
 body.reader-open .bottom-nav,
@@ -390,20 +388,26 @@ body.reader-open .search-bar{display:none!important}
   filter:brightness(var(--reader-brightness));
   min-width:0;min-height:0;overflow:hidden;
 }
-/* Slider (Substitui Flip-Book) */
+
+/* Slider CSS com transições JS */
 .slider-book{
-  display:flex;width:100%;height:100%;
-  overflow-x:auto;overflow-y:hidden;
-  scroll-snap-type:x mandatory;scroll-behavior:smooth;
-  scrollbar-width:none;
+  position:relative; width:100%; height:100%; overflow:hidden; display:block; touch-action: pan-y;
 }
-.slider-book::-webkit-scrollbar{display:none}
 .page{
-  flex:0 0 100%;height:100%;
-  scroll-snap-align:start;
-  background:var(--reader-bg, var(--theme-reader-bg));
-  color:var(--reader-text, var(--theme-reader-text));
-  overflow-y:auto;overflow-x:hidden;
+  position:absolute; inset:0; z-index:1; visibility:hidden;
+  transition:transform 0.45s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.45s ease;
+  background:var(--reader-bg, var(--theme-reader-bg)); color:var(--reader-text, var(--theme-reader-text));
+  overflow-y:auto; overflow-x:hidden; pointer-events:none;
+}
+.page.active{
+  visibility:visible; transform:translateX(0); z-index:3; pointer-events:auto;
+  box-shadow: -15px 0 45px rgba(0,0,0,0.12);
+}
+.page.prev{
+  visibility:visible; transform:translateX(-100%); z-index:2; opacity:0;
+}
+.page.next{
+  visibility:visible; transform:translateX(100%); z-index:2; opacity:0;
 }
 
 .page-content{min-height:100%;padding:var(--reader-margin);padding-bottom:38px;display:flex;flex-direction:column}
@@ -421,12 +425,12 @@ body.reader-open .search-bar{display:none!important}
 .annotation-note{outline:2px solid color-mix(in srgb,#c58cff 32%,transparent);outline-offset:1px;border-radius:3px}
 
 /* PDF Layout & TextLayer */
-.pdf-page-wrap{display:flex;align-items:center;justify-content:center;height:100%;width:100%;}
+.pdf-page-wrap{display:flex;align-items:center;justify-content:center;height:100%;width:100%;background:#fff;}
 .pdf-page-inner{position:relative;max-width:100%;max-height:100%;}
 .pdf-page-inner canvas{width:100%;height:100%;object-fit:contain;display:block;}
 .pdf-text-layer{position:absolute;inset:0;overflow:hidden;color:transparent;line-height:1;}
 .pdf-text-layer span{position:absolute;white-space:pre;cursor:text;transform-origin:0 0;}
-.pdf-text-layer mark{background:var(--accent);color:transparent;border-radius:3px;}
+.pdf-text-layer mark{background:var(--hl-color, var(--accent));color:transparent;border-radius:3px;}
 ::selection{background:rgba(40,120,255,0.4);color:transparent;}
 
 .pdf-loading{
@@ -552,12 +556,11 @@ body.reader-open .search-bar{display:none!important}
   background:var(--surface);
 }
 
-/* Segmented control */
+/* Forms e Configurações */
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:12px}
 .seg button{min-height:38px;border-radius:9px;font-size:11.5px;font-weight:700;color:var(--muted);transition:.15s}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
 
-/* Forms */
 .form-grid{display:grid;grid-template-columns:1fr;gap:12px}
 .form-group{margin-bottom:14px}
 .form-group.full{grid-column:1/-1}
@@ -632,7 +635,6 @@ body.reader-open .search-bar{display:none!important}
 .annotation-card:hover,.bookmark-card:hover,.collection-card:hover{
   border-color:color-mix(in srgb,var(--accent) 30%,var(--border));
 }
-.annotation-card:active,.bookmark-card:active{transform:scale(.99)}
 .item-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .item-type{
   font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
@@ -644,6 +646,13 @@ body.reader-open .search-bar{display:none!important}
   font-size:12px;color:var(--text);background:var(--surface);
   border-radius:10px;padding:9px;margin-top:8px;line-height:1.45;
 }
+
+/* Edit / Delete Buttons */
+.item-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.action-btn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+.action-btn:hover { background: var(--surface-hover); color: var(--text); }
+.action-btn.delete-btn:hover { color: #e11d48; border-color: #f43f5e; }
+
 .bookmark-icon{color:var(--accent)}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px}
 .chip{
@@ -760,7 +769,7 @@ body.reader-open .search-bar{display:none!important}
        ============================================================ -->
   <header class="app-bar" id="app-bar">
     <div class="bar-brand">
-      <div class="brand-mark"><i data-lucide="book-open"></i></div>
+      <div class="brand-mark"><img src="logo.png" alt="Veredas Reader"></div>
       <span>Veredas Reader</span>
     </div>
     <button class="bar-btn" id="btn-search-toggle" aria-label="Buscar">
@@ -791,9 +800,9 @@ body.reader-open .search-bar{display:none!important}
         <!-- SIDEBAR / DRAWER -->
         <aside class="sidebar" id="sidebar" aria-label="Navegação da biblioteca">
           <div class="sidebar-head">
-            <div class="brand-mark"><i data-lucide="book-open"></i></div>
+            <div class="brand-mark"><img src="logo.png" alt="Veredas Reader"></div>
             <div style="min-width:0">
-              <strong>Lumina Reader</strong>
+              <strong>Veredas Reader</strong>
               <small>Sua biblioteca local</small>
             </div>
             <button class="bar-btn" id="btn-close-drawer" aria-label="Fechar menu">
@@ -1013,11 +1022,11 @@ body.reader-open .search-bar{display:none!important}
 
 <section class="panel" id="panel-note">
   <div class="panel-head">
-    <div><h3>Adicionar anotação</h3><p>O trecho selecionado será vinculado à página atual.</p></div>
+    <div><h3>Sua anotação</h3><p>Edite ou adicione comentários ao seu trecho.</p></div>
     <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="form-group"><label class="form-label">Trecho selecionado</label>
+    <div class="form-group"><label class="form-label">Trecho</label>
       <div class="annotation-card" id="selected-preview"></div>
     </div>
     <div class="form-group"><label class="form-label">Sua nota</label>
@@ -1049,6 +1058,17 @@ body.reader-open .search-bar{display:none!important}
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
+/* ============================================================
+   SERVICE WORKER PWA
+   ============================================================ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log("Service Worker registrado com sucesso."))
+      .catch(err => console.error("Falha ao registrar Service Worker:", err));
+  });
+}
+
 /* ============================================================
    DEPENDÊNCIAS
    ============================================================ */
@@ -1158,6 +1178,12 @@ class DBManager{
     await this.updateBook(b);
     return true;
   }
+  async deleteBookmark(id, bmId){
+    const b=await this.getBook(id);
+    if(!b)return;
+    b.bookmarks=b.bookmarks.filter(x=>x.id!==bmId);
+    await this.updateBook(b);
+  }
   async addAnnotation(id,a){
     const b=await this.getBook(id);
     if(!b)return;
@@ -1169,6 +1195,12 @@ class DBManager{
     if(!b)return;
     b.annotations=b.annotations.filter(a=>a.id!==aid);
     await this.updateBook(b);
+  }
+  async updateNote(id, aid, newText){
+    const b=await this.getBook(id);
+    if(!b)return;
+    const ann=b.annotations.find(a=>a.id===aid);
+    if(ann){ann.note=newText; await this.updateBook(b);}
   }
   async deleteBook(id){
     return new Promise((resolve,reject)=>{
@@ -1409,7 +1441,7 @@ class PDFParser{
     try {
       const page = await pdf.getPage(pageNumber);
       const base = page.getViewport({scale: 1});
-      const scale = Math.min(maxW / base.width, maxH / base.height);
+      const scale = Math.min(maxW / base.width, maxH / base.height) * 0.98;
       const viewport = page.getViewport({scale});
 
       const canvas = document.createElement('canvas');
@@ -1458,6 +1490,14 @@ class PDFParser{
       console.error(e);
       wrapNode.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>';
     }
+  }
+  static async renderPageToDataURL(pdf, pageNumber, maxW, maxH, quality=0.7) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: Math.min(maxW / page.getViewport({ scale: 1 }).width, maxH / page.getViewport({ scale: 1 }).height) });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    return canvas.toDataURL('image/jpeg', quality);
   }
   static async getTitle(pdf){
     try{
@@ -1546,15 +1586,6 @@ class ReaderEngine{
     this.bind();
   }
   bind(){
-    this.readerStage.addEventListener('click',e=>{
-      // Ignora clique se for nos menus e bloqueia a virada de página; aciona apenas menus
-      if(e.target.closest('.reader-ui'))return;
-      const sel=window.getSelection();
-      if(sel&&!sel.isCollapsed&&String(sel).trim())return;
-      
-      this.ui.classList.contains('visible')?this.hideUI():this.showUI();
-    });
-    
     document.addEventListener('keydown',e=>{
       if(!document.getElementById('view-reader').classList.contains('active'))return;
       if(e.key==='ArrowRight')this.flip(1);
@@ -1767,7 +1798,12 @@ class ReaderEngine{
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
       d.className='page';d.dataset.page=i;
-      d.innerHTML=`<div class="page-content"><div class="page-text" style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">Página ${i+1} de ${this.pagesData.length}</div></div>`;
+      const isPdf = this.currentBook.format === 'pdf';
+      
+      d.innerHTML = isPdf
+        ? html 
+        : `<div class="page-content"><div class="page-text" style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">Página ${i+1} de ${this.pagesData.length}</div></div>`;
+      
       this.container.appendChild(d);
     });
     
@@ -1778,32 +1814,66 @@ class ReaderEngine{
     if(slider) slider.max = totalMax;
     document.getElementById('scrubber-total').textContent = this.pagesData.length;
 
-    this.container.addEventListener('scroll', Utils.debounce(() => {
-      if(!this.container) return;
-      const index = Math.round(this.container.scrollLeft / this.container.clientWidth);
-      if(this.currentPageIndex !== index && index >= 0 && index < this.pagesData.length) {
-        this.currentPageIndex = index;
-        this.updateProgressText(index);
-        this.persistProgressDebounced(index);
-        this.applyAnnotationsToRenderedPage(index);
-        this.renderPdfPageIfNeeded(index);
-      }
-    }, 40), {passive: true});
-
-    // Posição inicial sem animação
-    this.currentPageIndex = startIndex;
-    this.container.style.scrollBehavior = 'auto';
-    this.container.scrollLeft = startIndex * window.innerWidth; // usa largura cheia para scroll
-    this.container.style.scrollBehavior = 'smooth';
+    // Configurar lógica de Touch para Animação da Virada
+    let startX = 0, currentX = 0, isDragging = false;
+    this.container.addEventListener('touchstart', e => {
+        if(e.target.closest('.reader-ui')) return;
+        startX = e.touches[0].clientX;
+        currentX = startX;
+        isDragging = true;
+    }, {passive: true});
     
-    this.updateProgressText(startIndex);
-    this.applyAnnotationsToRenderedPage(startIndex);
-    this.renderPdfPageIfNeeded(startIndex);
+    this.container.addEventListener('touchmove', e => {
+        if(!isDragging) return;
+        currentX = e.touches[0].clientX;
+    }, {passive: true});
+    
+    this.container.addEventListener('touchend', e => {
+        if(!isDragging) return;
+        isDragging = false;
+        const delta = startX - currentX;
+        if (Math.abs(delta) > 50) {
+            if(delta > 0) this.flip(1);
+            else this.flip(-1);
+        } else if(Math.abs(delta) < 10) {
+            const w = window.innerWidth;
+            if(startX < w * 0.25) this.flip(-1);
+            else if(startX > w * 0.75) this.flip(1);
+            else { this.ui.classList.contains('visible') ? this.hideUI() : this.showUI(); }
+        }
+    });
+    
+    // Tratamento para cliques no desktop
+    this.container.addEventListener('click', e => {
+        if(e.target.closest('.reader-ui')) return;
+        const sel = window.getSelection();
+        if(sel && !sel.isCollapsed && String(sel).trim()) return;
+        if(e.pointerType === 'mouse') {
+            const w = window.innerWidth;
+            if(e.clientX < w * 0.25) this.flip(-1);
+            else if(e.clientX > w * 0.75) this.flip(1);
+            else { this.ui.classList.contains('visible') ? this.hideUI() : this.showUI(); }
+        }
+    });
+
+    this.turnToPage(startIndex);
   }
   
   turnToPage(index){
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
-       this.sliderBook.scrollTo({ left: index * this.sliderBook.clientWidth, behavior: 'smooth' });
+       this.currentPageIndex = index;
+       const pages = this.container.querySelectorAll('.page');
+       pages.forEach((p, i) => {
+           p.classList.remove('active', 'prev', 'next');
+           if(i === index) p.classList.add('active');
+           else if(i < index) p.classList.add('prev');
+           else p.classList.add('next');
+       });
+       
+       this.updateProgressText(index);
+       this.persistProgressDebounced(index);
+       this.applyAnnotationsToRenderedPage(index);
+       this.renderPdfPageIfNeeded(index);
     }
   }
 
@@ -1814,9 +1884,10 @@ class ReaderEngine{
     wrap.dataset.rendered='1';
     const pageNo=parseInt(wrap.dataset.pdfPage,10);
     try{
-      const mobile=window.innerWidth<800||window.innerHeight>window.innerWidth;
-      const w=mobile?window.innerWidth:window.innerWidth/2;
-      const h=window.innerHeight;
+      // Usar bounding rect garante que o PDF use 100% da área disponível
+      const rect = wrap.getBoundingClientRect();
+      const w = rect.width > 0 ? rect.width : window.innerWidth;
+      const h = rect.height > 0 ? rect.height : window.innerHeight;
       await PDFParser.renderPageToContainer(this.pdfDoc, pageNo, wrap, w, h);
       this.applyAnnotationsToRenderedPage(pageIndex);
     }catch(e){
@@ -1919,13 +1990,37 @@ class ReaderEngine{
     document.getElementById('selected-preview').innerHTML=
       `<div class="item-type">Trecho selecionado</div><div class="item-text">“${Utils.esc(s.text)}”</div><div class="item-meta">Página ${s.pageIndex+1} de ${this.pagesData.length}</div>`;
     document.getElementById('note-text').value='';
+    document.getElementById('btn-save-note').dataset.editId = '';
+    document.getElementById('btn-save-note').dataset.bookId = '';
     App.openPanel('panel-note');
   }
   async saveNote(){
+    const btn = document.getElementById('btn-save-note');
+    const note = document.getElementById('note-text').value.trim();
+    if(!note){Utils.toast('Escreva uma nota antes de salvar.','edit-3');return}
+    
+    const editId = btn.dataset.editId;
+    const bId = btn.dataset.bookId || this.currentBook?.id;
+
+    if (editId && bId) {
+        await App.db.updateNote(bId, editId, note);
+        Utils.toast('Anotação atualizada.', 'check');
+        btn.dataset.editId = '';
+        btn.dataset.bookId = '';
+        App.closePanels();
+        
+        if (this.currentBook && this.currentBook.id === bId) {
+            this.currentBook = await App.db.getBook(bId);
+            this.applyAnnotationsToRenderedPage(this.currentPageIndex);
+            this.showAnnotations();
+        } else {
+            App.library.render();
+        }
+        return;
+    }
+
     if(!this.pendingSelection||!this.currentBook)return;
     const s=this.pendingSelection;
-    const note=document.getElementById('note-text').value.trim();
-    if(!note){Utils.toast('Escreva uma nota antes de salvar.','edit-3');return}
     await this.db.addAnnotation(this.currentBook.id,{
       type:'note',bookId:this.currentBook.id,pageIndex:s.pageIndex,
       chapter:this.pageMeta[s.pageIndex]?.chapter||0,
@@ -1967,7 +2062,6 @@ class ReaderEngine{
       const a=(this.currentBook?.annotations||[]).find(x=>
         x.pageIndex===Number(root.closest('.page')?.dataset.page||-1)&&x.start===start&&x.end===end);
       
-      // Se for PDF, o TextLayer é transparente, e a cor vai para o background
       const isPdf = root.classList.contains('pdf-text-layer');
       if (isPdf) {
          mark.style.setProperty('--hl-color', a?.color||'#f3d76a');
@@ -2122,11 +2216,6 @@ class LibraryManager{
         const view=document.getElementById('view-home');
         if(view)view.scrollTo({top:0,behavior:'smooth'});
       };
-    });
-  }
-  syncBottomNavFromSidebar(){
-    document.querySelectorAll('#bottom-nav [data-filter]').forEach(x=>{
-      x.classList.toggle('active',x.dataset.filter===this.currentFilter);
     });
   }
   baseBooks(){
@@ -2346,8 +2435,22 @@ class LibraryManager{
           <i data-lucide="bookmark" class="bookmark-icon" style="width:16px;height:16px"></i>
         </div>
         <div class="item-text">${Utils.esc(m.title||'Página salva')}</div>
-        <div class="item-meta">${Utils.esc(book.title)} · página ${(m.globalPage??m.pageIndex??0)+1}${m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>`;
+        <div class="item-meta">${Utils.esc(book.title)} · página ${(m.globalPage??m.pageIndex??0)+1}${m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>
+        <div class="item-actions">
+           <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+        </div>`;
+      
       c.onclick=()=>App.reader.openBook({...book,progress:{...(book.progress||{}),globalPage:m.globalPage??0}});
+      
+      c.querySelector('.delete-btn').onclick = async (e) => {
+        e.stopPropagation();
+        if(confirm('Excluir este marcador?')) {
+           await App.db.deleteBookmark(book.id, m.id);
+           Utils.toast('Marcador excluído.', 'trash');
+           this.render();
+        }
+      };
+      
       container.appendChild(c);
     });
     lucide.createIcons({root:container});
@@ -2373,8 +2476,35 @@ class LibraryManager{
         </div>
         <div class="item-text">“${Utils.esc(a.text)}”</div>
         ${a.note?`<div class="item-note">${Utils.esc(a.note)}</div>`:''}
-        <div class="item-meta">${Utils.esc(book.title)} · página ${(a.pageIndex||0)+1}</div>`;
+        <div class="item-meta">${Utils.esc(book.title)} · página ${(a.pageIndex||0)+1}</div>
+        <div class="item-actions">
+           ${isNote ? `<button class="action-btn edit-btn" title="Editar"><i data-lucide="edit-3"></i></button>` : ''}
+           <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+        </div>`;
+      
       c.onclick=()=>App.reader.openBook({...book,progress:{...(book.progress||{}),globalPage:a.pageIndex||0}});
+      
+      c.querySelector('.delete-btn').onclick = async (e) => {
+        e.stopPropagation();
+        if(confirm(`Excluir esta ${isNote ? 'anotação' : 'citação'}?`)) {
+           await App.db.deleteAnnotation(book.id, a.id);
+           Utils.toast('Item excluído.', 'trash');
+           this.render();
+        }
+      };
+
+      if(isNote) {
+         c.querySelector('.edit-btn').onclick = (e) => {
+            e.stopPropagation();
+            document.getElementById('selected-preview').innerHTML = 
+                `<div class="item-type">Trecho original</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">Página ${(a.pageIndex||0)+1}</div>`;
+            document.getElementById('note-text').value = a.note;
+            document.getElementById('btn-save-note').dataset.editId = a.id;
+            document.getElementById('btn-save-note').dataset.bookId = book.id;
+            App.openPanel('panel-note');
+         };
+      }
+      
       container.appendChild(c);
     });
     lucide.createIcons({root:container});
@@ -2699,6 +2829,12 @@ const App={
       document.getElementById('backdrop').classList.remove('visible');
     }
   },
+  async reloadAnnotations() {
+    if (!this.reader.currentBook) return;
+    const b = await this.db.getBook(this.reader.currentBook.id);
+    this.reader.currentBook = b;
+    this.renderAnnotationPanel(b);
+  },
   renderAnnotationPanel(book){
     const body=document.getElementById('annotations-body');
     body.innerHTML='';
@@ -2709,6 +2845,7 @@ const App={
       h.textContent=title;
       body.appendChild(h);
       items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(a=>{
+        const isNote = a.type === 'note';
         const c=document.createElement('div');
         c.className='annotation-card';
         c.innerHTML=`
@@ -2718,8 +2855,40 @@ const App={
           </div>
           ${a.text?`<div class="item-text">“${Utils.esc(a.text)}”</div>`:''}
           ${a.note?`<div class="item-note">${Utils.esc(a.note)}</div>`:''}
-          <div class="item-meta">Página ${(a.pageIndex||0)+1}</div>`;
-        c.onclick=()=>{this.closePanels();this.reader.turnToPage(a.pageIndex||0)};
+          <div class="item-meta">Página ${(a.pageIndex||0)+1}</div>
+          <div class="item-actions">
+             ${isNote ? `<button class="action-btn edit-btn" title="Editar"><i data-lucide="edit-3"></i></button>` : ''}
+             <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+          </div>`;
+        
+        c.onclick=(e)=>{ 
+            if(!e.target.closest('.item-actions')) {
+                this.closePanels(); this.reader.turnToPage(a.pageIndex||0);
+            }
+        };
+
+        c.querySelector('.delete-btn').onclick = async (e) => {
+            e.stopPropagation();
+            if(confirm(`Excluir esta ${title.toLowerCase().slice(0,-1)}?`)) {
+                await this.db.deleteAnnotation(book.id, a.id);
+                Utils.toast('Item excluído.', 'trash');
+                this.reader.applyAnnotationsToRenderedPage(a.pageIndex);
+                this.reloadAnnotations();
+            }
+        };
+
+        if(isNote) {
+            c.querySelector('.edit-btn').onclick = (e) => {
+                e.stopPropagation();
+                document.getElementById('selected-preview').innerHTML = 
+                    `<div class="item-type">Trecho original</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">Página ${(a.pageIndex||0)+1}</div>`;
+                document.getElementById('note-text').value = a.note;
+                document.getElementById('btn-save-note').dataset.editId = a.id;
+                document.getElementById('btn-save-note').dataset.bookId = book.id;
+                App.openPanel('panel-note');
+            };
+        }
+
         body.appendChild(c);
       });
     };
@@ -2740,8 +2909,26 @@ const App={
             <i data-lucide="bookmark" style="width:16px;height:16px;color:var(--accent)"></i>
           </div>
           <div class="item-text">${Utils.esc(m.title||'Página salva')}</div>
-          <div class="item-meta">Página ${(m.globalPage??m.pageIndex??0)+1}</div>`;
-        c.onclick=()=>{this.closePanels();this.reader.turnToPage(m.globalPage??0)};
+          <div class="item-meta">Página ${(m.globalPage??m.pageIndex??0)+1}</div>
+          <div class="item-actions">
+             <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+          </div>`;
+          
+        c.onclick=(e)=>{ 
+            if(!e.target.closest('.item-actions')) {
+                this.closePanels(); this.reader.turnToPage(m.globalPage??0);
+            }
+        };
+
+        c.querySelector('.delete-btn').onclick = async (e) => {
+            e.stopPropagation();
+            if(confirm('Excluir este marcador?')) {
+                await this.db.deleteBookmark(book.id, m.id);
+                Utils.toast('Marcador excluído.', 'trash');
+                this.reloadAnnotations();
+            }
+        };
+
         body.appendChild(c);
       });
     }
