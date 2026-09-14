@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Veredas Reader</title>
 <meta name="theme-color" content="#176B67">
+<link rel="icon" href="favicon.png" type="image/x-icon">
 <!-- MANIFEST E ÍCONES PWA -->
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192x192.png">
@@ -449,6 +450,15 @@ body.reader-open .search-bar{display:none!important}
 }
 .pdf-loading .spinner{width:26px;height:26px;border-width:2px;margin:0}
 
+/* PDF: leitura por página (lateral) ou contínua, como em leitores dedicados. */
+.page.pdf-page{overflow:auto;overscroll-behavior:contain;background:#e9e9e9;touch-action:pan-x pan-y pinch-zoom}
+.slider-book.pdf-vertical{overflow-y:auto;overflow-x:hidden;background:#e9e9e9;scroll-snap-type:y proximity;perspective:none;touch-action:pan-y pinch-zoom}
+.slider-book.pdf-vertical .page.pdf-page{position:relative;inset:auto;visibility:visible;transform:none;opacity:1;z-index:auto;pointer-events:auto;min-height:100%;margin:0 0 12px;overflow:visible;scroll-snap-align:start;box-shadow:none}
+.slider-book.pdf-vertical .page.pdf-page .pdf-page-wrap{min-height:calc(100dvh - 16px)}
+.slider-book.pdf-vertical .page.pdf-page.turning-left,.slider-book.pdf-vertical .page.pdf-page.turning-right{transform:none!important;opacity:1!important}
+.pdf-zoom-badge{position:absolute;right:14px;bottom:16px;z-index:5;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font:700 11px var(--ui-font);pointer-events:none;opacity:0;transition:opacity .2s}
+.pdf-zoom-badge.show{opacity:1}
+
 .reader-stage,.page,.page-text{user-select:text;-webkit-user-select:text}
 .reader-stage{-webkit-touch-callout:none}
 
@@ -515,6 +525,13 @@ body.reader-open .search-bar{display:none!important}
 .reader-icon:hover{background:var(--surface-hover)}
 .reader-icon svg{width:19px;height:19px}
 .reader-center-actions{display:flex;gap:2px}
+.reader-icon.is-playing{background:var(--accent);color:#fff}
+
+/* Player de voz: controles grandes e legíveis também com a tela bloqueada. */
+.tts-now-playing{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;background:var(--surface-2);margin-bottom:14px}
+.tts-now-playing i{color:var(--accent);width:24px;height:24px;flex:none}.tts-now-playing strong,.tts-now-playing small{display:block}.tts-now-playing small{font-size:11px;color:var(--muted);margin-top:3px}
+.tts-play-row{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;margin:12px 0}.tts-play-row .reader-icon{border:1px solid var(--border);background:var(--surface)}
+.tts-play-row .reader-icon.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* ============================================================
    SELECTION POPUP
@@ -526,6 +543,7 @@ body.reader-open .search-bar{display:none!important}
   max-width:min(96vw,520px);flex-wrap:wrap;justify-content:center;
 }
 .selection-pop.show{display:flex}
+.selection-pop.below{transform:translate(-50%,0)}
 .selection-pop button{
   min-height:38px;border-radius:10px;padding:0 11px;
   display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
@@ -912,6 +930,8 @@ body.reader-open .search-bar{display:none!important}
         </div>
         <div class="reader-title" id="reader-title">Carregando...</div>
         <div class="reader-actions">
+          <button class="reader-icon" id="btn-reader-layout" aria-label="Modo de leitura do PDF" title="Modo do PDF" hidden><i data-lucide="columns-2"></i></button>
+          <button class="reader-icon" id="btn-reader-tts" aria-label="Ouvir leitura" title="Ouvir leitura"><i data-lucide="headphones"></i></button>
           <button class="reader-icon" id="btn-reader-toc" aria-label="Sumário"><i data-lucide="list"></i></button>
         </div>
       </div>
@@ -1022,6 +1042,33 @@ body.reader-open .search-bar{display:none!important}
     </div>
     <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
       <button class="soft-btn" id="btn-restore-settings"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-tts">
+  <div class="panel-head">
+    <div><h3>Ouvir leitura</h3><p>Continue de onde parou, no seu ritmo.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+  </div>
+  <div class="panel-body">
+    <div class="tts-now-playing"><i data-lucide="headphones"></i><div><strong id="tts-book-title">Livro</strong><small id="tts-status">Pronto para começar</small></div></div>
+    <div class="tts-play-row">
+      <button class="reader-icon" id="btn-tts-back" aria-label="Trecho anterior"><i data-lucide="rewind"></i></button>
+      <button class="reader-icon primary" id="btn-tts-play" aria-label="Iniciar leitura"><i data-lucide="play"></i></button>
+      <button class="reader-icon" id="btn-tts-forward" aria-label="Próximo trecho"><i data-lucide="fast-forward"></i></button>
+    </div>
+    <div class="setting-section"><h4>Velocidade</h4>
+      <div class="seg" id="tts-rate-grid">
+        <button data-tts-rate="0.8">0,8×</button><button data-tts-rate="1" class="active">1×</button><button data-tts-rate="1.25">1,25×</button><button data-tts-rate="1.5">1,5×</button><button data-tts-rate="2">2×</button>
+      </div>
+    </div>
+    <div class="setting-section"><h4>Voz</h4>
+      <label class="form-label" for="tts-voice">Escolha uma voz disponível no dispositivo</label>
+      <select class="field" id="tts-voice"><option value="">Voz padrão do sistema</option></select>
+    </div>
+    <div class="setting-section"><h4>Durante a reprodução</h4>
+      <p style="font-size:12px;line-height:1.5;color:var(--muted)">A leitura avança página a página. Os controles do sistema aparecem quando o navegador oferece suporte.</p>
     </div>
   </div>
 </section>
@@ -1262,7 +1309,8 @@ class DBManager{
 
 const AppDefaults={settings:{
   theme:'light',fontFamily:"'Merriweather',serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
-  readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true
+  readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
+  pdfReadingMode:'lateral',pdfZoom:1,ttsRate:1,ttsVoiceURI:''
 }};
 
 /* ============================================================
@@ -1471,13 +1519,13 @@ class PDFParser{
     const pdf=await pdfjsLib.getDocument({data:buffer}).promise;
     return{pdf,numPages:pdf.numPages};
   }
-  static async renderPageToContainer(pdf, pageNumber, wrapNode, maxW, maxH) {
+  static async renderPageToContainer(pdf, pageNumber, wrapNode, maxW, maxH, zoom=1) {
     try {
       const page = await pdf.getPage(pageNumber);
       const base = page.getViewport({scale: 1});
       // Prioriza a largura. Em telas estreitas, a leitura continua em rolagem vertical
       // em vez de reduzir a página até ela ficar ilegível para caber na altura.
-      const scale = Math.max(0.1, (maxW - 16) / base.width);
+      const scale = Math.max(0.1, (maxW - 16) / base.width) * Math.max(.75,Math.min(3,zoom));
       const viewport = page.getViewport({scale});
 
       const canvas = document.createElement('canvas');
@@ -1610,6 +1658,139 @@ class DOMPaginator{
 /* ============================================================
    READER ENGINE
    ============================================================ */
+class TextToSpeechController{
+  constructor(reader){
+    this.reader=reader;this.supported='speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    this.playing=false;this.paused=false;this.pageIndex=0;this.segmentIndex=0;this.segments=[];this.runId=0;this.wakeLock=null;
+    this.bind();
+  }
+  bind(){
+    const open=()=>this.openPanel();
+    document.getElementById('btn-reader-tts').onclick=open;
+    document.getElementById('btn-tts-play').onclick=()=>this.toggle();
+    document.getElementById('btn-tts-back').onclick=()=>this.skip(-1);
+    document.getElementById('btn-tts-forward').onclick=()=>this.skip(1);
+    document.querySelectorAll('[data-tts-rate]').forEach(btn=>btn.onclick=async()=>{
+      await App.updateSetting('ttsRate',Number(btn.dataset.ttsRate));
+      this.refreshPanel();
+      if(this.playing){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
+    });
+    document.getElementById('tts-voice').onchange=async e=>{
+      await App.updateSetting('ttsVoiceURI',e.target.value);
+      if(this.playing){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
+    };
+    if(this.supported){
+      speechSynthesis.addEventListener?.('voiceschanged',()=>this.populateVoices());
+      window.addEventListener('pagehide',()=>this.stop());
+    }
+  }
+  populateVoices(){
+    const select=document.getElementById('tts-voice');if(!select||!this.supported)return;
+    const chosen=App.state.settings.ttsVoiceURI||'';
+    const voices=speechSynthesis.getVoices().slice().sort((a,b)=>{
+      const aPt=/^pt/i.test(a.lang)?0:1,bPt=/^pt/i.test(b.lang)?0:1;
+      return aPt-bPt||a.name.localeCompare(b.name);
+    });
+    select.innerHTML='<option value="">Voz padrão do sistema</option>';
+    voices.forEach(v=>{
+      const option=document.createElement('option');option.value=v.voiceURI;option.textContent=`${v.name} — ${v.lang}`;
+      if(v.voiceURI===chosen)option.selected=true;select.appendChild(option);
+    });
+  }
+  refreshPanel(){
+    const title=this.reader.currentBook?.title||'Livro';
+    document.getElementById('tts-book-title').textContent=title;
+    document.getElementById('tts-status').textContent=!this.supported?'Leitura em voz alta não disponível neste navegador':this.paused?'Em pausa':this.playing?`Lendo página ${this.pageIndex+1} de ${this.reader.pagesData.length}`:'Pronto para começar';
+    const btn=document.getElementById('btn-tts-play');
+    btn.disabled=!this.supported;btn.setAttribute('aria-label',this.playing&&!this.paused?'Pausar leitura':'Iniciar leitura');
+    btn.innerHTML=`<i data-lucide="${this.playing&&!this.paused?'pause':'play'}"></i>`;
+    document.getElementById('btn-reader-tts')?.classList.toggle('is-playing',this.playing&&!this.paused);
+    document.querySelectorAll('[data-tts-rate]').forEach(x=>x.classList.toggle('active',Number(x.dataset.ttsRate)===Number(App.state.settings.ttsRate||1)));
+    lucide.createIcons({root:document.getElementById('panel-tts')});
+  }
+  openPanel(){
+    if(!this.supported)Utils.toast('A leitura em voz alta não é suportada neste navegador.','alert-triangle');
+    if(!this.playing)this.pageIndex=this.reader.currentPageIndex;
+    this.populateVoices();this.refreshPanel();App.openPanel('panel-tts');
+  }
+  async toggle(){
+    if(!this.supported)return;
+    if(this.playing&&!this.paused){speechSynthesis.pause();this.paused=true;this.updateMediaSession('paused');this.refreshPanel();return}
+    if(this.playing&&this.paused){speechSynthesis.resume();this.paused=false;this.updateMediaSession('playing');this.refreshPanel();return}
+    await this.start(this.reader.currentPageIndex,0);
+  }
+  async start(pageIndex,segmentIndex=0){
+    if(!this.reader.currentBook)return;
+    this.stop(false);this.playing=true;this.paused=false;this.pageIndex=Utils.clamp(pageIndex,0,this.reader.pagesData.length-1);this.segmentIndex=segmentIndex;
+    await this.requestWakeLock();this.updateMediaSession('playing');this.refreshPanel();
+    await this.loadPageAndSpeak();
+  }
+  async loadPageAndSpeak(){
+    const run=++this.runId;
+    try{
+      const text=await this.reader.getPageSpeechText(this.pageIndex);
+      if(!this.playing||run!==this.runId)return;
+      this.segments=this.segmentText(text);
+      if(!this.segments.length){this.advance();return}
+      this.segmentIndex=Utils.clamp(this.segmentIndex,0,this.segments.length-1);
+      this.speakSegment(run);
+    }catch(e){console.error(e);this.stop();Utils.toast('Não foi possível preparar este trecho para áudio.','alert-triangle')}
+  }
+  segmentText(text){
+    const normalized=(text||'').replace(/\s+/g,' ').trim();if(!normalized)return[];
+    const sentences=normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g)||[normalized];
+    const parts=[];let current='';
+    sentences.forEach(sentence=>{
+      if((current+' '+sentence).length>280&&current){parts.push(current.trim());current=sentence}
+      else current+=' '+sentence;
+    });
+    if(current.trim())parts.push(current.trim());return parts;
+  }
+  speakSegment(run){
+    if(!this.playing||run!==this.runId)return;
+    const utterance=new SpeechSynthesisUtterance(this.segments[this.segmentIndex]);
+    const voiceURI=App.state.settings.ttsVoiceURI;
+    utterance.voice=speechSynthesis.getVoices().find(v=>v.voiceURI===voiceURI)||null;
+    utterance.lang=utterance.voice?.lang||document.documentElement.lang||'pt-BR';
+    utterance.rate=Number(App.state.settings.ttsRate)||1;
+    utterance.onend=()=>{
+      if(!this.playing||run!==this.runId)return;
+      this.segmentIndex++;
+      if(this.segmentIndex<this.segments.length)this.speakSegment(run);else this.advance();
+    };
+    utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled'){console.warn(e);this.stop();Utils.toast('A voz foi interrompida pelo navegador.','alert-triangle')}};
+    speechSynthesis.speak(utterance);
+  }
+  advance(){
+    if(!this.playing)return;
+    if(this.pageIndex>=this.reader.pagesData.length-1){this.stop();Utils.toast('Leitura concluída.','check-circle');return}
+    this.pageIndex++;this.segmentIndex=0;this.reader.turnToPage(this.pageIndex,{fromTts:true});this.refreshPanel();this.loadPageAndSpeak();
+  }
+  skip(direction){
+    const next=Utils.clamp(this.pageIndex+direction,0,this.reader.pagesData.length-1);
+    if(next===this.pageIndex&&direction<0){this.segmentIndex=0;if(this.playing){this.stop(false);this.start(next,0)}return}
+    if(this.playing){this.stop(false);this.start(next,0)}else{this.reader.turnToPage(next);this.pageIndex=next;this.refreshPanel()}
+  }
+  async requestWakeLock(){
+    try{if('wakeLock' in navigator)this.wakeLock=await navigator.wakeLock.request('screen')}catch(e){}
+  }
+  async releaseWakeLock(){try{await this.wakeLock?.release?.()}catch(e){}this.wakeLock=null}
+  updateMediaSession(state){
+    if(!('mediaSession' in navigator))return;
+    try{
+      navigator.mediaSession.playbackState=state;
+      navigator.mediaSession.metadata=new MediaMetadata({title:this.reader.currentBook?.title||'Leitura',artist:'Veredas Reader'});
+      navigator.mediaSession.setActionHandler('play',()=>this.toggle());
+      navigator.mediaSession.setActionHandler('pause',()=>this.toggle());
+      navigator.mediaSession.setActionHandler('nexttrack',()=>this.skip(1));
+      navigator.mediaSession.setActionHandler('previoustrack',()=>this.skip(-1));
+    }catch(e){}
+  }
+  stop(release=true){
+    this.runId++;if(this.supported)speechSynthesis.cancel();this.playing=false;this.paused=false;if(release)this.releaseWakeLock();this.updateMediaSession('none');this.refreshPanel();
+  }
+}
+
 class ReaderEngine{
   constructor(db,state){
     this.db=db;this.state=state;
@@ -1622,8 +1803,10 @@ class ReaderEngine{
     this.navigating=false;this.uiTimer=null;
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
     this.annotationPressTimer=null;this.activeAnnotationId=null;
+    this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
     this.persistProgressDebounced=Utils.debounce(i=>this.persistProgress(i),900);
     this.bind();
+    this.tts=new TextToSpeechController(this);
   }
   bind(){
     document.addEventListener('keydown',e=>{
@@ -1640,6 +1823,7 @@ class ReaderEngine{
     document.getElementById('btn-reader-annotations').onclick=()=>this.showAnnotations();
     document.getElementById('btn-reader-settings').onclick=()=>App.openPanel('panel-settings');
     document.getElementById('btn-reader-toc').onclick=()=>this.openToc();
+    document.getElementById('btn-reader-layout').onclick=()=>this.togglePdfReadingMode();
     document.getElementById('sel-highlight').onclick=()=>this.saveSelection('highlight');
     document.getElementById('sel-quote').onclick=()=>this.saveSelection('quote');
     document.getElementById('sel-note').onclick=()=>this.openNoteForSelection();
@@ -1663,8 +1847,11 @@ class ReaderEngine{
       });
     }
 
-    document.addEventListener('mouseup',()=>setTimeout(()=>this.captureSelection(),0));
-    document.addEventListener('touchend',()=>setTimeout(()=>this.captureSelection(),40),{passive:true});
+    // selectionchange dispara assim que as alças de seleção se estabilizam no toque,
+    // sem obrigar o leitor a soltar o dedo ou tocar novamente.
+    document.addEventListener('selectionchange',()=>this.scheduleSelectionCapture());
+    document.addEventListener('pointerup',()=>this.scheduleSelectionCapture());
+    document.addEventListener('touchend',()=>this.scheduleSelectionCapture(),{passive:true});
     // Remove o menu/contexto do navegador somente dentro do leitor: o menu do app
     // continua sendo a única ação apresentada depois da seleção.
     this.readerStage.addEventListener('contextmenu',e=>e.preventDefault());
@@ -1673,6 +1860,10 @@ class ReaderEngine{
     window.addEventListener('resize',Utils.debounce(()=>{
       if(this.currentBook&&document.getElementById('view-reader').classList.contains('active'))this.triggerRePagination();
     },350));
+  }
+  scheduleSelectionCapture(){
+    cancelAnimationFrame(this.selectionFrame);
+    this.selectionFrame=requestAnimationFrame(()=>this.captureSelection());
   }
   showUI(){this.ui.classList.add('visible');clearTimeout(this.uiTimer);this.uiTimer=setTimeout(()=>this.hideUI(),5000)}
   hideUI(){clearTimeout(this.uiTimer);this.ui.classList.remove('visible')}
@@ -1696,6 +1887,9 @@ class ReaderEngine{
       if(!file||!file.buffer)throw new Error('Arquivo não encontrado');
       this.destroy();
       document.getElementById('reader-title').textContent=book.title||'Livro';
+      this.pdfMode=this.state.settings.pdfReadingMode||'lateral';
+      this.pdfZoom=Utils.clamp(Number(this.state.settings.pdfZoom)||1,.75,3);
+      document.getElementById('btn-reader-layout').hidden=book.format!=='pdf';
       App.switchView('reader');
       this.hideUI();
       let start=book.progress?.globalPage??null;
@@ -1839,11 +2033,15 @@ class ReaderEngine{
   async initSliderBook(startIndex){
     this.destroySliderOnly();
     this.createFreshSliderContainer();
+    const isPdf=this.currentBook.format==='pdf';
+    const pdfVertical=isPdf&&this.pdfMode==='vertical';
+    this.container.classList.toggle('pdf-vertical',pdfVertical);
     
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
       d.className='page';d.dataset.page=i;
       const isPdf = this.currentBook.format === 'pdf';
+      if(isPdf)d.classList.add('pdf-page');
       
       d.innerHTML = isPdf
         ? html 
@@ -1853,6 +2051,11 @@ class ReaderEngine{
     });
     
     this.sliderBook = this.container;
+    if(isPdf){
+      const badge=document.createElement('div');badge.className='pdf-zoom-badge';badge.id='pdf-zoom-badge';badge.textContent=`${Math.round(this.pdfZoom*100)}%`;this.container.appendChild(badge);
+      this.updatePdfControls();this.setupPdfPinch();
+      if(pdfVertical)this.setupPdfContinuousScroll();
+    }
     
     const slider = document.getElementById('reader-page-slider');
     const totalMax = Math.max(0, this.pagesData.length - 1);
@@ -1860,17 +2063,22 @@ class ReaderEngine{
     document.getElementById('scrubber-total').textContent = this.pagesData.length;
 
     // Configurar lógica de Touch para Animação da Virada
-    let startX = 0, currentX = 0, isDragging = false;
+    let startX = 0, currentX = 0, startY = 0, currentY = 0, isDragging = false;
     this.container.addEventListener('touchstart', e => {
+        if(isPdf&&e.touches.length>1)return;
         if(e.target.closest('.reader-ui')) return;
         startX = e.touches[0].clientX;
         currentX = startX;
+        startY = e.touches[0].clientY;
+        currentY = startY;
         isDragging = true;
     }, {passive: true});
     
     this.container.addEventListener('touchmove', e => {
+        if(isPdf&&e.touches.length>1)return;
         if(!isDragging) return;
         currentX = e.touches[0].clientX;
+        currentY = e.touches[0].clientY;
     }, {passive: true});
     
     this.container.addEventListener('touchend', e => {
@@ -1878,6 +2086,10 @@ class ReaderEngine{
         isDragging = false;
         const selection=window.getSelection();
         if(selection&&!selection.isCollapsed&&String(selection).trim())return;
+        if(pdfVertical){
+            if(Math.hypot(startX-currentX,startY-currentY)<10){this.ui.classList.contains('visible')?this.hideUI():this.showUI();}
+            return;
+        }
         const delta = startX - currentX;
         if (Math.abs(delta) > 50) {
             if(delta > 0) this.flip(1);
@@ -1902,7 +2114,7 @@ class ReaderEngine{
         if(e.target.closest('#annotation-pop')) return;
         const sel = window.getSelection();
         if(sel && !sel.isCollapsed && String(sel).trim()) return;
-        if(e.pointerType === 'mouse') {
+        if(!pdfVertical&&e.pointerType === 'mouse') {
             const w = window.innerWidth;
             if(e.clientX < w * 0.25) this.flip(-1);
             else if(e.clientX > w * 0.75) this.flip(1);
@@ -1910,11 +2122,20 @@ class ReaderEngine{
         }
     });
 
-    this.turnToPage(startIndex);
+    this.turnToPage(startIndex,{instant:true});
   }
   
-  turnToPage(index){
+  turnToPage(index,options={}){
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
+       if(this.isPdfVertical()){
+         this.currentPageIndex=index;
+         this.container.querySelectorAll('.page').forEach((p,i)=>p.classList.toggle('active',i===index));
+         const page=this.container.querySelector(`.page[data-page="${index}"]`);
+         if(page&&!options.fromScroll)page.scrollIntoView({block:'start',behavior:options.instant?'auto':'smooth'});
+         this.updateProgressText(index);this.persistProgressDebounced(index);this.applyAnnotationsToRenderedPage(index);
+         this.renderPdfPageIfNeeded(index);this.renderPdfPageIfNeeded(index+1);this.renderPdfPageIfNeeded(index-1);
+         return;
+       }
        const previousIndex=this.currentPageIndex;
        const direction=index-previousIndex;
        const previousPage=this.container.querySelector(`.page[data-page="${previousIndex}"]`);
@@ -1937,7 +2158,7 @@ class ReaderEngine{
        this.updateProgressText(index);
        this.persistProgressDebounced(index);
        this.applyAnnotationsToRenderedPage(index);
-       this.renderPdfPageIfNeeded(index);
+      this.renderPdfPageIfNeeded(index);
     }
   }
 
@@ -1952,12 +2173,86 @@ class ReaderEngine{
       const rect = wrap.getBoundingClientRect();
       const w = rect.width > 0 ? rect.width : window.innerWidth;
       const h = rect.height > 0 ? rect.height : window.innerHeight;
-      await PDFParser.renderPageToContainer(this.pdfDoc, pageNo, wrap, w, h);
+      await PDFParser.renderPageToContainer(this.pdfDoc, pageNo, wrap, w, h, this.pdfZoom);
       this.applyAnnotationsToRenderedPage(pageIndex);
     }catch(e){
       console.error(e);
       wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>`;
     }
+  }
+  isPdfVertical(){return this.currentBook?.format==='pdf'&&this.pdfMode==='vertical'}
+  updatePdfControls(){
+    const btn=document.getElementById('btn-reader-layout');
+    if(!btn)return;
+    const pdf=this.currentBook?.format==='pdf';btn.hidden=!pdf;
+    if(!pdf)return;
+    const vertical=this.pdfMode==='vertical';
+    btn.innerHTML=`<i data-lucide="${vertical?'columns-2':'rows-3'}"></i>`;
+    btn.title=vertical?'Mudar para páginas laterais':'Mudar para rolagem vertical';
+    btn.setAttribute('aria-label',btn.title);lucide.createIcons({root:btn});
+  }
+  async togglePdfReadingMode(){
+    if(this.currentBook?.format!=='pdf')return;
+    const index=this.currentPageIndex;
+    this.pdfMode=this.pdfMode==='vertical'?'lateral':'vertical';
+    await App.updateSetting('pdfReadingMode',this.pdfMode);
+    await this.initSliderBook(index);
+    Utils.toast(this.pdfMode==='vertical'?'Rolagem vertical ativada.':'Páginas laterais ativadas.','file-text');
+  }
+  setupPdfContinuousScroll(){
+    let raf=null;
+    this.container.addEventListener('scroll',()=>{
+      if(raf)return;
+      raf=requestAnimationFrame(()=>{
+        raf=null;const middle=this.container.getBoundingClientRect().top+this.container.clientHeight*.42;
+        let nearest=null,distance=Infinity;
+        this.container.querySelectorAll('.page.pdf-page').forEach(page=>{
+          const rect=page.getBoundingClientRect(),d=Math.abs(rect.top-middle);
+          if(d<distance){distance=d;nearest=Number(page.dataset.page)}
+          if(rect.bottom>0&&rect.top<window.innerHeight)this.renderPdfPageIfNeeded(Number(page.dataset.page));
+        });
+        if(nearest!==null&&nearest!==this.currentPageIndex)this.turnToPage(nearest,{fromScroll:true,instant:true});
+      });
+    },{passive:true});
+  }
+  setupPdfPinch(){
+    let startDistance=0,startZoom=this.pdfZoom,preview=this.pdfZoom,pinching=false;
+    const distance=touches=>Math.hypot(touches[0].clientX-touches[1].clientX,touches[0].clientY-touches[1].clientY);
+    const badge=()=>document.getElementById('pdf-zoom-badge');
+    this.container.addEventListener('touchstart',e=>{
+      if(e.touches.length!==2)return;
+      pinching=true;startDistance=distance(e.touches);startZoom=this.pdfZoom;preview=this.pdfZoom;
+      badge()?.classList.add('show');
+    },{passive:true});
+    this.container.addEventListener('touchmove',e=>{
+      if(!pinching||e.touches.length!==2)return;
+      e.preventDefault();preview=Utils.clamp(startZoom*(distance(e.touches)/startDistance),.75,3);
+      const el=badge();if(el)el.textContent=`${Math.round(preview*100)}%`;
+    },{passive:false});
+    this.container.addEventListener('touchend',e=>{
+      if(!pinching||e.touches.length>1)return;
+      pinching=false;badge()?.classList.remove('show');
+      if(Math.abs(preview-this.pdfZoom)>.02)this.setPdfZoom(preview);
+    },{passive:true});
+  }
+  async setPdfZoom(zoom){
+    this.pdfZoom=Utils.clamp(zoom,.75,3);
+    await App.updateSetting('pdfZoom',this.pdfZoom);
+    if(!this.container)return;
+    this.container.querySelectorAll('.pdf-page-wrap').forEach(wrap=>{
+      wrap.dataset.rendered='';
+      wrap.innerHTML=`<div class="pdf-loading"><div class="spinner"></div><span>Aplicando zoom...</span></div>`;
+    });
+    this.renderPdfPageIfNeeded(this.currentPageIndex);
+    if(this.isPdfVertical())this.renderPdfPageIfNeeded(this.currentPageIndex+1);
+  }
+  async getPageSpeechText(index){
+    if(this.currentBook?.format==='pdf'&&this.pdfDoc){
+      const page=await this.pdfDoc.getPage(index+1);const content=await page.getTextContent();
+      return content.items.map(item=>item.str).join(' ');
+    }
+    const temp=document.createElement('div');temp.innerHTML=this.pagesData[index]||'';
+    return temp.textContent||'';
   }
   updateProgressText(i){
     const slider = document.getElementById('reader-page-slider');
@@ -2018,7 +2313,9 @@ class ReaderEngine{
     this.pendingSelection={text,start,end,pageIndex,rect:range.getBoundingClientRect()};
     const pop=document.getElementById('selection-pop');
     pop.style.left=`${Math.max(110,Math.min(window.innerWidth-110,(this.pendingSelection.rect.left+this.pendingSelection.rect.right)/2))}px`;
-    pop.style.top=`${Math.max(70,this.pendingSelection.rect.top)}px`;
+    const below=this.pendingSelection.rect.top<118;
+    pop.classList.toggle('below',below);
+    pop.style.top=`${below?Math.min(window.innerHeight-60,this.pendingSelection.rect.bottom+10):Math.max(70,this.pendingSelection.rect.top)}px`;
     pop.classList.add('show');
   }
   hideSelectionPop(){document.getElementById('selection-pop').classList.remove('show')}
@@ -2258,6 +2555,7 @@ class ReaderEngine{
   }
   close(){
     this.hideUI();
+    this.tts?.stop();
     this.destroy();
     App.switchView('home');
     App.library.render();
@@ -2268,6 +2566,7 @@ class ReaderEngine{
     this.sliderBook=null;
   }
   destroy(){
+    this.tts?.stop();
     this.destroySliderOnly();
     this.pdfDoc?.destroy?.();
     this.pdfDoc=null;
@@ -3099,7 +3398,10 @@ const App={
 document.addEventListener('click',e=>{
   const p=document.getElementById('selection-pop');
   if(p.classList.contains('show')&&!e.target.closest('#selection-pop')){
-    setTimeout(()=>p.classList.remove('show'),120);
+    const selection=window.getSelection();
+    const hasReaderSelection=selection&&!selection.isCollapsed&&String(selection).trim()&&
+      (selection.anchorNode?.parentElement?.closest?.('.page-text')||selection.anchorNode?.parentElement?.closest?.('.pdf-text-layer'));
+    if(!hasReaderSelection)setTimeout(()=>p.classList.remove('show'),120);
   }
   const annotationPop=document.getElementById('annotation-pop');
   if(annotationPop.classList.contains('show')&&!e.target.closest('#annotation-pop')&&!e.target.closest('[data-annotation-id]')){

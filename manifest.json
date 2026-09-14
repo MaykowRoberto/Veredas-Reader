@@ -1,12 +1,12 @@
 {
   "name": "Veredas Reader",
-  "short_name": "Veredas",
+  "short_name": "VeredasReader",
   "description": "Leitor de e-books e PDF",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f2ead8",
   "theme_color": "#bb7a3a",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "icons": [
     {
       "src": "icon-192x192.png",
