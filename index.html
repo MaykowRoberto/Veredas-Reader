@@ -422,16 +422,26 @@ body.reader-open .search-bar{display:none!important}
 .page-number{height:20px;text-align:center;font:11px var(--ui-font);color:var(--muted);padding-top:8px}
 .page-text mark{background:#f3d76a;color:inherit;padding:0 .08em;border-radius:3px}
 .annotation-quote{background:color-mix(in srgb,#a8c6ff 36%,transparent);border-radius:3px}
-.annotation-note{outline:2px solid color-mix(in srgb,#c58cff 32%,transparent);outline-offset:1px;border-radius:3px}
+.annotation-note{
+  background:color-mix(in srgb,#c58cff 18%,transparent);border-bottom:2px solid #9c63c9;
+  border-radius:3px;cursor:pointer;position:relative;padding-right:.18em;
+}
+.annotation-note::after{content:'◦';font-family:var(--ui-font);font-weight:900;color:#7d3ea9;font-size:1.05em;vertical-align:super;margin-left:.08em}
+.annotation-highlight{cursor:pointer}
 
 /* PDF Layout & TextLayer */
-.pdf-page-wrap{display:flex;align-items:center;justify-content:center;height:100%;width:100%;background:#fff;}
-.pdf-page-inner{position:relative;max-width:100%;max-height:100%;}
-.pdf-page-inner canvas{width:100%;height:100%;object-fit:contain;display:block;}
+.pdf-page-wrap{display:flex;align-items:flex-start;justify-content:center;min-height:100%;width:100%;padding:8px;background:#fff;overflow:visible;}
+.pdf-page-inner{position:relative;width:max-content;max-width:none;box-shadow:0 2px 10px rgba(0,0,0,.12);}
+.pdf-page-inner canvas{display:block;}
 .pdf-text-layer{position:absolute;inset:0;overflow:hidden;color:transparent;line-height:1;}
 .pdf-text-layer span{position:absolute;white-space:pre;cursor:text;transform-origin:0 0;}
-.pdf-text-layer mark{background:var(--hl-color, var(--accent));color:transparent;border-radius:3px;}
-::selection{background:rgba(40,120,255,0.4);color:transparent;}
+.pdf-annotation-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.pdf-annotation-highlight,.pdf-annotation-quote{position:absolute;border-radius:3px;pointer-events:none;mix-blend-mode:multiply;}
+.pdf-annotation-highlight{background:var(--hl-color,#f3d76a);opacity:.62;}
+.pdf-annotation-quote{background:rgba(168,198,255,.5);}
+.pdf-note-indicator{position:absolute;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#7d3ea9;color:#fff;border:2px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.22);font:700 14px var(--ui-font);pointer-events:auto;cursor:pointer;}
+.page-text::selection{background:rgba(40,120,255,.34);color:inherit;}
+.pdf-text-layer::selection{background:rgba(40,120,255,.42);color:rgba(0,0,0,.82);}
 
 .pdf-loading{
   display:flex;align-items:center;justify-content:center;height:100%;width:100%;
@@ -440,6 +450,27 @@ body.reader-open .search-bar{display:none!important}
 .pdf-loading .spinner{width:26px;height:26px;border-width:2px;margin:0}
 
 .reader-stage,.page,.page-text{user-select:text;-webkit-user-select:text}
+.reader-stage{-webkit-touch-callout:none}
+
+/* Comentários e ações de marcação dentro da leitura */
+.annotation-pop{
+  position:fixed;z-index:270;display:none;width:min(330px,calc(100vw - 28px));
+  padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);
+  color:var(--text);box-shadow:0 14px 38px rgba(0,0,0,.22);
+}
+.annotation-pop.show{display:block;animation:popIn .16s ease-out}
+@keyframes popIn{from{opacity:0;transform:translateY(5px) scale(.98)}to{opacity:1;transform:none}}
+.annotation-pop-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:800;margin-bottom:5px}
+.annotation-pop-quote{font:italic 14px/1.45 var(--reader-font);max-height:72px;overflow:auto;margin-bottom:8px}
+.annotation-pop-note{font-size:13px;line-height:1.45;padding:9px 10px;border-radius:10px;background:var(--surface-2);margin-bottom:10px;white-space:pre-wrap}
+.annotation-pop-actions{display:flex;justify-content:flex-end;gap:7px}
+.annotation-pop-actions button{min-height:36px;padding:0 10px;border-radius:9px;font-size:12px;font-weight:800}
+.annotation-pop-actions .danger{color:#b42336;background:color-mix(in srgb,#b42336 10%,var(--surface))}
+
+/* A página anterior gira para dar uma sensação de folha, sem comprometer a seleção de texto. */
+.slider-book{perspective:1800px}
+.page.turning-left{z-index:6!important;visibility:visible!important;transform:rotateY(-88deg)!important;transform-origin:left center;opacity:.45!important;pointer-events:none}
+.page.turning-right{z-index:6!important;visibility:visible!important;transform:rotateY(88deg)!important;transform-origin:right center;opacity:.45!important;pointer-events:none}
 
 .reader-ui{
   position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;
@@ -929,6 +960,9 @@ body.reader-open .search-bar{display:none!important}
   <button id="sel-note"><i data-lucide="sticky-note" style="width:14px;height:14px"></i>Anotar</button>
   <button id="sel-share"><i data-lucide="share-2" style="width:14px;height:14px"></i>Enviar</button>
 </div>
+
+<!-- Comentário ou ação de marcação contextual dentro da página -->
+<div class="annotation-pop" id="annotation-pop" role="dialog" aria-live="polite"></div>
 
 <!-- BACKDROP -->
 <div class="backdrop" id="backdrop"></div>
@@ -1441,7 +1475,9 @@ class PDFParser{
     try {
       const page = await pdf.getPage(pageNumber);
       const base = page.getViewport({scale: 1});
-      const scale = Math.min(maxW / base.width, maxH / base.height) * 0.98;
+      // Prioriza a largura. Em telas estreitas, a leitura continua em rolagem vertical
+      // em vez de reduzir a página até ela ficar ilegível para caber na altura.
+      const scale = Math.max(0.1, (maxW - 16) / base.width);
       const viewport = page.getViewport({scale});
 
       const canvas = document.createElement('canvas');
@@ -1483,6 +1519,9 @@ class PDFParser{
       inner.style.height = canvas.style.height;
       inner.appendChild(canvas);
       inner.appendChild(textLayer);
+      const annotationLayer = document.createElement('div');
+      annotationLayer.className = 'pdf-annotation-layer';
+      inner.appendChild(annotationLayer);
 
       wrapNode.innerHTML = '';
       wrapNode.appendChild(inner);
@@ -1582,6 +1621,7 @@ class ReaderEngine{
     this.ui=document.getElementById('reader-ui');
     this.navigating=false;this.uiTimer=null;
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
+    this.annotationPressTimer=null;this.activeAnnotationId=null;
     this.persistProgressDebounced=Utils.debounce(i=>this.persistProgress(i),900);
     this.bind();
   }
@@ -1625,6 +1665,11 @@ class ReaderEngine{
 
     document.addEventListener('mouseup',()=>setTimeout(()=>this.captureSelection(),0));
     document.addEventListener('touchend',()=>setTimeout(()=>this.captureSelection(),40),{passive:true});
+    // Remove o menu/contexto do navegador somente dentro do leitor: o menu do app
+    // continua sendo a única ação apresentada depois da seleção.
+    this.readerStage.addEventListener('contextmenu',e=>e.preventDefault());
+    this.readerStage.addEventListener('pointerdown',e=>this.startAnnotationPress(e));
+    ['pointerup','pointercancel','pointerleave'].forEach(type=>this.readerStage.addEventListener(type,()=>this.cancelAnnotationPress()));
     window.addEventListener('resize',Utils.debounce(()=>{
       if(this.currentBook&&document.getElementById('view-reader').classList.contains('active'))this.triggerRePagination();
     },350));
@@ -1831,6 +1876,8 @@ class ReaderEngine{
     this.container.addEventListener('touchend', e => {
         if(!isDragging) return;
         isDragging = false;
+        const selection=window.getSelection();
+        if(selection&&!selection.isCollapsed&&String(selection).trim())return;
         const delta = startX - currentX;
         if (Math.abs(delta) > 50) {
             if(delta > 0) this.flip(1);
@@ -1846,6 +1893,13 @@ class ReaderEngine{
     // Tratamento para cliques no desktop
     this.container.addEventListener('click', e => {
         if(e.target.closest('.reader-ui')) return;
+        const annotationTarget=e.target.closest('[data-annotation-id]');
+        if(annotationTarget){
+            e.stopPropagation();
+            this.openAnnotationPopover(annotationTarget.dataset.annotationId,annotationTarget.getBoundingClientRect());
+            return;
+        }
+        if(e.target.closest('#annotation-pop')) return;
         const sel = window.getSelection();
         if(sel && !sel.isCollapsed && String(sel).trim()) return;
         if(e.pointerType === 'mouse') {
@@ -1861,14 +1915,24 @@ class ReaderEngine{
   
   turnToPage(index){
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
+       const previousIndex=this.currentPageIndex;
+       const direction=index-previousIndex;
+       const previousPage=this.container.querySelector(`.page[data-page="${previousIndex}"]`);
+       const shouldAnimate=this.container.dataset.started==='1';
        this.currentPageIndex = index;
        const pages = this.container.querySelectorAll('.page');
        pages.forEach((p, i) => {
-           p.classList.remove('active', 'prev', 'next');
-           if(i === index) p.classList.add('active');
-           else if(i < index) p.classList.add('prev');
-           else p.classList.add('next');
+            p.classList.remove('active', 'prev', 'next', 'turning-left', 'turning-right');
+            if(i === index) p.classList.add('active');
+            else if(i < index) p.classList.add('prev');
+            else p.classList.add('next');
        });
+       if(shouldAnimate&&previousPage&&direction!==0){
+         previousPage.classList.add(direction>0?'turning-left':'turning-right');
+         window.setTimeout(()=>previousPage.classList.remove('turning-left','turning-right'),520);
+       }
+       this.container.dataset.started='1';
+       this.hideAnnotationPopover();
        
        this.updateProgressText(index);
        this.persistProgressDebounced(index);
@@ -1958,6 +2022,69 @@ class ReaderEngine{
     pop.classList.add('show');
   }
   hideSelectionPop(){document.getElementById('selection-pop').classList.remove('show')}
+  startAnnotationPress(event){
+    const target=event.target.closest?.('[data-annotation-id]');
+    if(!target||!target.classList.contains('annotation-highlight'))return;
+    this.cancelAnnotationPress();
+    this.annotationPressTimer=window.setTimeout(()=>{
+      if(navigator.vibrate)navigator.vibrate(18);
+      this.openAnnotationPopover(target.dataset.annotationId,target.getBoundingClientRect());
+    },560);
+  }
+  cancelAnnotationPress(){
+    if(this.annotationPressTimer){window.clearTimeout(this.annotationPressTimer);this.annotationPressTimer=null;}
+  }
+  hideAnnotationPopover(){
+    const pop=document.getElementById('annotation-pop');
+    if(pop)pop.classList.remove('show');
+    this.activeAnnotationId=null;
+  }
+  openAnnotationPopover(annotationId,rect){
+    const annotation=this.currentBook?.annotations?.find(a=>a.id===annotationId);
+    if(!annotation)return;
+    this.hideSelectionPop();
+    this.activeAnnotationId=annotationId;
+    const pop=document.getElementById('annotation-pop');
+    pop.innerHTML='';
+    const label=document.createElement('div');label.className='annotation-pop-label';
+    label.textContent=annotation.type==='note'?'Comentário':'Grifo';
+    const quote=document.createElement('div');quote.className='annotation-pop-quote';
+    quote.textContent=`“${annotation.text||''}”`;
+    pop.append(label,quote);
+    if(annotation.type==='note'){
+      const note=document.createElement('div');note.className='annotation-pop-note';note.textContent=annotation.note||'Sem comentário';pop.appendChild(note);
+    }
+    const actions=document.createElement('div');actions.className='annotation-pop-actions';
+    if(annotation.type==='note'){
+      const edit=document.createElement('button');edit.type='button';edit.textContent='Editar';
+      edit.onclick=()=>this.editAnnotationFromPopover(annotation);actions.appendChild(edit);
+    }
+    const remove=document.createElement('button');remove.type='button';remove.className='danger';
+    remove.textContent=annotation.type==='note'?'Apagar':'Remover grifo';
+    remove.onclick=()=>this.deleteAnnotationFromPopover(annotation);actions.appendChild(remove);
+    pop.appendChild(actions);
+    const width=Math.min(330,window.innerWidth-28);
+    const desiredLeft=Math.max(14,Math.min(window.innerWidth-width-14,rect.left+rect.width/2-width/2));
+    const desiredTop=Math.max(70,Math.min(window.innerHeight-pop.offsetHeight-14,rect.bottom+10));
+    pop.style.left=`${desiredLeft}px`;pop.style.top=`${desiredTop}px`;pop.classList.add('show');
+  }
+  editAnnotationFromPopover(annotation){
+    this.hideAnnotationPopover();
+    document.getElementById('selected-preview').innerHTML=`<div class="item-type">Trecho comentado</div><div class="item-text">“${Utils.esc(annotation.text)}”</div><div class="item-meta">Página ${annotation.pageIndex+1} de ${this.pagesData.length}</div>`;
+    document.getElementById('note-text').value=annotation.note||'';
+    const save=document.getElementById('btn-save-note');
+    save.dataset.editId=annotation.id;save.dataset.bookId=this.currentBook.id;
+    App.openPanel('panel-note');
+  }
+  async deleteAnnotationFromPopover(annotation){
+    const message=annotation.type==='note'?'Apagar este comentário?':'Remover este grifo?';
+    if(!confirm(message))return;
+    await this.db.deleteAnnotation(this.currentBook.id,annotation.id);
+    this.currentBook=await this.db.getBook(this.currentBook.id);
+    this.hideAnnotationPopover();
+    this.applyAnnotationsToRenderedPage(annotation.pageIndex);
+    Utils.toast(annotation.type==='note'?'Comentário apagado.':'Grifo removido.','trash');
+  }
   async saveSelection(type){
     if(!this.pendingSelection||!this.currentBook)return;
     const s=this.pendingSelection;
@@ -2034,15 +2161,15 @@ class ReaderEngine{
   applyAnnotationsToRenderedPage(pageIndex){
     const page=document.querySelector(`.page[data-page="${pageIndex}"] .page-text`) || document.querySelector(`.page[data-page="${pageIndex}"] .pdf-text-layer`);
     if(!page||!this.currentBook)return;
+    if(page.classList.contains('pdf-text-layer')){
+      this.applyPdfAnnotations(page,pageIndex);
+      return;
+    }
     page.querySelectorAll('[data-annotation-mark]').forEach(e=>e.replaceWith(...e.childNodes));
-    const anns=this.currentBook.annotations.filter(a=>a.pageIndex===pageIndex&&a.type!=='note');
-    anns.sort((a,b)=>(b.start||0)-(a.start||0)).forEach(a=>{
-      this.wrapTextRange(page,a.start||0,a.end||0,a.type==='highlight'?'HIGHLIGHT':'QUOTE');
-    });
-    const notes=this.currentBook.annotations.filter(a=>a.pageIndex===pageIndex&&a.type==='note');
-    notes.forEach(a=>this.wrapTextRange(page,a.start||0,a.end||0,'NOTE'));
+    const anns=this.currentBook.annotations.filter(a=>a.pageIndex===pageIndex);
+    anns.sort((a,b)=>(b.start||0)-(a.start||0)).forEach(a=>this.wrapTextRange(page,a));
   }
-  wrapTextRange(root,start,end,type){
+  rangeForOffsets(root,start,end){
     if(end<=start)return;
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     let pos=0,sp=null,so=0,ep=null,eo=0,node;
@@ -2052,25 +2179,52 @@ class ReaderEngine{
       if(end>=pos&&end<=next){ep=node;eo=end-pos;break}
       pos=next;
     }
-    if(!sp||!ep)return;
+    if(!sp||!ep)return null;
     const range=document.createRange();
     range.setStart(sp,so);range.setEnd(ep,eo);
+    return range;
+  }
+  wrapTextRange(root,annotation){
+    const range=this.rangeForOffsets(root,annotation.start||0,annotation.end||0);
+    if(!range)return;
+    const type=annotation.type==='highlight'?'HIGHLIGHT':annotation.type==='quote'?'QUOTE':'NOTE';
     const mark=document.createElement(type==='HIGHLIGHT'?'mark':'span');
     mark.dataset.annotationMark='1';
+    mark.dataset.annotationId=annotation.id;
     mark.className=type==='QUOTE'?'annotation-quote':type==='NOTE'?'annotation-note':'';
     if(type==='HIGHLIGHT'){
-      const a=(this.currentBook?.annotations||[]).find(x=>
-        x.pageIndex===Number(root.closest('.page')?.dataset.page||-1)&&x.start===start&&x.end===end);
-      
-      const isPdf = root.classList.contains('pdf-text-layer');
-      if (isPdf) {
-         mark.style.setProperty('--hl-color', a?.color||'#f3d76a');
-      } else {
-         mark.style.background=a?.color||'#f3d76a';
-         mark.style.color='inherit';
-      }
+      mark.classList.add('annotation-highlight');
+      mark.style.background=annotation.color||'#f3d76a';
+      mark.style.color='inherit';
     }
     try{range.surroundContents(mark)}catch(e){}
+  }
+  applyPdfAnnotations(textLayer,pageIndex){
+    const layer=textLayer.parentElement.querySelector('.pdf-annotation-layer');
+    if(!layer)return;
+    layer.innerHTML='';
+    const rootRect=textLayer.getBoundingClientRect();
+    const annotations=this.currentBook.annotations.filter(a=>a.pageIndex===pageIndex);
+    annotations.forEach(annotation=>{
+      const range=this.rangeForOffsets(textLayer,annotation.start||0,annotation.end||0);
+      if(!range)return;
+      const rects=Array.from(range.getClientRects()).filter(r=>r.width&&r.height);
+      rects.forEach((rect,index)=>{
+        if(annotation.type==='note'&&index>0)return;
+        const el=document.createElement(annotation.type==='note'?'button':'span');
+        if(annotation.type==='note'){
+          el.type='button';el.className='pdf-note-indicator';el.textContent='•';
+          el.dataset.annotationId=annotation.id;el.setAttribute('aria-label','Abrir comentário');
+          el.style.left=`${rect.right-rootRect.left-8}px`;el.style.top=`${rect.top-rootRect.top-8}px`;
+        }else{
+          el.className=annotation.type==='highlight'?'pdf-annotation-highlight':'pdf-annotation-quote';
+          el.style.left=`${rect.left-rootRect.left}px`;el.style.top=`${rect.top-rootRect.top}px`;
+          el.style.width=`${rect.width}px`;el.style.height=`${rect.height}px`;
+          if(annotation.type==='highlight')el.style.setProperty('--hl-color',annotation.color||'#f3d76a');
+        }
+        layer.appendChild(el);
+      });
+    });
   }
   async triggerRePagination(){
     if(!this.currentBook)return;
@@ -2946,6 +3100,11 @@ document.addEventListener('click',e=>{
   const p=document.getElementById('selection-pop');
   if(p.classList.contains('show')&&!e.target.closest('#selection-pop')){
     setTimeout(()=>p.classList.remove('show'),120);
+  }
+  const annotationPop=document.getElementById('annotation-pop');
+  if(annotationPop.classList.contains('show')&&!e.target.closest('#annotation-pop')&&!e.target.closest('[data-annotation-id]')){
+    annotationPop.classList.remove('show');
+    if(App.reader)App.reader.activeAnnotationId=null;
   }
 });
 window.addEventListener('load',()=>App.init());
