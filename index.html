@@ -1631,7 +1631,6 @@ class TXTParser{
    DOM PAGINATOR
    ============================================================ */
 class DOMPaginator{
-  static FOOTER_HEIGHT=44;
   static flattenBlocks(root,out){
     const wrapperTags=['DIV','SECTION','ARTICLE','BODY','MAIN','ASIDE'];
     Array.from(root.childNodes).forEach(node=>{
@@ -1643,10 +1642,18 @@ class DOMPaginator{
     });
   }
   static async paginateHtml(htmlString,w,h,fontSize,fontFamily,lineHeight=1.65,margin=6){
-    const textH=Math.max(100,h-this.FOOTER_HEIGHT);
     const box=document.createElement('div');
-    // Adicionado box-sizing para impedir que o paddings expanda o elemento e estrague o cálculo
-    box.style.cssText=`position:absolute;visibility:hidden;width:${w}px;height:${textH}px;padding:${margin}% ${margin}%;font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};overflow:hidden;box-sizing:border-box;`;
+    // Mede usando a mesma estrutura da página visível. Assim, margens de parágrafos,
+    // rodapé e área útil não divergem da paginação exibida ao leitor.
+    box.className='page-content';
+    box.style.cssText=`position:fixed;left:-10000px;top:0;visibility:hidden;width:${w}px;height:${h}px;min-height:0;padding:${margin}% ${margin}% 38px;overflow:hidden;box-sizing:border-box;`;
+    const textBox=document.createElement('div');
+    textBox.className='page-text';
+    textBox.style.cssText=`font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};`;
+    const footer=document.createElement('div');
+    footer.className='page-number';
+    footer.textContent='Página';
+    box.append(textBox,footer);
     document.body.appendChild(box);
     const tmp=document.createElement('div');tmp.innerHTML=htmlString;
     const elements=[];this.flattenBlocks(tmp,elements);
@@ -1657,8 +1664,8 @@ class DOMPaginator{
       const elHtml=el.nodeType===3?Utils.esc(el.textContent):el.outerHTML;
       if(!elHtml.trim())continue;
       
-      box.innerHTML = current + elHtml;
-      if(box.scrollHeight > box.clientHeight + 2){
+      textBox.innerHTML = current + elHtml;
+      if(textBox.scrollHeight > textBox.clientHeight + 2){
         if(current){
           pages.push(current);
           current='';
@@ -1669,8 +1676,8 @@ class DOMPaginator{
             const tag=el.tagName.toLowerCase(), full=el.textContent;
             let lo=0, hi=full.length;
             const fits = n => {
-              box.innerHTML = `<${tag}>${Utils.esc(full.slice(0,n))}</${tag}>`;
-              return box.scrollHeight <= box.clientHeight + 2;
+              textBox.innerHTML = `<${tag}>${Utils.esc(full.slice(0,n))}</${tag}>`;
+              return textBox.scrollHeight <= textBox.clientHeight + 2;
             };
             while(lo < hi){
               const mid = Math.ceil((lo+hi)/2);
@@ -1917,7 +1924,8 @@ class ReaderEngine{
   }
   pagSignature(book,w,h){
     const s=this.state.settings;
-    return `${book.id}__${s.fontFamily}__${s.fontSize}__${s.lineHeight}__${s.margin}__${Math.round(w)}x${Math.round(h)}`;
+    // Incrementar a versão invalida apenas as páginas calculadas pelo algoritmo anterior.
+    return `${book.id}__${s.fontFamily}__${s.fontSize}__${s.lineHeight}__${s.margin}__${Math.round(w)}x${Math.round(h)}__paginator-v2`;
   }
   async openBook(book){
     if(this.navigating)return;
@@ -2030,25 +2038,37 @@ class ReaderEngine{
       this.currentExtractor=parsed.extractor;
       this.totalChapters=parsed.totalChapters;
       this.chapterTitles=parsed.toc||Array.from({length:this.totalChapters},(_,i)=>`Capítulo ${i+1}`);
-      this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
+      const chapterHtml=[];
       for(let ch=0;ch<this.totalChapters;ch++){
         if(ch%4===0){
           document.getElementById('loader-sub').textContent=`Organizando capítulo ${ch+1} de ${this.totalChapters}`;
           await new Promise(r=>setTimeout(r,0));
         }
         const raw=await parsed.extractor(ch);
-        let pgs;
-        try{
-          pgs=await DOMPaginator.paginateHtml(raw||'<p></p>',w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin);
-        }catch(e){
-          pgs=[EPUBParser.plainTextFallback(raw||'')];
-        }
-        this.chapterStarts.push(this.pagesData.length);
-        pgs.forEach((p,i)=>{
-          this.pagesData.push(p);
-          this.pageMeta.push({globalPage:this.pagesData.length-1,chapter:ch,localPage:i,title:this.chapterTitles[ch]||`Capítulo ${ch+1}`});
-        });
+        // O marcador não ocupa espaço, mas preserva a posição do capítulo para o sumário.
+        // Paginar o fluxo inteiro evita páginas quase vazias no fim de cada arquivo do spine.
+        chapterHtml.push(`<span data-epub-chapter-marker="${ch}" aria-hidden="true"></span>${raw||'<p></p>'}`);
       }
+      try{
+        this.pagesData=await DOMPaginator.paginateHtml(chapterHtml.join(''),w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin);
+      }catch(e){
+        this.pagesData=chapterHtml.map(html=>EPUBParser.plainTextFallback(html));
+      }
+      const chapterStarts=Array(this.totalChapters).fill(-1);
+      let activeChapter=0;
+      this.pageMeta=this.pagesData.map((page,globalPage)=>{
+        const markers=[...page.matchAll(/data-epub-chapter-marker="(\d+)"/g)].map(match=>Number(match[1]));
+        markers.forEach(ch=>{if(chapterStarts[ch]===-1)chapterStarts[ch]=globalPage;});
+        if(markers.length)activeChapter=markers[markers.length-1];
+        return {globalPage,chapter:activeChapter,localPage:0,title:this.chapterTitles[activeChapter]||`Capítulo ${activeChapter+1}`};
+      });
+      let lastChapterStart=0;
+      this.chapterStarts=chapterStarts.map(start=>{
+        if(start>=0)lastChapterStart=start;
+        return lastChapterStart;
+      });
+      const localPages=Array(this.totalChapters).fill(0);
+      this.pageMeta.forEach(meta=>{meta.localPage=localPages[meta.chapter]++;});
       await this.db.setPageCache(sig,{
         pagesData:this.pagesData,pageMeta:this.pageMeta,
         chapterStarts:this.chapterStarts,chapterTitles:this.chapterTitles,
