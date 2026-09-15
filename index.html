@@ -374,7 +374,7 @@ body.bar-hidden .bottom-nav{transform:translateY(100%)}
 .bottom-nav button:hover{background:var(--surface-hover)}
 
 /* ============================================================
-   READER (NOVO MOTOR DE ANIMAÇÃO)
+   READER (NOVO MOTOR DE ANIMAÇÃO 3D)
    ============================================================ */
 body.reader-open .app-bar,
 body.reader-open .bottom-nav,
@@ -390,25 +390,35 @@ body.reader-open .search-bar{display:none!important}
   min-width:0;min-height:0;overflow:hidden;
 }
 
-/* Slider CSS com transições JS */
+/* Slider CSS com transições JS realistas (Perspective e folha que dobra) */
 .slider-book{
   position:relative; width:100%; height:100%; overflow:hidden; display:block; touch-action: pan-y;
+  perspective:2000px; transform-style:preserve-3d;
 }
 .page{
   position:absolute; inset:0; z-index:1; visibility:hidden;
-  transition:transform 0.45s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.45s ease;
+  transition:transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.65s ease;
   background:var(--reader-bg, var(--theme-reader-bg)); color:var(--reader-text, var(--theme-reader-text));
   overflow-y:auto; overflow-x:hidden; pointer-events:none;
 }
 .page.active{
   visibility:visible; transform:translateX(0); z-index:3; pointer-events:auto;
-  box-shadow: -15px 0 45px rgba(0,0,0,0.12);
+  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
 }
-.page.prev{
-  visibility:visible; transform:translateX(-100%); z-index:2; opacity:0;
+.page.prev{ visibility:visible; transform:translateX(-100%); z-index:2; opacity:0; }
+.page.next{ visibility:visible; transform:translateX(100%); z-index:2; opacity:0; }
+
+.page.turning-left{
+  z-index:6!important; visibility:visible!important;
+  transform:rotateY(-110deg) scale(0.96)!important;
+  transform-origin:left center; opacity:0!important; pointer-events:none;
+  box-shadow: 20px 0 40px rgba(0,0,0,0.2) inset !important;
 }
-.page.next{
-  visibility:visible; transform:translateX(100%); z-index:2; opacity:0;
+.page.turning-right{
+  z-index:6!important; visibility:visible!important;
+  transform:rotateY(110deg) scale(0.96)!important;
+  transform-origin:right center; opacity:0!important; pointer-events:none;
+  box-shadow: -20px 0 40px rgba(0,0,0,0.2) inset !important;
 }
 
 .page-content{min-height:100%;padding:var(--reader-margin);padding-bottom:38px;display:flex;flex-direction:column}
@@ -432,7 +442,7 @@ body.reader-open .search-bar{display:none!important}
 
 /* PDF Layout & TextLayer */
 .pdf-page-wrap{display:flex;align-items:flex-start;justify-content:center;min-height:100%;width:100%;padding:8px;background:#fff;overflow:visible;}
-.pdf-page-inner{position:relative;width:max-content;max-width:none;box-shadow:0 2px 10px rgba(0,0,0,.12);}
+.pdf-page-inner{position:relative;width:max-content;max-width:none;box-shadow:0 2px 10px rgba(0,0,0,.12);transform-origin:center center;}
 .pdf-page-inner canvas{display:block;}
 .pdf-text-layer{position:absolute;inset:0;overflow:hidden;color:transparent;line-height:1;}
 .pdf-text-layer span{position:absolute;white-space:pre;cursor:text;transform-origin:0 0;}
@@ -440,9 +450,25 @@ body.reader-open .search-bar{display:none!important}
 .pdf-annotation-highlight,.pdf-annotation-quote{position:absolute;border-radius:3px;pointer-events:none;mix-blend-mode:multiply;}
 .pdf-annotation-highlight{background:var(--hl-color,#f3d76a);opacity:.62;}
 .pdf-annotation-quote{background:rgba(168,198,255,.5);}
-.pdf-note-indicator{position:absolute;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#7d3ea9;color:#fff;border:2px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.22);font:700 14px var(--ui-font);pointer-events:auto;cursor:pointer;}
+
+/* Ícone de nota aprimorado, formato profissional */
+.pdf-note-indicator{
+  position:absolute; width:26px; height:26px; border-radius:6px;
+  display:grid; place-items:center; background:#7d3ea9;
+  color:transparent;
+  border:2px solid #fff; box-shadow:var(--shadow-sm);
+  pointer-events:auto; cursor:pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
 .page-text::selection{background:rgba(40,120,255,.34);color:inherit;}
-.pdf-text-layer::selection{background:rgba(40,120,255,.42);color:rgba(0,0,0,.82);}
+
+/* CORREÇÃO DO EFEITO DA SELEÇÃO DO PDF */
+.pdf-text-layer::selection, .pdf-text-layer span::selection {
+  background:rgba(40,120,255,.42); color:transparent;
+}
 
 .pdf-loading{
   display:flex;align-items:center;justify-content:center;height:100%;width:100%;
@@ -450,7 +476,7 @@ body.reader-open .search-bar{display:none!important}
 }
 .pdf-loading .spinner{width:26px;height:26px;border-width:2px;margin:0}
 
-/* PDF: leitura por página (lateral) ou contínua, como em leitores dedicados. */
+/* PDF: leitura por página (lateral) ou contínua */
 .page.pdf-page{overflow:auto;overscroll-behavior:contain;background:#e9e9e9;touch-action:pan-x pan-y pinch-zoom}
 .slider-book.pdf-vertical{overflow-y:auto;overflow-x:hidden;background:#e9e9e9;scroll-snap-type:y proximity;perspective:none;touch-action:pan-y pinch-zoom}
 .slider-book.pdf-vertical .page.pdf-page{position:relative;inset:auto;visibility:visible;transform:none;opacity:1;z-index:auto;pointer-events:auto;min-height:100%;margin:0 0 12px;overflow:visible;scroll-snap-align:start;box-shadow:none}
@@ -477,16 +503,14 @@ body.reader-open .search-bar{display:none!important}
 .annotation-pop-actions button{min-height:36px;padding:0 10px;border-radius:9px;font-size:12px;font-weight:800}
 .annotation-pop-actions .danger{color:#b42336;background:color-mix(in srgb,#b42336 10%,var(--surface))}
 
-/* A página anterior gira para dar uma sensação de folha, sem comprometer a seleção de texto. */
-.slider-book{perspective:1800px}
-.page.turning-left{z-index:6!important;visibility:visible!important;transform:rotateY(-88deg)!important;transform-origin:left center;opacity:.45!important;pointer-events:none}
-.page.turning-right{z-index:6!important;visibility:visible!important;transform:rotateY(88deg)!important;transform-origin:right center;opacity:.45!important;pointer-events:none}
-
+/* CORREÇÃO DA UI DO LEITOR E SELEÇÃO DA PRIMEIRA LINHA */
 .reader-ui{
   position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;
-  z-index:80;pointer-events:none;opacity:0;transition:opacity .25s;
+  z-index:80;pointer-events:none;opacity:0; visibility:hidden;
+  transition:opacity .25s, visibility 0s linear .25s;
 }
-.reader-ui.visible{opacity:1}
+.reader-ui.visible{opacity:1; visibility:visible; transition:opacity .25s, visibility 0s;}
+
 .reader-top{
   pointer-events:auto;display:flex;align-items:center;justify-content:space-between;
   padding:calc(8px + var(--safe-top)) 10px 8px;
@@ -527,7 +551,7 @@ body.reader-open .search-bar{display:none!important}
 .reader-center-actions{display:flex;gap:2px}
 .reader-icon.is-playing{background:var(--accent);color:#fff}
 
-/* Player de voz: controles grandes e legíveis também com a tela bloqueada. */
+/* Player de voz */
 .tts-now-playing{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;background:var(--surface-2);margin-bottom:14px}
 .tts-now-playing i{color:var(--accent);width:24px;height:24px;flex:none}.tts-now-playing strong,.tts-now-playing small{display:block}.tts-now-playing small{font-size:11px;color:var(--muted);margin-top:3px}
 .tts-play-row{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;margin:12px 0}.tts-play-row .reader-icon{border:1px solid var(--border);background:var(--surface)}
@@ -1523,8 +1547,6 @@ class PDFParser{
     try {
       const page = await pdf.getPage(pageNumber);
       const base = page.getViewport({scale: 1});
-      // Prioriza a largura. Em telas estreitas, a leitura continua em rolagem vertical
-      // em vez de reduzir a página até ela ficar ilegível para caber na altura.
       const scale = Math.max(0.1, (maxW - 16) / base.width) * Math.max(.75,Math.min(3,zoom));
       const viewport = page.getViewport({scale});
 
@@ -1623,32 +1645,55 @@ class DOMPaginator{
   static async paginateHtml(htmlString,w,h,fontSize,fontFamily,lineHeight=1.65,margin=6){
     const textH=Math.max(100,h-this.FOOTER_HEIGHT);
     const box=document.createElement('div');
-    box.style.cssText=`position:absolute;visibility:hidden;width:${w}px;height:${textH}px;padding:${margin}% ${margin}%;font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};overflow:hidden;`;
+    // Adicionado box-sizing para impedir que o paddings expanda o elemento e estrague o cálculo
+    box.style.cssText=`position:absolute;visibility:hidden;width:${w}px;height:${textH}px;padding:${margin}% ${margin}%;font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};overflow:hidden;box-sizing:border-box;`;
     document.body.appendChild(box);
     const tmp=document.createElement('div');tmp.innerHTML=htmlString;
     const elements=[];this.flattenBlocks(tmp,elements);
     const pages=[];let current='';
-    for(const el of elements){
+
+    for(let i = 0; i < elements.length; i++){
+      const el = elements[i];
       const elHtml=el.nodeType===3?Utils.esc(el.textContent):el.outerHTML;
       if(!elHtml.trim())continue;
-      box.insertAdjacentHTML('beforeend',elHtml);
-      if(box.scrollHeight>box.clientHeight){
-        if(current){pages.push(current);current='';box.innerHTML=''}
-        box.innerHTML=elHtml;
-        if(box.scrollHeight>box.clientHeight&&el.nodeType===1&&el.children.length===0&&el.textContent.trim()){
-          const tag=el.tagName.toLowerCase(),full=el.textContent;box.innerHTML='';
-          let lo=0,hi=full.length;
-          const fits=n=>{box.innerHTML=`<${tag}>${Utils.esc(full.slice(0,n))}</${tag}>`;return box.scrollHeight<=box.clientHeight};
-          if(!fits(hi)){
-            while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(fits(mid))lo=mid;else hi=mid-1}
-            let cut=full.lastIndexOf(' ',lo);if(cut<=0)cut=lo;
-            const p1=full.slice(0,cut).trim(),rest=full.slice(cut).trim();
-            pages.push(`<${tag}>${Utils.esc(p1)}</${tag}>`);
-            current=rest?`<${tag}>${Utils.esc(rest)}</${tag}>`:'';box.innerHTML=current;
-          }else current=elHtml;
-        }else current=elHtml;
-      }else current+=elHtml;
+      
+      box.innerHTML = current + elHtml;
+      if(box.scrollHeight > box.clientHeight + 2){
+        if(current){
+          pages.push(current);
+          current='';
+          i--; 
+          continue;
+        }else{
+          if(el.nodeType===1 && el.children.length===0 && el.textContent.trim()){
+            const tag=el.tagName.toLowerCase(), full=el.textContent;
+            let lo=0, hi=full.length;
+            const fits = n => {
+              box.innerHTML = `<${tag}>${Utils.esc(full.slice(0,n))}</${tag}>`;
+              return box.scrollHeight <= box.clientHeight + 2;
+            };
+            while(lo < hi){
+              const mid = Math.ceil((lo+hi)/2);
+              if(fits(mid)) lo=mid; else hi=mid-1;
+            }
+            let cut=full.lastIndexOf(' ',lo); if(cut<=0) cut=lo;
+            const p1=full.slice(0,cut).trim(), rest=full.slice(cut).trim();
+            
+            if(p1) pages.push(`<${tag}>${Utils.esc(p1)}</${tag}>`);
+            if(rest){
+               const restEl = document.createElement(tag);
+               restEl.textContent = rest;
+               elements.splice(i + 1, 0, restEl);
+            }
+          }else{
+            pages.push(elHtml);
+          }
+        }
+      }else{
+        current += elHtml;
+      }
     }
+    
     if(current)pages.push(current);
     document.body.removeChild(box);
     return pages.length?pages:['<p></p>'];
@@ -1847,13 +1892,10 @@ class ReaderEngine{
       });
     }
 
-    // selectionchange dispara assim que as alças de seleção se estabilizam no toque,
-    // sem obrigar o leitor a soltar o dedo ou tocar novamente.
     document.addEventListener('selectionchange',()=>this.scheduleSelectionCapture());
     document.addEventListener('pointerup',()=>this.scheduleSelectionCapture());
     document.addEventListener('touchend',()=>this.scheduleSelectionCapture(),{passive:true});
-    // Remove o menu/contexto do navegador somente dentro do leitor: o menu do app
-    // continua sendo a única ação apresentada depois da seleção.
+    
     this.readerStage.addEventListener('contextmenu',e=>e.preventDefault());
     this.readerStage.addEventListener('pointerdown',e=>this.startAnnotationPress(e));
     ['pointerup','pointercancel','pointerleave'].forEach(type=>this.readerStage.addEventListener(type,()=>this.cancelAnnotationPress()));
@@ -2040,7 +2082,7 @@ class ReaderEngine{
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
       d.className='page';d.dataset.page=i;
-      const isPdf = this.currentBook.format === 'pdf';
+      
       if(isPdf)d.classList.add('pdf-page');
       
       d.innerHTML = isPdf
@@ -2062,7 +2104,6 @@ class ReaderEngine{
     if(slider) slider.max = totalMax;
     document.getElementById('scrubber-total').textContent = this.pagesData.length;
 
-    // Configurar lógica de Touch para Animação da Virada
     let startX = 0, currentX = 0, startY = 0, currentY = 0, isDragging = false;
     this.container.addEventListener('touchstart', e => {
         if(isPdf&&e.touches.length>1)return;
@@ -2102,7 +2143,6 @@ class ReaderEngine{
         }
     });
     
-    // Tratamento para cliques no desktop
     this.container.addEventListener('click', e => {
         if(e.target.closest('.reader-ui')) return;
         const annotationTarget=e.target.closest('[data-annotation-id]');
@@ -2150,7 +2190,7 @@ class ReaderEngine{
        });
        if(shouldAnimate&&previousPage&&direction!==0){
          previousPage.classList.add(direction>0?'turning-left':'turning-right');
-         window.setTimeout(()=>previousPage.classList.remove('turning-left','turning-right'),520);
+         window.setTimeout(()=>previousPage.classList.remove('turning-left','turning-right'),650);
        }
        this.container.dataset.started='1';
        this.hideAnnotationPopover();
@@ -2169,7 +2209,6 @@ class ReaderEngine{
     wrap.dataset.rendered='1';
     const pageNo=parseInt(wrap.dataset.pdfPage,10);
     try{
-      // Usar bounding rect garante que o PDF use 100% da área disponível
       const rect = wrap.getBoundingClientRect();
       const w = rect.width > 0 ? rect.width : window.innerWidth;
       const h = rect.height > 0 ? rect.height : window.innerHeight;
@@ -2226,13 +2265,25 @@ class ReaderEngine{
     },{passive:true});
     this.container.addEventListener('touchmove',e=>{
       if(!pinching||e.touches.length!==2)return;
-      e.preventDefault();preview=Utils.clamp(startZoom*(distance(e.touches)/startDistance),.75,3);
+      e.preventDefault();
+      preview=Utils.clamp(startZoom*(distance(e.touches)/startDistance),.75,3);
       const el=badge();if(el)el.textContent=`${Math.round(preview*100)}%`;
+      
+      const inner = this.container.querySelector(`.page[data-page="${this.currentPageIndex}"] .pdf-page-inner`);
+      if(inner) {
+          const ratio = preview / this.pdfZoom;
+          inner.style.transform = `scale(${ratio})`;
+      }
     },{passive:false});
     this.container.addEventListener('touchend',e=>{
       if(!pinching||e.touches.length>1)return;
       pinching=false;badge()?.classList.remove('show');
-      if(Math.abs(preview-this.pdfZoom)>.02)this.setPdfZoom(preview);
+      if(Math.abs(preview-this.pdfZoom)>.02){
+          this.setPdfZoom(preview);
+      } else {
+          const inner = this.container.querySelector(`.page[data-page="${this.currentPageIndex}"] .pdf-page-inner`);
+          if(inner) inner.style.transform = 'none';
+      }
     },{passive:true});
   }
   async setPdfZoom(zoom){
@@ -2510,7 +2561,7 @@ class ReaderEngine{
         if(annotation.type==='note'&&index>0)return;
         const el=document.createElement(annotation.type==='note'?'button':'span');
         if(annotation.type==='note'){
-          el.type='button';el.className='pdf-note-indicator';el.textContent='•';
+          el.type='button';el.className='pdf-note-indicator';
           el.dataset.annotationId=annotation.id;el.setAttribute('aria-label','Abrir comentário');
           el.style.left=`${rect.right-rootRect.left-8}px`;el.style.top=`${rect.top-rootRect.top-8}px`;
         }else{
