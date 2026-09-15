@@ -10,9 +10,11 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
+<!-- DEPENDÊNCIAS -->
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
 <style>
 /* ============================================================
@@ -374,7 +376,7 @@ body.bar-hidden .bottom-nav{transform:translateY(100%)}
 .bottom-nav button:hover{background:var(--surface-hover)}
 
 /* ============================================================
-   READER (NOVO MOTOR DE ANIMAÇÃO 3D)
+   READER (NOVO MOTOR DE DESLIZAMENTO SUAVE)
    ============================================================ */
 body.reader-open .app-bar,
 body.reader-open .bottom-nav,
@@ -390,36 +392,21 @@ body.reader-open .search-bar{display:none!important}
   min-width:0;min-height:0;overflow:hidden;
 }
 
-/* Slider CSS com transições JS realistas (Perspective e folha que dobra) */
 .slider-book{
   position:relative; width:100%; height:100%; overflow:hidden; display:block; touch-action: pan-y;
-  perspective:2000px; transform-style:preserve-3d;
 }
 .page{
   position:absolute; inset:0; z-index:1; visibility:hidden;
-  transition:transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.65s ease;
+  transition:transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
   background:var(--reader-bg, var(--theme-reader-bg)); color:var(--reader-text, var(--theme-reader-text));
   overflow-y:auto; overflow-x:hidden; pointer-events:none;
 }
 .page.active{
   visibility:visible; transform:translateX(0); z-index:3; pointer-events:auto;
-  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+  box-shadow: 0 0 30px rgba(0,0,0,0.08);
 }
-.page.prev{ visibility:visible; transform:translateX(-100%); z-index:2; opacity:0; }
-.page.next{ visibility:visible; transform:translateX(100%); z-index:2; opacity:0; }
-
-.page.turning-left{
-  z-index:6!important; visibility:visible!important;
-  transform:rotateY(-110deg) scale(0.96)!important;
-  transform-origin:left center; opacity:0!important; pointer-events:none;
-  box-shadow: 20px 0 40px rgba(0,0,0,0.2) inset !important;
-}
-.page.turning-right{
-  z-index:6!important; visibility:visible!important;
-  transform:rotateY(110deg) scale(0.96)!important;
-  transform-origin:right center; opacity:0!important; pointer-events:none;
-  box-shadow: -20px 0 40px rgba(0,0,0,0.2) inset !important;
-}
+.page.prev{ visibility:visible; transform:translateX(-100%); z-index:2; }
+.page.next{ visibility:visible; transform:translateX(100%); z-index:2; }
 
 .page-content{min-height:100%;padding:var(--reader-margin);padding-bottom:38px;display:flex;flex-direction:column}
 .page-text{
@@ -429,9 +416,18 @@ body.reader-open .search-bar{display:none!important}
 }
 .page-text p{margin-bottom:1.15em;text-indent:1.5em}
 .page-text h1,.page-text h2,.page-text h3{font-family:var(--ui-font);text-indent:0;text-align:left;margin-bottom:1em}
-.page-text img{max-width:100%;height:auto}
+.page-text img{max-width:100%;max-height:78vh;height:auto;display:block;margin:1em auto;object-fit:contain}
+.page-text table{max-width:100%;border-collapse:collapse;font-size:.92em;text-indent:0}
+.page-text td,.page-text th{border:1px solid var(--border);padding:4px 6px;text-align:left}
+.page-text pre{white-space:pre-wrap;word-break:break-word;text-indent:0}
+.doc-notice{
+  margin:2em 0;padding:16px;border:1px solid var(--border);border-radius:14px;
+  background:var(--surface-2);text-indent:0;text-align:left;font-size:.95em;line-height:1.55;
+}
+.doc-notice strong{display:block;margin-bottom:6px;font-family:var(--ui-font)}
 .page-number{height:20px;text-align:center;font:11px var(--ui-font);color:var(--muted);padding-top:8px}
 .page-text mark{background:#f3d76a;color:inherit;padding:0 .08em;border-radius:3px}
+.page-text a{color:inherit;text-decoration:none;cursor:text;pointer-events:none}
 .annotation-quote{background:color-mix(in srgb,#a8c6ff 36%,transparent);border-radius:3px}
 .annotation-note{
   background:color-mix(in srgb,#c58cff 18%,transparent);border-bottom:2px solid #9c63c9;
@@ -451,7 +447,6 @@ body.reader-open .search-bar{display:none!important}
 .pdf-annotation-highlight{background:var(--hl-color,#f3d76a);opacity:.62;}
 .pdf-annotation-quote{background:rgba(168,198,255,.5);}
 
-/* Ícone de nota aprimorado, formato profissional */
 .pdf-note-indicator{
   position:absolute; width:26px; height:26px; border-radius:6px;
   display:grid; place-items:center; background:#7d3ea9;
@@ -465,7 +460,6 @@ body.reader-open .search-bar{display:none!important}
 
 .page-text::selection{background:rgba(40,120,255,.34);color:inherit;}
 
-/* CORREÇÃO DO EFEITO DA SELEÇÃO DO PDF */
 .pdf-text-layer::selection, .pdf-text-layer span::selection {
   background:rgba(40,120,255,.42); color:transparent;
 }
@@ -481,14 +475,12 @@ body.reader-open .search-bar{display:none!important}
 .slider-book.pdf-vertical{overflow-y:auto;overflow-x:hidden;background:#e9e9e9;scroll-snap-type:y proximity;perspective:none;touch-action:pan-y pinch-zoom}
 .slider-book.pdf-vertical .page.pdf-page{position:relative;inset:auto;visibility:visible;transform:none;opacity:1;z-index:auto;pointer-events:auto;min-height:100%;margin:0 0 12px;overflow:visible;scroll-snap-align:start;box-shadow:none}
 .slider-book.pdf-vertical .page.pdf-page .pdf-page-wrap{min-height:calc(100dvh - 16px)}
-.slider-book.pdf-vertical .page.pdf-page.turning-left,.slider-book.pdf-vertical .page.pdf-page.turning-right{transform:none!important;opacity:1!important}
 .pdf-zoom-badge{position:absolute;right:14px;bottom:16px;z-index:5;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font:700 11px var(--ui-font);pointer-events:none;opacity:0;transition:opacity .2s}
 .pdf-zoom-badge.show{opacity:1}
 
 .reader-stage,.page,.page-text{user-select:text;-webkit-user-select:text}
 .reader-stage{-webkit-touch-callout:none}
 
-/* Comentários e ações de marcação dentro da leitura */
 .annotation-pop{
   position:fixed;z-index:270;display:none;width:min(330px,calc(100vw - 28px));
   padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);
@@ -503,7 +495,6 @@ body.reader-open .search-bar{display:none!important}
 .annotation-pop-actions button{min-height:36px;padding:0 10px;border-radius:9px;font-size:12px;font-weight:800}
 .annotation-pop-actions .danger{color:#b42336;background:color-mix(in srgb,#b42336 10%,var(--surface))}
 
-/* CORREÇÃO DA UI DO LEITOR E SELEÇÃO DA PRIMEIRA LINHA */
 .reader-ui{
   position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;
   z-index:80;pointer-events:none;opacity:0; visibility:hidden;
@@ -551,7 +542,6 @@ body.reader-open .search-bar{display:none!important}
 .reader-center-actions{display:flex;gap:2px}
 .reader-icon.is-playing{background:var(--accent);color:#fff}
 
-/* Player de voz */
 .tts-now-playing{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;background:var(--surface-2);margin-bottom:14px}
 .tts-now-playing i{color:var(--accent);width:24px;height:24px;flex:none}.tts-now-playing strong,.tts-now-playing small{display:block}.tts-now-playing small{font-size:11px;color:var(--muted);margin-top:3px}
 .tts-play-row{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;margin:12px 0}.tts-play-row .reader-icon{border:1px solid var(--border);background:var(--surface)}
@@ -629,7 +619,6 @@ body.reader-open .search-bar{display:none!important}
   background:var(--surface);
 }
 
-/* Forms e Configurações */
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:12px}
 .seg button{min-height:38px;border-radius:9px;font-size:11.5px;font-weight:700;color:var(--muted);transition:.15s}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
@@ -720,7 +709,6 @@ body.reader-open .search-bar{display:none!important}
   border-radius:10px;padding:9px;margin-top:8px;line-height:1.45;
 }
 
-/* Edit / Delete Buttons */
 .item-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .action-btn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
 .action-btn:hover { background: var(--surface-hover); color: var(--text); }
@@ -772,7 +760,30 @@ body.reader-open .search-bar{display:none!important}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 .loader-title{font-size:14px;font-weight:800}
-.loader-sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+.loader-sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4;min-height:17px}
+.loader-track{
+  margin:14px auto 0;width:min(240px,70vw);height:5px;border-radius:99px;
+  background:var(--surface-hover);overflow:hidden;display:none;
+}
+.loader-track.visible{display:block}
+.loader-fill{
+  height:100%;width:0%;border-radius:99px;background:var(--accent);
+  transition:width .18s ease-out;
+}
+.loader-pct{font-size:11px;font-weight:700;color:var(--muted);margin-top:8px;display:none;font-variant-numeric:tabular-nums}
+.loader-pct.visible{display:block}
+.loader-cancel{
+  margin-top:18px;display:none;border:1px solid var(--border);background:var(--surface);
+  color:var(--text);font:inherit;font-size:12px;font-weight:700;border-radius:99px;
+  padding:9px 20px;min-height:var(--touch);cursor:pointer;
+}
+.loader-cancel.visible{display:inline-block}
+.loader-cancel:active{background:var(--surface-hover)}
+.loader-cancel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  .spinner{animation-duration:2.4s}
+  .loader-fill{transition:none}
+}
 
 /* ============================================================
    RESPONSIVE
@@ -851,7 +862,8 @@ body.reader-open .search-bar{display:none!important}
     <button class="bar-btn primary" id="btn-import" aria-label="Importar livro">
       <i data-lucide="plus"></i>
     </button>
-    <input type="file" id="file-input" accept=".epub,.pdf,.txt" hidden>
+    <!-- input file atualizado suportando epub, pdf, txt, docx e mobi -->
+    <input type="file" id="file-input" accept=".epub,.pdf,.txt,.docx,.mobi" hidden>
   </header>
 
   <!-- SEARCH OVERLAY -->
@@ -1153,11 +1165,16 @@ body.reader-open .search-bar{display:none!important}
 </section>
 
 <!-- LOADER + TOASTS -->
-<div class="loader" id="loader">
+<div class="loader" id="loader" role="status" aria-live="polite">
   <div class="loader-box">
     <div class="spinner"></div>
     <div class="loader-title" id="loader-title">Processando</div>
     <div class="loader-sub" id="loader-sub"></div>
+    <div class="loader-track" id="loader-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+      <div class="loader-fill" id="loader-fill"></div>
+    </div>
+    <div class="loader-pct" id="loader-pct">0%</div>
+    <button type="button" class="loader-cancel" id="loader-cancel">Cancelar</button>
   </div>
 </div>
 <div class="toast-wrap" id="toast-wrap"></div>
@@ -1204,12 +1221,60 @@ const Utils={
   debounce:(fn,wait)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),wait)}},
   clamp:(v,min,max)=>Math.max(min,Math.min(max,v)),
   safeDecode:s=>{try{return decodeURIComponent(s)}catch{return s}},
-  showLoader:(title,sub='')=>{
+  showLoader:(title,sub='',opts={})=>{
+    const track=document.getElementById('loader-track');
+    const pct=document.getElementById('loader-pct');
+    const cancel=document.getElementById('loader-cancel');
     document.getElementById('loader-title').textContent=title;
     document.getElementById('loader-sub').textContent=sub;
+    const showBar=!!opts.progress;
+    track.classList.toggle('visible',showBar);
+    pct.classList.toggle('visible',showBar);
+    document.getElementById('loader-fill').style.width='0%';
+    pct.textContent='0%';
+    track.setAttribute('aria-valuenow','0');
+    cancel.classList.toggle('visible',typeof opts.onCancel==='function');
+    cancel.disabled=false;
+    cancel.textContent='Cancelar';
+    Utils._onCancel=opts.onCancel||null;
     document.getElementById('loader').classList.add('active');
   },
-  hideLoader:()=>document.getElementById('loader').classList.remove('active'),
+  setLoaderText:(title,sub)=>{
+    if(title!=null)document.getElementById('loader-title').textContent=title;
+    if(sub!=null)document.getElementById('loader-sub').textContent=sub;
+  },
+  setLoaderProgress:(percent,sub)=>{
+    const p=Utils.clamp(Math.round(percent),0,100);
+    const fill=document.getElementById('loader-fill');
+    const track=document.getElementById('loader-track');
+    if(fill)fill.style.width=p+'%';
+    if(track)track.setAttribute('aria-valuenow',String(p));
+    const pct=document.getElementById('loader-pct');
+    if(pct)pct.textContent=p+'%';
+    if(sub!=null)document.getElementById('loader-sub').textContent=sub;
+  },
+  hideLoader:()=>{
+    Utils._onCancel=null;
+    const l=document.getElementById('loader');
+    if(l)l.classList.remove('active');
+    const c=document.getElementById('loader-cancel');
+    if(c){c.classList.remove('visible');c.disabled=false;c.textContent='Cancelar'}
+    const t=document.getElementById('loader-track');
+    if(t)t.classList.remove('visible');
+    const p=document.getElementById('loader-pct');
+    if(p)p.classList.remove('visible');
+  },
+  _onCancel:null,
+  /* Devolve o controle ao navegador para que a interface continue respondendo
+     (e um quadro seja realmente pintado) durante tarefas longas. */
+  yieldToUI:()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0))),
+  isAbort:e=>!!e&&(e.name==='AbortError'||e.message==='__abort__'),
+  fmtBytes:n=>{
+    if(!Number.isFinite(n))return '';
+    const u=['B','KB','MB','GB'];let i=0;
+    while(n>=1024&&i<u.length-1){n/=1024;i++}
+    return `${n.toFixed(n<10&&i>0?1:0)} ${u[i]}`;
+  },
   normalizeBook:b=>({...b,
     tags:Array.isArray(b.tags)?b.tags:[],
     collections:Array.isArray(b.collections)?b.collections:[],
@@ -1226,6 +1291,12 @@ const Utils={
 };
 window.addEventListener('unhandledrejection',e=>{console.error(e.reason);Utils.hideLoader()});
 window.addEventListener('error',e=>{console.error(e.error||e.message);Utils.hideLoader()});
+document.getElementById('loader-cancel').addEventListener('click',e=>{
+  if(typeof Utils._onCancel!=='function')return;
+  e.currentTarget.disabled=true;
+  e.currentTarget.textContent='Cancelando...';
+  try{Utils._onCancel()}catch(err){console.error(err)}
+});
 
 /* ============================================================
    DB
@@ -1336,6 +1407,531 @@ const AppDefaults={settings:{
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
   pdfReadingMode:'lateral',pdfZoom:1,ttsRate:1,ttsVoiceURI:''
 }};
+
+/* ============================================================
+   DOCX & MOBI PARSERS
+   ============================================================ */
+
+/* Erro com mensagem legível + dica de como resolver. */
+class ParseError extends Error{
+  constructor(message,hint){super(message);this.name='ParseError';this.hint=hint||''}
+}
+
+const DocUtils={
+  /* Converte qualquer <a ...>...</a> em <span>...</span>, preservando o
+     conteúdo mas descartando href/onclick/target — sem isso, um link real
+     dentro do livro navega o navegador para fora do app ao ser tocado. */
+  stripLinks(html){
+    return String(html).replace(/<a\b[^>]*>/gi,'<span>').replace(/<\/a>/gi,'</span>');
+  },
+  notice(title,text){
+    return `<div class="doc-notice"><strong>${Utils.esc(title)}</strong>${Utils.esc(text)}</div>`;
+  },
+  hasMarkup(s){return /<\s*(p|div|h[1-6]|br|img|body|html|span|font|blockquote)\b/i.test(s)},
+  /* Quebra um documento longo em capítulos usando títulos e quebras de página.
+     Sempre devolve pelo menos um capítulo. */
+  splitChapters(html,fallbackTitle){
+    const host=document.createElement('div');
+    host.innerHTML=html;
+    const nodes=Array.from(host.childNodes);
+    const chapters=[];
+    let cur=null;
+    const push=(title)=>{cur={title:title||fallbackTitle,parts:[]};chapters.push(cur)};
+    push(fallbackTitle);
+    for(const node of nodes){
+      const isEl=node.nodeType===1;
+      const isBreak=isEl&&node.hasAttribute('data-doc-break');
+      const isHeading=isEl&&/^H[12]$/.test(node.tagName)&&node.textContent.trim().length<=140;
+      if((isBreak||isHeading)&&chapters.length<DocUtils.MAX_CHAPTERS){
+        const hasContent=cur&&cur.parts.join('').replace(/<[^>]*>/g,'').trim().length>0;
+        if(hasContent)push(isHeading?node.textContent.trim():'');
+        else if(isHeading&&cur)cur.title=node.textContent.trim()||cur.title;
+      }
+      if(isBreak)continue;
+      cur.parts.push(node.nodeType===3?Utils.esc(node.textContent):(isEl?node.outerHTML:''));
+    }
+    /* junta capítulos muito curtos ao anterior para a lista não virar ruído */
+    const merged=[];
+    for(const ch of chapters){
+      const html=ch.parts.join('');
+      const len=html.replace(/<[^>]*>/g,'').trim().length;
+      if(!len&&!merged.length)continue;
+      if(merged.length&&len<DocUtils.MIN_CHAPTER_CHARS){
+        merged[merged.length-1].html+=html;
+      }else{
+        merged.push({title:ch.title||fallbackTitle,html});
+      }
+    }
+    if(!merged.length)merged.push({title:fallbackTitle,html:html||'<p></p>'});
+    return merged;
+  }
+};
+DocUtils.MAX_CHAPTERS=400;
+DocUtils.MIN_CHAPTER_CHARS=600;
+
+/* ------------------------------------------------------------
+   DOCX
+   ------------------------------------------------------------ */
+class DOCXParser{
+  static async parse(buffer,opts={}){
+    const onProgress=opts.onProgress||(()=>{});
+    if(typeof mammoth==='undefined'||!mammoth||typeof mammoth.convertToHtml!=='function'){
+      throw new ParseError('O conversor de DOCX não carregou.','Conecte-se à internet uma vez para baixar o componente e abra o livro novamente.');
+    }
+    onProgress('Convertendo o documento',.1);
+    let budget=DOCXParser.IMAGE_BUDGET;
+    const options={styleMap:DOCXParser.STYLE_MAP};
+    if(mammoth.images&&typeof mammoth.images.imgElement==='function'){
+      options.convertImage=mammoth.images.imgElement(async image=>{
+        try{
+          if(budget<=0)return{src:''};
+          const b64=await image.read('base64');
+          const bytes=Math.ceil(b64.length*0.75);
+          if(bytes>DOCXParser.MAX_IMAGE||bytes>budget)return{src:''};
+          budget-=bytes;
+          return{src:`data:${image.contentType||'image/png'};base64,${b64}`};
+        }catch(e){return{src:''}}
+      });
+    }
+    let result;
+    try{
+      result=await mammoth.convertToHtml({arrayBuffer:buffer},options);
+    }catch(e){
+      console.error(e);
+      throw new ParseError('Não foi possível ler este arquivo DOCX.','O arquivo pode estar corrompido, protegido por senha ou ser um .doc antigo. Salve-o novamente como .docx e importe de novo.');
+    }
+    onProgress('Organizando o texto',.85);
+    let html=String((result&&result.value)||'').trim();
+    html=html.replace(/<img[^>]*src\s*=\s*(""|'')[^>]*>/gi,'');
+    html=DocUtils.stripLinks(html);
+    if(!html){
+      html=DocUtils.notice('Documento sem texto','Este arquivo .docx não tem conteúdo de texto que possa ser exibido.');
+    }
+    return html;
+  }
+}
+DOCXParser.MAX_IMAGE=700*1024;
+DOCXParser.IMAGE_BUDGET=4*1024*1024;
+DOCXParser.STYLE_MAP=[
+  "p[style-name='Title'] => h1:fresh",
+  "p[style-name='Subtitle'] => h2:fresh",
+  "p[style-name='Heading 1'] => h1:fresh",
+  "p[style-name='Heading 2'] => h2:fresh",
+  "p[style-name='Heading 3'] => h3:fresh",
+  "p[style-name='Título'] => h1:fresh",
+  "p[style-name='Título 1'] => h1:fresh",
+  "p[style-name='Título 2'] => h2:fresh",
+  "p[style-name='Título 3'] => h3:fresh"
+];
+
+/* ------------------------------------------------------------
+   MOBI — descompactação HUFF/CDIC
+   ------------------------------------------------------------ */
+class MobiHuffman{
+  constructor(){this.dict1=null;this.minCode=null;this.maxCode=null;this.dictionary=[]}
+  static tag(rec,n=4){
+    let s='';for(let i=0;i<n;i++)s+=String.fromCharCode(rec[i]||0);return s;
+  }
+  loadHuff(rec){
+    if(!rec||rec.length<24||MobiHuffman.tag(rec)!=='HUFF')throw new ParseError('Tabela de compressão MOBI inválida.','');
+    const dv=new DataView(rec.buffer,rec.byteOffset,rec.byteLength);
+    const off1=dv.getUint32(8,false),off2=dv.getUint32(12,false);
+    if(off1+1024>rec.length||off2+256>rec.length)throw new ParseError('Tabela de compressão MOBI incompleta.','');
+    this.dict1=new Array(256);
+    for(let i=0;i<256;i++){
+      const v=dv.getUint32(off1+i*4,false);
+      const codelen=v&0x1F,term=(v&0x80)!==0,maxcode=v>>>8;
+      if(codelen===0)throw new ParseError('Tabela de compressão MOBI corrompida.','');
+      this.dict1[i]={codelen,term,maxcode:(maxcode+1)*Math.pow(2,32-codelen)-1};
+    }
+    const dict2=new Array(64);
+    for(let i=0;i<64;i++)dict2[i]=dv.getUint32(off2+i*4,false);
+    const mins=[0],maxs=[0];
+    for(let i=0;i<64;i+=2)mins.push(dict2[i]);
+    for(let i=1;i<64;i+=2)maxs.push(dict2[i]);
+    this.minCode=mins.map((m,cl)=>m*Math.pow(2,32-cl));
+    this.maxCode=maxs.map((m,cl)=>(m+1)*Math.pow(2,32-cl)-1);
+    this.dictionary=[];
+  }
+  loadCdic(rec){
+    if(!rec||rec.length<16||MobiHuffman.tag(rec)!=='CDIC')return;
+    const dv=new DataView(rec.buffer,rec.byteOffset,rec.byteLength);
+    const phrases=dv.getUint32(8,false),bits=dv.getUint32(12,false);
+    if(bits>16)return;
+    const n=Math.max(0,Math.min(1<<bits,phrases-this.dictionary.length));
+    for(let i=0;i<n;i++){
+      const at=16+i*2;
+      if(at+2>rec.length)break;
+      const off=dv.getUint16(at,false);
+      if(16+off+2>rec.length)break;
+      const blen=dv.getUint16(16+off,false);
+      const len=blen&0x7FFF;
+      const s=18+off;
+      if(s+len>rec.length)break;
+      this.dictionary.push({data:rec.subarray(s,s+len),decoded:(blen&0x8000)!==0,busy:false});
+    }
+  }
+  unpack(data,depth=0){
+    if(depth>12)throw new ParseError('Arquivo MOBI corrompido.','');
+    const total=data.length;
+    const out=[];
+    let bitsleft=total*8,bitPos=0,guard=0;
+    const peek=bp=>{
+      const byte=bp>>3,sh=bp&7;
+      const b0=byte<total?data[byte]:0;
+      const b1=byte+1<total?data[byte+1]:0;
+      const b2=byte+2<total?data[byte+2]:0;
+      const b3=byte+3<total?data[byte+3]:0;
+      const b4=byte+4<total?data[byte+4]:0;
+      const big=(b0*16777216+b1*65536+b2*256+b3)*256+b4;
+      return Math.floor(big/Math.pow(2,8-sh))%4294967296;
+    };
+    while(bitsleft>0){
+      if(++guard>8000000)break;
+      const code=peek(bitPos);
+      const e=this.dict1[Math.floor(code/16777216)];
+      if(!e)break;
+      let codelen=e.codelen,maxcode=e.maxcode;
+      if(!e.term){
+        while(codelen<=32&&code<this.minCode[codelen])codelen++;
+        if(codelen>32)break;
+        maxcode=this.maxCode[codelen];
+      }
+      bitPos+=codelen;bitsleft-=codelen;
+      if(bitsleft<0)break;
+      const r=Math.floor((maxcode-code)/Math.pow(2,32-codelen));
+      const entry=this.dictionary[r];
+      if(!entry)break;
+      if(!entry.decoded){
+        if(entry.busy)break;
+        entry.busy=true;
+        const sub=this.unpack(entry.data,depth+1);
+        entry.data=sub;entry.decoded=true;entry.busy=false;
+      }
+      out.push(entry.data);
+    }
+    let len=0;for(const s of out)len+=s.length;
+    const res=new Uint8Array(len);
+    let p=0;for(const s of out){res.set(s,p);p+=s.length}
+    return res;
+  }
+}
+
+/* ------------------------------------------------------------
+   MOBI — leitura do contêiner Palm Database
+   ------------------------------------------------------------ */
+class MobiFile{
+  constructor(buffer){
+    this.buffer=buffer;
+    this.u8=new Uint8Array(buffer);
+    this.dv=new DataView(buffer);
+    this.exth=null;
+    this.fullName='';
+    this.codepage=1252;
+    this.extraFlags=0;
+    this.firstImage=0;
+    this.huffOffset=0;
+    this.huffCount=0;
+    this.fileVersion=0;
+  }
+  static signature(buffer){
+    try{
+      const u8=new Uint8Array(buffer,60,8);
+      let s='';for(let i=0;i<8;i++)s+=String.fromCharCode(u8[i]);
+      return s;
+    }catch(e){return ''}
+  }
+  static isMobi(buffer){
+    const s=MobiFile.signature(buffer);
+    return s==='BOOKMOBI'||s==='TEXtREAd';
+  }
+  record(i){
+    if(i<0||i>=this.numRecords)return new Uint8Array(0);
+    const start=this.offsets[i];
+    const end=i+1<this.numRecords?this.offsets[i+1]:this.buffer.byteLength;
+    if(!(start>=0&&end<=this.buffer.byteLength&&start<end))return new Uint8Array(0);
+    return this.u8.subarray(start,end);
+  }
+  decodeBytes(bytes){
+    if(!bytes||!bytes.length)return '';
+    const label=this.codepage===65001?'utf-8':'windows-1252';
+    try{return new TextDecoder(label).decode(bytes)}
+    catch(e){
+      try{return new TextDecoder('utf-8').decode(bytes)}
+      catch(e2){let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);return s}
+    }
+  }
+  readHeader(){
+    const dv=this.dv,len=this.buffer.byteLength;
+    if(len<80)throw new ParseError('Arquivo MOBI incompleto.','O download parece ter sido interrompido. Baixe o arquivo novamente.');
+    this.signature=MobiFile.signature(this.buffer);
+    this.numRecords=dv.getUint16(76,false);
+    if(!this.numRecords||78+this.numRecords*8>len){
+      throw new ParseError('Arquivo MOBI corrompido.','A lista interna de registros está incompleta. Tente baixar ou converter o arquivo novamente.');
+    }
+    this.offsets=new Array(this.numRecords);
+    for(let i=0;i<this.numRecords;i++)this.offsets[i]=dv.getUint32(78+i*8,false);
+    const r0=this.rec0=this.offsets[0];
+    if(r0+16>len)throw new ParseError('Arquivo MOBI corrompido.','O cabeçalho do livro não pôde ser lido.');
+    this.compression=dv.getUint16(r0,false);
+    this.textLength=dv.getUint32(r0+4,false);
+    this.textRecordCount=dv.getUint16(r0+8,false);
+    this.recordSize=dv.getUint16(r0+10,false);
+    this.encryption=dv.getUint16(r0+12,false);
+    let magic='';
+    for(let i=16;i<20;i++)magic+=String.fromCharCode(this.u8[r0+i]||0);
+    this.isMobiHeader=magic==='MOBI';
+    if(this.isMobiHeader&&r0+132<=len){
+      this.mobiHeaderLength=dv.getUint32(r0+20,false);
+      this.mobiType=dv.getUint32(r0+24,false);
+      const cp=dv.getUint32(r0+28,false);
+      if(cp===65001||cp===1252)this.codepage=cp;
+      this.fileVersion=dv.getUint32(r0+36,false);
+      const nameOff=dv.getUint32(r0+84,false);
+      const nameLen=dv.getUint32(r0+88,false);
+      this.firstImage=dv.getUint32(r0+108,false);
+      if(!(this.firstImage>0&&this.firstImage<this.numRecords))this.firstImage=0;
+      this.huffOffset=dv.getUint32(r0+112,false);
+      this.huffCount=dv.getUint32(r0+116,false);
+      this.exthFlags=dv.getUint32(r0+128,false);
+      if(this.mobiHeaderLength>=0xE4&&r0+244<=len)this.extraFlags=dv.getUint16(r0+242,false);
+      if(nameLen>0&&nameLen<2048&&r0+nameOff+nameLen<=len){
+        this.fullName=this.decodeBytes(this.u8.subarray(r0+nameOff,r0+nameOff+nameLen)).replace(/\0+$/,'').trim();
+      }
+      if(this.exthFlags&0x40)this.readExth(r0+16+this.mobiHeaderLength);
+    }
+    return this;
+  }
+  readExth(off){
+    const dv=this.dv,len=this.buffer.byteLength;
+    if(off+12>len)return;
+    let magic='';for(let i=0;i<4;i++)magic+=String.fromCharCode(this.u8[off+i]||0);
+    if(magic!=='EXTH')return;
+    const count=dv.getUint32(off+8,false);
+    if(count>1024)return;
+    this.exth={};
+    let p=off+12;
+    for(let i=0;i<count&&p+8<=len;i++){
+      const type=dv.getUint32(p,false);
+      const size=dv.getUint32(p+4,false);
+      if(size<8||p+size>len)break;
+      if(this.exth[type]===undefined)this.exth[type]=this.u8.subarray(p+8,p+size);
+      p+=size;
+    }
+  }
+  metaTitle(){
+    const t=this.exth&&(this.exth[503]||this.exth[99]);
+    const s=t?this.decodeBytes(t).trim():'';
+    return s||this.fullName||'';
+  }
+  metaAuthor(){
+    const a=this.exth&&this.exth[100];
+    return a?this.decodeBytes(a).replace(/\0+$/,'').trim():'';
+  }
+  imageRecord(recindex){
+    if(!this.firstImage||!recindex)return null;
+    return this.record(this.firstImage+recindex-1);
+  }
+  static imageDataUrl(rec){
+    if(!rec||rec.length<8||rec.length>MobiFile.MAX_IMAGE)return null;
+    let mime='';
+    if(rec[0]===0xFF&&rec[1]===0xD8)mime='image/jpeg';
+    else if(rec[0]===0x89&&rec[1]===0x50)mime='image/png';
+    else if(rec[0]===0x47&&rec[1]===0x49)mime='image/gif';
+    else return null;
+    try{return `data:${mime};base64,${EPUBParser.uint8ToBase64(rec)}`}
+    catch(e){return null}
+  }
+  coverDataUrl(){
+    try{
+      if(!this.exth)return null;
+      for(const key of [201,203]){
+        const raw=this.exth[key];
+        if(!raw||raw.length<4)continue;
+        const dv=new DataView(raw.buffer,raw.byteOffset,raw.byteLength);
+        const idx=dv.getUint32(0,false);
+        if(idx===0xFFFFFFFF)continue;
+        const url=MobiFile.imageDataUrl(this.imageRecord(idx+1));
+        if(url)return url;
+      }
+      /* sem EXTH de capa: usa a primeira imagem do livro */
+      for(let i=1;i<=8;i++){
+        const url=MobiFile.imageDataUrl(this.imageRecord(i));
+        if(url)return url;
+      }
+      return null;
+    }catch(e){return null}
+  }
+  /* Tamanho da "trailing data entry" gravada no fim de cada registro de texto. */
+  static trailingSize(rec,end){
+    let bitpos=0,result=0,size=end;
+    if(size<=0)return 0;
+    for(;;){
+      size--;
+      if(size<0)return result;
+      const b=rec[size];
+      result|=(b&0x7F)<<bitpos;
+      if(b&0x80)return result;
+      bitpos+=7;
+      if(bitpos>=28||size===0)return result;
+    }
+  }
+  trimRecord(rec){
+    let end=rec.length;
+    let flags=this.extraFlags>>>1;
+    while(flags){
+      if(flags&1){
+        end-=MobiFile.trailingSize(rec,end);
+        if(end<=0)return rec.subarray(0,0);
+      }
+      flags>>>=1;
+    }
+    if(this.extraFlags&1){
+      if(end<=0)return rec.subarray(0,0);
+      end-=(rec[end-1]&0x3)+1;
+    }
+    return rec.subarray(0,Math.max(0,end));
+  }
+  static lz77(input,out,pos,cap){
+    const n=input.length;
+    let i=0;
+    while(i<n&&pos<cap){
+      const c=input[i++];
+      if(c>=1&&c<=8){
+        for(let k=0;k<c&&i<n&&pos<cap;k++)out[pos++]=input[i++];
+      }else if(c<128){
+        out[pos++]=c;
+      }else if(c>=192){
+        out[pos++]=32;
+        if(pos<cap)out[pos++]=c^128;
+      }else{
+        if(i>=n)break;
+        const next=input[i++];
+        const dist=(((c<<8)|next)>>3)&0x07FF;
+        let length=(next&7)+3;
+        if(dist===0||dist>pos)break;
+        while(length-->0&&pos<cap){out[pos]=out[pos-dist];pos++}
+      }
+    }
+    return pos;
+  }
+  async readText(onProgress,signal){
+    if(this.encryption===1||this.encryption===2){
+      throw new ParseError('Este arquivo está protegido por DRM.','Livros com proteção da Amazon não podem ser abertos aqui. Use uma cópia sem DRM ou converta o livro para EPUB.');
+    }
+    const comp=this.compression;
+    if(comp!==1&&comp!==2&&comp!==17480){
+      throw new ParseError('Compressão MOBI não reconhecida.','Converta o arquivo para EPUB em um programa como o Calibre e importe novamente.');
+    }
+    let huff=null;
+    if(comp===17480){
+      if(!this.huffCount||!this.huffOffset)throw new ParseError('Arquivo MOBI incompleto.','As tabelas de compressão não foram encontradas.');
+      huff=new MobiHuffman();
+      huff.loadHuff(this.record(this.huffOffset));
+      for(let i=1;i<this.huffCount;i++)huff.loadCdic(this.record(this.huffOffset+i));
+      if(!huff.dictionary.length)throw new ParseError('Arquivo MOBI incompleto.','O dicionário de compressão está vazio.');
+    }
+    const declared=Number(this.textLength)||0;
+    const cap=Math.min(Math.max(declared,1)+131072,MobiFile.MAX_TEXT);
+    const out=new Uint8Array(cap);
+    let pos=0;
+    const last=Math.min(this.textRecordCount,this.numRecords-1);
+    if(last<1)throw new ParseError('Arquivo MOBI sem texto.','Nenhum registro de conteúdo foi encontrado.');
+    let mark=performance.now();
+    for(let i=1;i<=last;i++){
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      const raw=this.trimRecord(this.record(i));
+      if(raw.length){
+        if(comp===2){
+          pos=MobiFile.lz77(raw,out,pos,cap);
+        }else{
+          const dec=comp===1?raw:huff.unpack(raw);
+          const n=Math.min(dec.length,cap-pos);
+          if(n>0){out.set(dec.subarray(0,n),pos);pos+=n}
+        }
+      }
+      if(pos>=cap)break;
+      if(performance.now()-mark>40){
+        mark=performance.now();
+        if(onProgress)onProgress(i/last);
+        await Utils.yieldToUI();
+      }
+    }
+    if(!pos)throw new ParseError('Não foi possível extrair o texto deste MOBI.','O arquivo pode estar corrompido. Tente convertê-lo para EPUB.');
+    const end=declared>0&&declared<=pos?declared:pos;
+    return out.subarray(0,end);
+  }
+  resolveImages(html){
+    if(!this.firstImage)return html.replace(/<img\b[^>]*>/gi,'');
+    let budget=MobiFile.IMAGE_BUDGET;
+    return html.replace(/<img\b[^>]*>/gi,tag=>{
+      const m=/recindex\s*=\s*["']?(\d+)["']?/i.exec(tag);
+      if(!m)return '';
+      const idx=parseInt(m[1],10);
+      if(!idx||budget<=0)return '';
+      const url=MobiFile.imageDataUrl(this.imageRecord(idx));
+      if(!url)return '';
+      budget-=url.length;
+      if(budget<0)return '';
+      return `<img src="${url}" alt="">`;
+    });
+  }
+  buildHtml(bytes){
+    let html=this.decodeBytes(bytes);
+    if(!DocUtils.hasMarkup(html))return TXTParser.toHtml(html);
+    html=html.replace(/<\?xml[^>]*\?>/gi,'');
+    html=html.replace(/<!DOCTYPE[^>]*>/gi,'');
+    html=html.replace(/<!--[\s\S]*?-->/g,'');
+    html=html.replace(/<head[\s\S]*?<\/head>/gi,'');
+    html=html.replace(/<style[\s\S]*?<\/style>/gi,'');
+    html=html.replace(/<script[\s\S]*?<\/script>/gi,'');
+    html=html.replace(/<guide[\s\S]*?<\/guide>/gi,'');
+    html=html.replace(/<mbp:pagebreak[^>]*>/gi,'<div data-doc-break="1"></div>');
+    html=html.replace(/<\/?mbp:[^>]*>/gi,'');
+    html=html.replace(/<\/?(?:html|body|title|meta|link)\b[^>]*>/gi,'');
+    html=html.replace(/<\/?(?:reference|guide)\b[^>]*>/gi,'');
+    html=this.resolveImages(html);
+    /* âncoras internas do MOBI apontam para posições de byte: viram texto simples */
+    /* Remove TODO link, interno ou externo — este leitor não sabe navegar
+       para eles, e um href real sobrevivendo faria o navegador tentar
+       abrir a página de fora do app ao ser tocado. */
+    html=DocUtils.stripLinks(html);
+    html=html.replace(/(<br\s*\/?>\s*){4,}/gi,'<br><br>');
+    return html.trim()||DocUtils.notice('Livro sem texto legível','Não encontramos conteúdo para exibir neste arquivo.');
+  }
+}
+MobiFile.MAX_TEXT=48*1024*1024;
+MobiFile.MAX_IMAGE=900*1024;
+MobiFile.IMAGE_BUDGET=4*1024*1024;
+
+class MOBIParser{
+  static async parse(buffer,opts={}){
+    const onProgress=opts.onProgress||(()=>{});
+    const signal=opts.signal||null;
+    if(!MobiFile.isMobi(buffer)){
+      throw new ParseError('Este arquivo não é um MOBI válido.','Confira se a extensão corresponde ao conteúdo ou converta o livro para EPUB.');
+    }
+    const file=new MobiFile(buffer).readHeader();
+    onProgress('Descompactando o livro',0);
+    const bytes=await file.readText(p=>onProgress('Descompactando o livro',p),signal);
+    onProgress('Organizando o texto',1);
+    await Utils.yieldToUI();
+    return file.buildHtml(bytes);
+  }
+  /* Metadados rápidos para a importação — não descompacta o texto. */
+  static metadata(buffer){
+    try{
+      if(!MobiFile.isMobi(buffer))return null;
+      const file=new MobiFile(buffer).readHeader();
+      return{
+        title:file.metaTitle(),
+        author:file.metaAuthor(),
+        cover:file.coverDataUrl(),
+        drm:file.encryption===1||file.encryption===2
+      };
+    }catch(e){console.warn(e);return null}
+  }
+}
 
 /* ============================================================
    EPUB PARSER
@@ -1629,6 +2225,16 @@ class TXTParser{
 
 /* ============================================================
    DOM PAGINATOR
+   ------------------------------------------------------------
+   Monta as páginas medindo os blocos direto no DOM.
+
+   Regras que sustentam este algoritmo:
+   - os nós são MOVIDOS para a caixa de medição (nunca reserializados
+     a cada passo), então o custo cresce de forma linear com o livro;
+   - todo nó que não cabe é dividido em partes estritamente menores,
+     o que garante que o laço sempre avança;
+   - o trabalho é fatiado com pausas para a interface continuar viva,
+     reportar progresso e aceitar o cancelamento.
    ============================================================ */
 class DOMPaginator{
   static flattenBlocks(root,out){
@@ -1641,12 +2247,72 @@ class DOMPaginator{
       if(isPureWrapper)this.flattenBlocks(node,out);else out.push(node);
     });
   }
-  static async paginateHtml(htmlString,w,h,fontSize,fontFamily,lineHeight=1.65,margin=6){
+  static cloneShell(el){
+    const shell=document.createElement(el.tagName);
+    for(const attr of Array.from(el.attributes||[]))shell.setAttribute(attr.name,attr.value);
+    return shell;
+  }
+  /* Encaixa o máximo de texto possível e devolve o restante. */
+  static placeText(node,container,fits){
+    const full=node.textContent;
+    if(!full)return true;
+    const probe=document.createTextNode('');
+    container.appendChild(probe);
+    if(!fits()){container.removeChild(probe);return false}
+    let lo=0,hi=full.length;
+    while(lo<hi){
+      const mid=Math.ceil((lo+hi)/2);
+      probe.textContent=full.slice(0,mid);
+      if(fits())lo=mid;else hi=mid-1;
+    }
+    if(lo<=0){container.removeChild(probe);return false}
+    let cut=full.lastIndexOf(' ',lo);
+    if(cut<=0)cut=lo;
+    probe.textContent=full.slice(0,cut);
+    const rest=full.slice(cut);
+    if(!rest.trim())return true;
+    return document.createTextNode(rest);
+  }
+  /* true = coube inteiro | false = não coube nada | Node = sobra */
+  static place(node,container,fits,depth=0){
+    if(node.nodeType===3&&!node.textContent)return true;
+    if(node.nodeType!==1&&node.nodeType!==3)return true;
+    container.appendChild(node);
+    if(fits())return true;
+    container.removeChild(node);
+    if(node.nodeType===3)return this.placeText(node,container,fits);
+    if(DOMPaginator.ATOMIC.has(node.tagName)||depth>DOMPaginator.MAX_DEPTH)return false;
+    const kids=Array.from(node.childNodes);
+    if(!kids.length)return false;
+    const shell=this.cloneShell(node);
+    container.appendChild(shell);
+    if(!fits()){container.removeChild(shell);return false}
+    for(let k=0;k<kids.length;k++){
+      const result=this.place(kids[k],shell,fits,depth+1);
+      if(result===true)continue;
+      /* result===false: o filho voltou intacto e vai inteiro para a sobra */
+      const leftover=result===false?kids[k]:result;
+      if(!shell.childNodes.length){
+        /* nada coube aqui: remonta o nó original antes de devolver o "não coube",
+           senão os filhos já movidos para a casca se perderiam */
+        container.removeChild(shell);
+        while(node.firstChild)node.removeChild(node.firstChild);
+        for(let m=0;m<kids.length;m++)node.appendChild(m===k?leftover:kids[m]);
+        return false;
+      }
+      const rest=this.cloneShell(node);
+      rest.appendChild(leftover);
+      for(let m=k+1;m<kids.length;m++)rest.appendChild(kids[m]);
+      return rest;
+    }
+    return true;
+  }
+  static async paginateHtml(htmlString,w,h,fontSize,fontFamily,lineHeight=1.65,margin=6,opts={}){
+    const onProgress=typeof opts.onProgress==='function'?opts.onProgress:null;
+    const signal=opts.signal||null;
     const box=document.createElement('div');
-    // Mede usando a mesma estrutura da página visível. Assim, margens de parágrafos,
-    // rodapé e área útil não divergem da paginação exibida ao leitor.
     box.className='page-content';
-    box.style.cssText=`position:fixed;left:-10000px;top:0;visibility:hidden;width:${w}px;height:${h}px;min-height:0;padding:${margin}% ${margin}% 38px;overflow:hidden;box-sizing:border-box;`;
+    box.style.cssText=`position:fixed;left:-10000px;top:0;visibility:hidden;width:${w}px;height:${h}px;min-height:0;padding:${margin}% ${margin}% 38px;overflow:hidden;box-sizing:border-box;contain:layout style;`;
     const textBox=document.createElement('div');
     textBox.className='page-text';
     textBox.style.cssText=`font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};`;
@@ -1655,57 +2321,73 @@ class DOMPaginator{
     footer.textContent='Página';
     box.append(textBox,footer);
     document.body.appendChild(box);
-    const tmp=document.createElement('div');tmp.innerHTML=htmlString;
-    const elements=[];this.flattenBlocks(tmp,elements);
-    const pages=[];let current='';
 
-    for(let i = 0; i < elements.length; i++){
-      const el = elements[i];
-      const elHtml=el.nodeType===3?Utils.esc(el.textContent):el.outerHTML;
-      if(!elHtml.trim())continue;
-      
-      textBox.innerHTML = current + elHtml;
-      if(textBox.scrollHeight > textBox.clientHeight + 2){
-        if(current){
-          pages.push(current);
-          current='';
-          i--; 
-          continue;
-        }else{
-          if(el.nodeType===1 && el.children.length===0 && el.textContent.trim()){
-            const tag=el.tagName.toLowerCase(), full=el.textContent;
-            let lo=0, hi=full.length;
-            const fits = n => {
-              textBox.innerHTML = `<${tag}>${Utils.esc(full.slice(0,n))}</${tag}>`;
-              return textBox.scrollHeight <= textBox.clientHeight + 2;
-            };
-            while(lo < hi){
-              const mid = Math.ceil((lo+hi)/2);
-              if(fits(mid)) lo=mid; else hi=mid-1;
-            }
-            let cut=full.lastIndexOf(' ',lo); if(cut<=0) cut=lo;
-            const p1=full.slice(0,cut).trim(), rest=full.slice(cut).trim();
-            
-            if(p1) pages.push(`<${tag}>${Utils.esc(p1)}</${tag}>`);
-            if(rest){
-               const restEl = document.createElement(tag);
-               restEl.textContent = rest;
-               elements.splice(i + 1, 0, restEl);
-            }
-          }else{
-            pages.push(elHtml);
-          }
+    const pages=[];
+    try{
+      const tmp=document.createElement('div');
+      tmp.innerHTML=htmlString;
+      const blocks=[];
+      this.flattenBlocks(tmp,blocks);
+      const total=blocks.length||1;
+      const fits=()=>textBox.scrollHeight<=textBox.clientHeight+2;
+      const flush=()=>{
+        if(textBox.childNodes.length){
+          pages.push(textBox.innerHTML);
+          textBox.textContent='';
         }
-      }else{
-        current += elHtml;
+      };
+      let index=0;
+      const pending=[];
+      const next=()=>pending.length?pending.shift():(index<blocks.length?blocks[index++]:null);
+      let guard=0;
+      let mark=performance.now();
+      let node;
+      while((node=next())!==null){
+        if(++guard>DOMPaginator.MAX_STEPS)break;
+        if(pages.length>=DOMPaginator.MAX_PAGES)break;
+        if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+        /* Só nós de texto em branco são descartados: elementos vazios podem ser
+           marcadores de capítulo, <br> ou espaçadores e precisam sobreviver. */
+        if(node.nodeType===3&&!node.textContent.trim())continue;
+        const result=this.place(node,textBox,fits);
+        if(result===true){
+          if(performance.now()-mark>32){
+            mark=performance.now();
+            if(onProgress)onProgress(index-pending.length,total,pages.length);
+            await Utils.yieldToUI();
+          }
+          continue;
+        }
+        if(result===false){
+          if(!textBox.childNodes.length){
+            /* nem sozinho cabe (imagem gigante, tabela larga): ganha uma página só para ele */
+            textBox.appendChild(node);
+          }else{
+            pending.unshift(node);
+          }
+          flush();
+        }else{
+          flush();
+          pending.unshift(result);
+        }
+        if(performance.now()-mark>32){
+          mark=performance.now();
+          if(onProgress)onProgress(index-pending.length,total,pages.length);
+          await Utils.yieldToUI();
+        }
       }
+      flush();
+      if(onProgress)onProgress(total,total,pages.length);
+    }finally{
+      box.remove();
     }
-    
-    if(current)pages.push(current);
-    document.body.removeChild(box);
     return pages.length?pages:['<p></p>'];
   }
 }
+DOMPaginator.ATOMIC=new Set(['IMG','SVG','VIDEO','AUDIO','IFRAME','CANVAS','HR','BR','INPUT','TEXTAREA','SELECT']);
+DOMPaginator.MAX_DEPTH=24;
+DOMPaginator.MAX_PAGES=30000;
+DOMPaginator.MAX_STEPS=2000000;
 
 /* ============================================================
    READER ENGINE
@@ -1904,6 +2586,10 @@ class ReaderEngine{
     document.addEventListener('touchend',()=>this.scheduleSelectionCapture(),{passive:true});
     
     this.readerStage.addEventListener('contextmenu',e=>e.preventDefault());
+    this.readerStage.addEventListener('click',e=>{
+      const link=e.target.closest?.('a[href]');
+      if(link){e.preventDefault();e.stopPropagation()}
+    },true);
     this.readerStage.addEventListener('pointerdown',e=>this.startAnnotationPress(e));
     ['pointerup','pointercancel','pointerleave'].forEach(type=>this.readerStage.addEventListener(type,()=>this.cancelAnnotationPress()));
     window.addEventListener('resize',Utils.debounce(()=>{
@@ -1924,17 +2610,29 @@ class ReaderEngine{
   }
   pagSignature(book,w,h){
     const s=this.state.settings;
-    // Incrementar a versão invalida apenas as páginas calculadas pelo algoritmo anterior.
-    return `${book.id}__${s.fontFamily}__${s.fontSize}__${s.lineHeight}__${s.margin}__${Math.round(w)}x${Math.round(h)}__paginator-v2`;
+    return `${book.id}__${s.fontFamily}__${s.fontSize}__${s.lineHeight}__${s.margin}__${Math.round(w)}x${Math.round(h)}__paginator-v4`;
   }
   async openBook(book){
     if(this.navigating)return;
     this.navigating=true;
     this.currentBook=Utils.normalizeBook(book);
-    Utils.showLoader('Abrindo livro','Preparando sua leitura...');
+    const ctrl=new AbortController();
+    this.openController=ctrl;
+    const watchdog=setTimeout(()=>{
+      if(!ctrl.signal.aborted){
+        this.openTimedOut=true;
+        ctrl.abort();
+      }
+    },ReaderEngine.OPEN_TIMEOUT);
+    this.openTimedOut=false;
+    Utils.showLoader('Abrindo livro','Preparando sua leitura...',{
+      progress:true,
+      onCancel:()=>{this.openCancelled=true;ctrl.abort()}
+    });
+    this.openCancelled=false;
     try{
       const file=await this.db.getFile(book.id);
-      if(!file||!file.buffer)throw new Error('Arquivo não encontrado');
+      if(!file||!file.buffer)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
       this.destroy();
       document.getElementById('reader-title').textContent=book.title||'Livro';
       this.pdfMode=this.state.settings.pdfReadingMode||'lateral';
@@ -1944,13 +2642,20 @@ class ReaderEngine{
       this.hideUI();
       let start=book.progress?.globalPage??null;
       const w=this.pageWidth(),h=window.innerHeight;
+      
+      const signal=ctrl.signal;
       if(book.format==='pdf'){
         start=await this.openPdf(file.buffer,book,start);
+      }else if(book.format==='docx'){
+        start=await this.openDocx(file.buffer,book,w,h,start,signal);
+      }else if(book.format==='mobi'){
+        start=await this.openMobi(file.buffer,book,w,h,start,signal);
       }else if(book.format==='txt'){
-        start=await this.openTxt(file.buffer,book,w,h,start);
+        start=await this.openTxt(file.buffer,book,w,h,start,signal);
       }else{
-        start=await this.openEpub(file.buffer,book,w,h,start);
+        start=await this.openEpub(file.buffer,book,w,h,start,signal);
       }
+      
       if(!this.pagesData.length){
         this.pagesData=['<p></p>'];
         this.pageMeta=[{globalPage:0,chapter:0,localPage:0,title:book.title}];
@@ -1974,16 +2679,88 @@ class ReaderEngine{
       this.currentBook.totalPages=this.pagesData.length;
       if(changedLegacy)await this.db.updateBook(this.currentBook);
       
+      Utils.setLoaderProgress(100,'Quase lá...');
       await this.initSliderBook(start);
       this.showUI();
     }catch(e){
-      console.error(e);
-      Utils.toast('Não foi possível abrir este livro.','alert-triangle');
-      this.close();
+      if(Utils.isAbort(e)){
+        if(this.openTimedOut){
+          Utils.toast('O livro demorou demais para abrir e foi interrompido.','alert-triangle');
+        }else if(this.openCancelled){
+          Utils.toast('Abertura cancelada.','x');
+        }
+        this.close();
+      }else{
+        console.error(e);
+        const isParse=e instanceof ParseError;
+        Utils.toast(isParse?e.message:'Não foi possível abrir este livro.','alert-triangle');
+        if(isParse&&e.hint)setTimeout(()=>Utils.toast(e.hint,'info'),900);
+        this.close();
+      }
     }finally{
+      clearTimeout(watchdog);
+      this.openController=null;
       Utils.hideLoader();
       this.navigating=false;
     }
+  }
+  /* Repassa o andamento da paginação para a barra de progresso. */
+  paginationOpts(signal,floor=15,ceiling=98){
+    return{
+      signal,
+      onProgress:(done,total,pagesSoFar)=>{
+        const ratio=total?Math.min(1,done/total):0;
+        Utils.setLoaderProgress(floor+ratio*(ceiling-floor),
+          pagesSoFar?`Montando as páginas — ${pagesSoFar} prontas`:'Montando as páginas...');
+      }
+    };
+  }
+  /* Converte capítulos em páginas marcadas e reconstrói o índice. */
+  markChapters(chapters){
+    return chapters.map((ch,i)=>
+      `<span data-doc-chapter-marker="${i}" aria-hidden="true"></span>${ch.html||'<p></p>'}`
+    ).join('');
+  }
+  buildChapterMeta(chapters,fallbackTitle){
+    const count=chapters.length;
+    this.totalChapters=count;
+    this.chapterTitles=chapters.map((c,i)=>c.title||`Parte ${i+1}`);
+    const starts=Array(count).fill(-1);
+    let active=0;
+    this.pageMeta=this.pagesData.map((page,globalPage)=>{
+      const markers=[...page.matchAll(/data-doc-chapter-marker="(\d+)"/g)].map(m=>Number(m[1]));
+      markers.forEach(ch=>{if(starts[ch]===-1)starts[ch]=globalPage});
+      if(markers.length)active=markers[markers.length-1];
+      return{globalPage,chapter:active,localPage:0,title:this.chapterTitles[active]||fallbackTitle};
+    });
+    let last=0;
+    this.chapterStarts=starts.map(s=>{if(s>=0)last=s;return last});
+    const local=Array(count).fill(0);
+    this.pageMeta.forEach(m=>{m.localPage=local[m.chapter]++});
+  }
+  restoreFromCache(cached){
+    this.pagesData=cached.pagesData;
+    this.pageMeta=cached.pageMeta;
+    this.chapterStarts=cached.chapterStarts;
+    this.chapterTitles=cached.chapterTitles;
+    this.totalChapters=cached.totalChapters;
+  }
+  /* Livros com muitas imagens embutidas estouram o IndexedDB: nesses casos
+     preferimos repaginar na próxima abertura a encher o armazenamento. */
+  async cachePages(sig,format){
+    try{
+      let bytes=0;
+      for(const p of this.pagesData){
+        bytes+=p.length;
+        if(bytes>ReaderEngine.MAX_CACHE_CHARS)return false;
+      }
+      await this.db.setPageCache(sig,{
+        pagesData:this.pagesData,pageMeta:this.pageMeta,
+        chapterStarts:this.chapterStarts,chapterTitles:this.chapterTitles,
+        totalChapters:this.totalChapters,format
+      });
+      return true;
+    }catch(e){console.warn('Cache de páginas não salvo:',e);return false}
   }
   async openPdf(buffer,book,start){
     const{pdf,numPages}=await PDFParser.parse(buffer);
@@ -1998,41 +2775,67 @@ class ReaderEngine{
     if(start===null)start=book.progress?.pageIndex??0;
     return start;
   }
-  async openTxt(buffer,book,w,h,start){
-    const txtData=new TextDecoder('utf-8').decode(buffer);
-    const html=TXTParser.toHtml(txtData);
+  async openDocument(buffer,book,w,h,start,signal,format){
     const sig=this.pagSignature(book,w,h);
     const cached=await this.db.getPageCache(sig);
     if(cached&&cached.pagesData){
-      this.pagesData=cached.pagesData;
-      this.pageMeta=cached.pageMeta;
-      this.chapterStarts=cached.chapterStarts;
-      this.chapterTitles=cached.chapterTitles;
-      this.totalChapters=cached.totalChapters;
+      this.restoreFromCache(cached);
+      if(start===null)start=book.progress?.pageIndex??0;
+      return start;
+    }
+    const label=format==='docx'?'Lendo o documento':'Lendo o livro';
+    Utils.setLoaderProgress(4,label+'...');
+    const parser=format==='docx'?DOCXParser:MOBIParser;
+    const html=await parser.parse(buffer,{
+      signal,
+      onProgress:(text,ratio)=>Utils.setLoaderProgress(4+(Number(ratio)||0)*10,text+'...')
+    });
+    if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+    Utils.setLoaderProgress(15,'Separando os capítulos...');
+    await Utils.yieldToUI();
+    const chapters=DocUtils.splitChapters(html,book.title||'Livro');
+    this.pagesData=await DOMPaginator.paginateHtml(
+      this.markChapters(chapters),w,h,
+      this.state.settings.fontSize,this.state.settings.fontFamily,
+      this.state.settings.lineHeight,this.state.settings.margin,
+      this.paginationOpts(signal)
+    );
+    this.buildChapterMeta(chapters,book.title||'Livro');
+    await this.cachePages(sig,format);
+    if(start===null)start=book.progress?.pageIndex??0;
+    return start;
+  }
+  async openDocx(buffer,book,w,h,start,signal){
+    return this.openDocument(buffer,book,w,h,start,signal,'docx');
+  }
+  async openMobi(buffer,book,w,h,start,signal){
+    return this.openDocument(buffer,book,w,h,start,signal,'mobi');
+  }
+  async openTxt(buffer,book,w,h,start,signal){
+    const sig=this.pagSignature(book,w,h);
+    const cached=await this.db.getPageCache(sig);
+    if(cached&&cached.pagesData){
+      this.restoreFromCache(cached);
     }else{
-      this.pagesData=await DOMPaginator.paginateHtml(html,w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin);
+      let txtData;
+      try{txtData=new TextDecoder('utf-8',{fatal:true}).decode(buffer)}
+      catch(e){txtData=new TextDecoder('windows-1252').decode(buffer)}
+      const html=TXTParser.toHtml(txtData);
+      this.pagesData=await DOMPaginator.paginateHtml(html,w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin,this.paginationOpts(signal,8));
       this.totalChapters=1;
       this.chapterTitles=[book.title];
       this.chapterStarts=[0];
       this.pageMeta=this.pagesData.map((_,i)=>({globalPage:i,chapter:0,localPage:i,title:book.title}));
-      await this.db.setPageCache(sig,{
-        pagesData:this.pagesData,pageMeta:this.pageMeta,
-        chapterStarts:this.chapterStarts,chapterTitles:this.chapterTitles,
-        totalChapters:this.totalChapters,format:'txt'
-      });
+      await this.cachePages(sig,'txt');
     }
     if(start===null)start=book.progress?.pageIndex??0;
     return start;
   }
-  async openEpub(buffer,book,w,h,start){
+  async openEpub(buffer,book,w,h,start,signal){
     const sig=this.pagSignature(book,w,h);
     const cached=await this.db.getPageCache(sig);
     if(cached&&cached.pagesData){
-      this.pagesData=cached.pagesData;
-      this.pageMeta=cached.pageMeta;
-      this.chapterStarts=cached.chapterStarts;
-      this.chapterTitles=cached.chapterTitles;
-      this.totalChapters=cached.totalChapters;
+      this.restoreFromCache(cached);
     }else{
       const parsed=await EPUBParser.parse(buffer);
       this.currentExtractor=parsed.extractor;
@@ -2040,18 +2843,19 @@ class ReaderEngine{
       this.chapterTitles=parsed.toc||Array.from({length:this.totalChapters},(_,i)=>`Capítulo ${i+1}`);
       const chapterHtml=[];
       for(let ch=0;ch<this.totalChapters;ch++){
+        if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
         if(ch%4===0){
-          document.getElementById('loader-sub').textContent=`Organizando capítulo ${ch+1} de ${this.totalChapters}`;
-          await new Promise(r=>setTimeout(r,0));
+          Utils.setLoaderProgress(2+((ch+1)/Math.max(1,this.totalChapters))*13,`Organizando capítulo ${ch+1} de ${this.totalChapters}`);
+          await Utils.yieldToUI();
         }
         const raw=await parsed.extractor(ch);
-        // O marcador não ocupa espaço, mas preserva a posição do capítulo para o sumário.
-        // Paginar o fluxo inteiro evita páginas quase vazias no fim de cada arquivo do spine.
         chapterHtml.push(`<span data-epub-chapter-marker="${ch}" aria-hidden="true"></span>${raw||'<p></p>'}`);
       }
       try{
-        this.pagesData=await DOMPaginator.paginateHtml(chapterHtml.join(''),w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin);
+        this.pagesData=await DOMPaginator.paginateHtml(chapterHtml.join(''),w,h,this.state.settings.fontSize,this.state.settings.fontFamily,this.state.settings.lineHeight,this.state.settings.margin,this.paginationOpts(signal));
       }catch(e){
+        if(Utils.isAbort(e))throw e;
+        console.error(e);
         this.pagesData=chapterHtml.map(html=>EPUBParser.plainTextFallback(html));
       }
       const chapterStarts=Array(this.totalChapters).fill(-1);
@@ -2069,11 +2873,7 @@ class ReaderEngine{
       });
       const localPages=Array(this.totalChapters).fill(0);
       this.pageMeta.forEach(meta=>{meta.localPage=localPages[meta.chapter]++;});
-      await this.db.setPageCache(sig,{
-        pagesData:this.pagesData,pageMeta:this.pageMeta,
-        chapterStarts:this.chapterStarts,chapterTitles:this.chapterTitles,
-        totalChapters:this.totalChapters,format:'epub'
-      });
+      await this.cachePages(sig,'epub');
     }
     if(start===null){
       const legacyChapter=Number(book.progress?.chapter||0);
@@ -2196,29 +2996,22 @@ class ReaderEngine{
          this.renderPdfPageIfNeeded(index);this.renderPdfPageIfNeeded(index+1);this.renderPdfPageIfNeeded(index-1);
          return;
        }
-       const previousIndex=this.currentPageIndex;
-       const direction=index-previousIndex;
-       const previousPage=this.container.querySelector(`.page[data-page="${previousIndex}"]`);
-       const shouldAnimate=this.container.dataset.started==='1';
+       
        this.currentPageIndex = index;
        const pages = this.container.querySelectorAll('.page');
        pages.forEach((p, i) => {
-            p.classList.remove('active', 'prev', 'next', 'turning-left', 'turning-right');
+            p.classList.remove('active', 'prev', 'next');
             if(i === index) p.classList.add('active');
             else if(i < index) p.classList.add('prev');
             else p.classList.add('next');
        });
-       if(shouldAnimate&&previousPage&&direction!==0){
-         previousPage.classList.add(direction>0?'turning-left':'turning-right');
-         window.setTimeout(()=>previousPage.classList.remove('turning-left','turning-right'),650);
-       }
        this.container.dataset.started='1';
        this.hideAnnotationPopover();
        
        this.updateProgressText(index);
        this.persistProgressDebounced(index);
        this.applyAnnotationsToRenderedPage(index);
-      this.renderPdfPageIfNeeded(index);
+       this.renderPdfPageIfNeeded(index);
     }
   }
 
@@ -2597,7 +3390,7 @@ class ReaderEngine{
   async triggerRePagination(){
     if(!this.currentBook)return;
     const old=this.currentPageIndex||0;
-    Utils.showLoader('Ajustando leitura','Recalculando páginas...');
+    Utils.showLoader('Ajustando leitura','Recalculando páginas...',{progress:true});
     try{
       await this.openBook({...this.currentBook,progress:{...(this.currentBook.progress||{}),globalPage:old}});
     }finally{Utils.hideLoader()}
@@ -2625,6 +3418,7 @@ class ReaderEngine{
     App.openPanel('panel-annotations');
   }
   close(){
+    this.openController?.abort();
     this.hideUI();
     this.tts?.stop();
     this.destroy();
@@ -2645,6 +3439,11 @@ class ReaderEngine{
     this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
   }
 }
+/* Tempo máximo para preparar um livro antes de desistir e avisar o leitor. */
+ReaderEngine.OPEN_TIMEOUT=90000;
+/* Acima disso as páginas prontas não vão para o cache, para não estourar o
+   armazenamento do aparelho com imagens embutidas. */
+ReaderEngine.MAX_CACHE_CHARS=14*1024*1024;
 
 /* ============================================================
    LIBRARY MANAGER
@@ -3129,8 +3928,7 @@ class LibraryManager{
       const file=e.target.files?.[0];
       if(!file)return;
       const ext=file.name.split('.').pop().toLowerCase();
-      if(ext==='mobi')return Utils.toast('MOBI não é suportado nativamente. Converta para EPUB.','alert-triangle');
-      if(!['epub','pdf','txt'].includes(ext))return Utils.toast('Formato não suportado.','alert-triangle');
+      if(!['epub','pdf','txt','docx','mobi'].includes(ext))return Utils.toast('Formato não suportado.','alert-triangle');
       Utils.showLoader('Importando livro','Lendo estrutura e capa...');
       try{
         const buffer=await file.arrayBuffer();
@@ -3158,13 +3956,36 @@ class LibraryManager{
             meta.totalPages=pdf.numPages;
             pdf.destroy();
           }catch(err){console.warn(err)}
+        }else if(ext==='mobi'){
+          if(!MobiFile.isMobi(buffer)){
+            throw new ParseError('Este arquivo não é um MOBI válido.','Confira se a extensão corresponde ao conteúdo ou converta o livro para EPUB.');
+          }
+          const info=MOBIParser.metadata(buffer);
+          if(info){
+            if(info.drm){
+              throw new ParseError('Este arquivo está protegido por DRM.','Livros com proteção da Amazon não podem ser abertos aqui. Use uma cópia sem DRM ou converta o livro para EPUB.');
+            }
+            if(info.title)meta.title=info.title;
+            if(info.author)meta.author=info.author;
+            if(info.cover)meta.cover=info.cover;
+          }
+        }else if(ext==='docx'){
+          const head=new Uint8Array(buffer,0,Math.min(4,buffer.byteLength));
+          if(!(head[0]===0x50&&head[1]===0x4B)){
+            throw new ParseError('Este arquivo não é um .docx válido.','Se for um .doc antigo, abra no Word e salve como .docx antes de importar.');
+          }
         }
         await this.db.saveBook(meta,buffer);
         Utils.toast('Livro importado e salvo offline.','check');
         await this.render();
       }catch(err){
         console.error(err);
-        Utils.toast('Falha ao processar o arquivo.','alert-circle');
+        if(err instanceof ParseError){
+          Utils.toast(err.message,'alert-circle');
+          if(err.hint)setTimeout(()=>Utils.toast(err.hint,'info'),900);
+        }else{
+          Utils.toast('Falha ao processar o arquivo.','alert-circle');
+        }
       }finally{
         Utils.hideLoader();
         e.target.value='';
