@@ -843,6 +843,81 @@ body.reader-open .search-bar{display:none!important}
   .hero-title{font-size:19px}
   .bottom-nav button span{font-size:9.5px}
 }
+
+/* ============================================================
+   PDF -> EPUB CONVERSION
+   ============================================================ */
+.pdf-badge{
+  background:color-mix(in srgb,#d94841 14%,#fff);
+  color:#a92822;
+}
+.convert-btn{
+  color:var(--accent);
+}
+.convert-btn:hover{
+  background:color-mix(in srgb,var(--accent) 9%,var(--surface));
+}
+.conversion-modal{
+  position:fixed;inset:0;z-index:520;display:none;place-items:center;
+  padding:20px;background:rgba(10,10,10,.45);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.conversion-modal.show{display:grid;animation:fadeIn .16s ease}
+.conversion-dialog{
+  width:min(440px,calc(100vw - 28px));max-height:min(82dvh,680px);
+  overflow:auto;background:var(--surface);border:1px solid var(--border);
+  border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.24);
+}
+.conversion-dialog-head{
+  display:flex;align-items:flex-start;gap:12px;padding:20px 20px 12px;
+}
+.conversion-dialog-icon{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;
+  flex:0 0 42px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));
+  color:var(--accent);
+}
+.conversion-dialog-head h3{font-size:17px;line-height:1.2;margin:1px 0 4px;font-weight:850}
+.conversion-dialog-head p{font-size:12px;line-height:1.5;color:var(--muted)}
+.conversion-dialog-body{padding:8px 20px 18px}
+.conversion-dialog-body p,.conversion-dialog-body li{font-size:12.5px;line-height:1.55;color:var(--text)}
+.conversion-dialog-body ul{padding-left:18px;margin:10px 0}
+.conversion-dialog-body li+li{margin-top:5px}
+.conversion-warning{
+  display:flex;gap:10px;padding:12px 13px;margin-top:12px;border-radius:14px;
+  background:color-mix(in srgb,#f59e0b 11%,var(--surface));
+  border:1px solid color-mix(in srgb,#f59e0b 24%,var(--border));
+}
+.conversion-warning svg{width:18px;height:18px;flex:0 0 18px;color:#b45309;margin-top:1px}
+.conversion-warning strong{display:block;font-size:12px;margin-bottom:3px}
+.conversion-dialog-footer{
+  display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;
+  border-top:1px solid var(--border);
+}
+.conversion-status{
+  display:none;align-items:center;gap:10px;margin-top:12px;padding:12px;
+  border-radius:14px;background:var(--surface-2);border:1px solid var(--border);
+}
+.conversion-status.show{display:flex}
+.conversion-status .spinner{width:24px;height:24px;border-width:2px;margin:0}
+.conversion-status-text{min-width:0}
+.conversion-status-text strong{display:block;font-size:12px}
+.conversion-status-text small{display:block;margin-top:2px;color:var(--muted);font-size:10.5px}
+.conversion-details{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px
+}
+.conversion-detail{
+  padding:10px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)
+}
+.conversion-detail strong{display:block;font-size:15px}
+.conversion-detail span{display:block;margin-top:2px;font-size:9.5px;color:var(--muted)}
+.conversion-dialog .danger-note{color:#9b2236;font-weight:700}
+@media(max-width:520px){
+  .conversion-dialog{border-radius:20px}
+  .conversion-dialog-footer{padding-bottom:calc(14px + var(--safe-bottom));flex-direction:column-reverse}
+  .conversion-dialog-footer .soft-btn{width:100%;justify-content:center}
+  .conversion-details{grid-template-columns:1fr 1fr}
+}
+
 </style>
 </head>
 <body data-theme="light">
@@ -1164,6 +1239,26 @@ body.reader-open .search-bar{display:none!important}
   <div class="panel-body" id="filter-panel-body"></div>
 </section>
 
+
+<!-- PDF -> EPUB CONVERSION DIALOG -->
+<div class="conversion-modal" id="conversion-modal" role="dialog" aria-modal="true" aria-labelledby="conversion-title" aria-describedby="conversion-body">
+  <div class="conversion-dialog" role="document">
+    <div class="conversion-dialog-head">
+      <div class="conversion-dialog-icon"><i data-lucide="file-output"></i></div>
+      <div style="min-width:0;flex:1">
+        <h3 id="conversion-title">Converter PDF para EPUB</h3>
+        <p id="conversion-subtitle">Prepare o livro para leitura fluida e ajustável.</p>
+      </div>
+      <button class="icon-btn" id="conversion-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+    </div>
+    <div class="conversion-dialog-body" id="conversion-body"></div>
+    <div class="conversion-dialog-footer" id="conversion-footer">
+      <button class="soft-btn" id="conversion-cancel">Cancelar</button>
+      <button class="soft-btn primary" id="conversion-confirm"><i data-lucide="file-output"></i>Converter para EPUB</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOADER + TOASTS -->
 <div class="loader" id="loader" role="status" aria-live="polite">
   <div class="loader-box">
@@ -1178,6 +1273,2636 @@ body.reader-open .search-bar{display:none!important}
   </div>
 </div>
 <div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ============================================================
+   MOTOR LOCAL PDF -> EPUB — integrado a partir do motor fornecido
+   ============================================================ */
+(() => {
+    'use strict';
+
+    class VeredasPDFToEPUB {
+
+        // ======================================================
+        // CONFIGURAÇÕES PADRÃO
+        // ======================================================
+
+        static DEFAULTS = {
+
+            title: 'Livro Convertido',
+            author: '',
+            lang: 'pt-BR',
+            publisher: '',
+
+            // --------------------------------------------------
+            // CAPA
+            // --------------------------------------------------
+
+            // Largura máxima da imagem da capa.
+            coverMaxWidth: 1600,
+
+            // Qualidade JPEG da capa.
+            coverQuality: 0.88,
+
+            // --------------------------------------------------
+            // PÁGINAS DE IMAGEM
+            // --------------------------------------------------
+
+            // Largura máxima das páginas que precisarem
+            // ser preservadas como imagem.
+            imagePageMaxWidth: 1400,
+
+            // Qualidade JPEG dessas páginas.
+            imagePageQuality: 0.86,
+
+            // --------------------------------------------------
+            // DETECÇÃO DE PÁGINAS VAZIAS
+            // --------------------------------------------------
+
+            // Tamanho da amostra usada para verificar
+            // se uma página aparentemente vazia possui
+            // conteúdo visual.
+            blankSampleSize: 140,
+
+            // Percentual mínimo de pixels considerados
+            // visualmente diferentes do branco.
+            blankThreshold: 0.006,
+
+            // --------------------------------------------------
+            // RECONSTRUÇÃO DO TEXTO
+            // --------------------------------------------------
+
+            // Tolerância vertical para considerar dois
+            // fragmentos pertencentes à mesma linha.
+            rowToleranceFactor: 0.42,
+
+            // Espaçamento vertical que sugere novo parágrafo.
+            paragraphGapFactor: 1.75,
+
+            // Tamanho relativo que sugere título.
+            headingFactor: 1.35,
+
+            // Tamanho relativo que sugere título principal.
+            strongHeadingFactor: 1.75,
+
+            // Remove páginas completamente vazias.
+            removeEmptyPages: true
+        };
+
+
+        // ======================================================
+        // MÉTODO PRINCIPAL
+        // ======================================================
+
+        static async convert(file, options = {}) {
+
+            this._assertDependencies();
+            this._assertPdf(file);
+
+            const cfg = {
+                ...this.DEFAULTS,
+                ...options
+            };
+
+            const setProgress =
+                typeof cfg.onProgress === 'function'
+                    ? cfg.onProgress
+                    : () => { };
+
+            // --------------------------------------------------
+            // Lê o arquivo
+            // --------------------------------------------------
+
+            const arrayBuffer = await file.arrayBuffer();
+
+            // --------------------------------------------------
+            // Carrega PDF.js
+            // --------------------------------------------------
+
+            const pdf = await pdfjsLib
+                .getDocument({
+                    data: arrayBuffer
+                })
+                .promise;
+
+            // --------------------------------------------------
+            // Extrai e reconstrói o conteúdo
+            // --------------------------------------------------
+
+            const data = await this._extractPdf(
+                pdf,
+                cfg,
+                setProgress
+            );
+
+            // --------------------------------------------------
+            // Metadados
+            // --------------------------------------------------
+
+            const meta = {
+
+                id: this._uuid(),
+
+                title:
+                    String(
+                        cfg.title ||
+                        file.name.replace(/\.pdf$/i, '') ||
+                        'Livro Convertido'
+                    ).trim(),
+
+                author:
+                    String(
+                        cfg.author || ''
+                    ).trim(),
+
+                lang:
+                    String(
+                        cfg.lang || 'pt-BR'
+                    ).trim() || 'pt-BR',
+
+                publisher:
+                    String(
+                        cfg.publisher || ''
+                    ).trim()
+            };
+
+            setProgress({
+                stage: 'epub',
+                percent: 72,
+                message: 'Reconstruindo o livro…'
+            });
+
+            // --------------------------------------------------
+            // Cria EPUB
+            // --------------------------------------------------
+
+            const epubBuffer =
+                await this._createEpub(
+                    meta,
+                    data,
+                    cfg,
+                    setProgress
+                );
+
+            // --------------------------------------------------
+            // Blob final
+            // --------------------------------------------------
+
+            const blob =
+                new Blob(
+                    [epubBuffer],
+                    {
+                        type: 'application/epub+zip'
+                    }
+                );
+
+            setProgress({
+                stage: 'done',
+                percent: 100,
+                message: 'Conversão concluída.'
+            });
+
+            return {
+
+                blob,
+
+                buffer: epubBuffer,
+
+                filename:
+                    `${this._slugify(meta.title)}.epub`,
+
+                coverDataUrl:
+                    data.coverDataUrl || '',
+
+                meta,
+
+                stats: {
+
+                    pdfPages:
+                        data.numPages,
+
+                    contentPages:
+                        data.pages.length,
+
+                    imagePages:
+                        data.imagePageCount,
+
+                    ignoredBlankPages:
+                        data.ignoredBlankPages,
+
+                    words:
+                        data.wordCount
+                },
+
+                previewHtml:
+                    this._buildPreviewHtml(
+                        meta,
+                        data
+                    )
+            };
+        }
+
+
+        // ======================================================
+        // VALIDAÇÕES
+        // ======================================================
+
+        static _assertDependencies() {
+
+            if (!window.pdfjsLib) {
+
+                throw new Error(
+                    'PDF.js não foi carregado. ' +
+                    'Inclua pdf.min.js antes deste motor.'
+                );
+            }
+
+            if (!window.JSZip) {
+
+                throw new Error(
+                    'JSZip não foi carregado. ' +
+                    'Inclua jszip.min.js antes deste motor.'
+                );
+            }
+        }
+
+
+        static _assertPdf(file) {
+
+            if (
+                !file ||
+                typeof file.arrayBuffer !== 'function'
+            ) {
+
+                throw new Error(
+                    'Forneça um objeto File/Blob contendo o PDF.'
+                );
+            }
+
+            const name =
+                String(
+                    file.name || ''
+                ).toLowerCase();
+
+            const type =
+                String(
+                    file.type || ''
+                ).toLowerCase();
+
+            if (
+                type &&
+                type !== 'application/pdf' &&
+                !name.endsWith('.pdf')
+            ) {
+
+                throw new Error(
+                    'O arquivo selecionado não parece ser um PDF.'
+                );
+            }
+        }
+
+
+        // ======================================================
+        // UTILITÁRIOS
+        // ======================================================
+
+        static _uuid() {
+
+            if (
+                globalThis.crypto &&
+                typeof globalThis.crypto.randomUUID === 'function'
+            ) {
+
+                return crypto.randomUUID();
+            }
+
+            return (
+                `${Date.now()}-` +
+                `${Math.random().toString(16).slice(2)}-` +
+                `${Math.random().toString(16).slice(2)}`
+            );
+        }
+
+
+        static _escapeXml(value) {
+
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+
+        static _escapeHtml(value) {
+
+            return this._escapeXml(value);
+        }
+
+
+        static _slugify(value) {
+
+            return String(value || 'livro')
+
+                .normalize('NFD')
+
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ''
+                )
+
+                .toLowerCase()
+
+                .replace(
+                    /[^a-z0-9]+/g,
+                    '-'
+                )
+
+                .replace(
+                    /^-+|-+$/g,
+                    ''
+                )
+
+                .slice(0, 90)
+
+                || 'livro';
+        }
+
+
+        static _safeId(text) {
+
+            return this
+                ._slugify(text)
+                .replace(/-/g, '_')
+                .slice(0, 40)
+                || 'heading';
+        }
+
+
+        // ======================================================
+        // EXTRAÇÃO DO PDF
+        // ======================================================
+
+        static async _extractPdf(
+            pdf,
+            cfg,
+            setProgress
+        ) {
+
+            const pages = [];
+
+            let wordCount = 0;
+
+            let imagePageCount = 0;
+
+            let ignoredBlankPages = 0;
+
+            let coverDataUrl = '';
+
+
+            // --------------------------------------------------
+            // Percorre todas as páginas
+            // --------------------------------------------------
+
+            for (
+                let pageNumber = 1;
+                pageNumber <= pdf.numPages;
+                pageNumber++
+            ) {
+
+                const progress =
+                    (
+                        (pageNumber - 1) /
+                        Math.max(1, pdf.numPages)
+                    ) * 68;
+
+                setProgress({
+
+                    stage: 'pdf',
+
+                    percent: progress,
+
+                    message:
+                        `Lendo página ${pageNumber} ` +
+                        `de ${pdf.numPages}…`
+                });
+
+
+                const page =
+                    await pdf.getPage(pageNumber);
+
+
+                // ==================================================
+                // PRIMEIRA PÁGINA = CAPA
+                // ==================================================
+
+                if (pageNumber === 1) {
+
+                    const cover =
+                        await this._renderPageImage(
+                            page,
+                            cfg.coverMaxWidth,
+                            cfg.coverQuality
+                        );
+
+                    coverDataUrl =
+                        cover.dataUrl;
+
+                    // Importante:
+                    // não manda o texto da capa para o conteúdo.
+                    continue;
+                }
+
+
+                // ==================================================
+                // EXTRAÇÃO DO TEXTO
+                // ==================================================
+
+                const textContent =
+                    await page.getTextContent({
+
+                        normalizeWhitespace: true,
+
+                        disableCombineTextItems: false
+                    });
+
+
+                const textItems =
+                    Array.isArray(
+                        textContent.items
+                    )
+
+                        ? textContent.items
+                            .filter(
+                                item =>
+                                    String(
+                                        item?.str || ''
+                                    ).trim()
+                            )
+
+                        : [];
+
+
+                // ==================================================
+                // EXISTE TEXTO
+                // ==================================================
+
+                if (textItems.length) {
+
+                    const grouped =
+                        this._groupPage(
+                            textContent.items,
+                            cfg
+                        );
+
+
+                    if (
+                        grouped.blocks.length
+                    ) {
+
+                        pages.push({
+
+                            number: pageNumber,
+
+                            blocks:
+                                grouped.blocks
+                        });
+
+
+                        wordCount +=
+                            grouped.wordCount;
+
+                        continue;
+                    }
+                }
+
+
+                // ==================================================
+                // NÃO HÁ TEXTO
+                // ==================================================
+
+                // Se o comportamento configurado permitir,
+                // mantém a página como imagem.
+
+                if (
+                    !cfg.removeEmptyPages
+                ) {
+
+                    const rendered =
+                        await this._renderPageImage(
+
+                            page,
+
+                            cfg.imagePageMaxWidth,
+
+                            cfg.imagePageQuality
+                        );
+
+
+                    pages.push({
+
+                        number: pageNumber,
+
+                        blocks: [
+
+                            {
+
+                                type: 'image',
+
+                                src:
+                                    rendered.dataUrl,
+
+                                alt:
+                                    `Página ${pageNumber}`
+                            }
+                        ]
+                    });
+
+
+                    imagePageCount++;
+
+                    continue;
+                }
+
+
+                // ==================================================
+                // VERIFICA VISUALMENTE A PÁGINA
+                // ==================================================
+
+                const rendered =
+                    await this._renderPageImage(
+
+                        page,
+
+                        cfg.imagePageMaxWidth,
+
+                        cfg.imagePageQuality
+                    );
+
+
+                // Existe alguma coisa visual relevante?
+                if (
+                    this._canvasHasVisibleContent(
+                        rendered.canvas,
+                        cfg
+                    )
+                ) {
+
+                    pages.push({
+
+                        number: pageNumber,
+
+                        blocks: [
+
+                            {
+
+                                type: 'image',
+
+                                src:
+                                    rendered.dataUrl,
+
+                                alt:
+                                    `Ilustração ou página ${pageNumber}`
+                            }
+                        ]
+                    });
+
+
+                    imagePageCount++;
+
+                } else {
+
+                    // Página realmente vazia:
+                    // não entra no EPUB.
+
+                    ignoredBlankPages++;
+                }
+            }
+
+
+            return {
+
+                numPages:
+                    pdf.numPages,
+
+                pages,
+
+                wordCount,
+
+                imagePageCount,
+
+                ignoredBlankPages,
+
+                coverDataUrl
+            };
+        }
+
+
+        // ======================================================
+        // NORMALIZA ITEMS DO PDF.JS
+        // ======================================================
+
+        static _normalizeItems(items) {
+
+            return items
+
+                .filter(
+                    item =>
+                        typeof item?.str === 'string' &&
+                        item.str.trim()
+                )
+
+                .map(item => {
+
+                    const t =
+                        item.transform ||
+                        [1, 0, 0, 1, 0, 0];
+
+
+                    const fontSize =
+                        Math.hypot(
+                            t[0],
+                            t[1]
+                        )
+
+                        ||
+
+                        Math.hypot(
+                            t[2],
+                            t[3]
+                        )
+
+                        ||
+
+                        10;
+
+
+                    return {
+
+                        str:
+                            item.str.trim(),
+
+                        x:
+                            Number(
+                                t[4] || 0
+                            ),
+
+                        y:
+                            Number(
+                                t[5] || 0
+                            ),
+
+                        w:
+                            Number(
+                                item.width || 0
+                            ),
+
+                        h:
+                            Math.abs(
+                                Number(
+                                    item.height ||
+                                    fontSize
+                                )
+                            ) || fontSize,
+
+                        fontSize
+                    };
+                });
+        }
+
+
+        // ======================================================
+        // RECONSTRUÇÃO DE LINHAS / PARÁGRAFOS
+        // ======================================================
+
+        static _groupPage(
+            items,
+            cfg
+        ) {
+
+            const clean =
+                this._normalizeItems(items);
+
+
+            if (!clean.length) {
+
+                return {
+
+                    blocks: [],
+
+                    wordCount: 0
+                };
+            }
+
+
+            // --------------------------------------------------
+            // Tamanho médio das fontes
+            // --------------------------------------------------
+
+            const sortedSizes =
+                clean
+                    .map(
+                        item =>
+                            item.fontSize
+                    )
+                    .sort(
+                        (a, b) =>
+                            a - b
+                    );
+
+
+            const medianSize =
+                sortedSizes[
+                Math.floor(
+                    sortedSizes.length / 2
+                )
+                ] || 12;
+
+
+            const tolerance =
+                Math.max(
+                    2.5,
+                    medianSize *
+                    cfg.rowToleranceFactor
+                );
+
+
+            // --------------------------------------------------
+            // Agrupa os fragmentos em linhas
+            // --------------------------------------------------
+
+            const rows = [];
+
+
+            for (
+                const item of clean
+            ) {
+
+                let row =
+                    rows.find(
+                        r =>
+                            Math.abs(
+                                r.y -
+                                item.y
+                            ) <= tolerance
+                    );
+
+
+                if (!row) {
+
+                    row = {
+
+                        y:
+                            item.y,
+
+                        items: []
+                    };
+
+
+                    rows.push(row);
+                }
+
+
+                row.items.push(item);
+
+
+                // Recalcula a posição média
+                row.y =
+                    row.items.reduce(
+                        (
+                            sum,
+                            current
+                        ) =>
+                            sum +
+                            current.y,
+                        0
+                    ) /
+                    row.items.length;
+            }
+
+
+            // PDF usa coordenadas que crescem
+            // de baixo para cima.
+            rows.sort(
+                (a, b) =>
+                    b.y - a.y
+            );
+
+
+            // --------------------------------------------------
+            // Converte rows em linhas de texto
+            // --------------------------------------------------
+
+            const lines =
+                rows
+
+                    .map(row => {
+
+                        row.items.sort(
+                            (a, b) =>
+                                a.x - b.x
+                        );
+
+
+                        let text = '';
+
+                        let prev = null;
+
+
+                        for (
+                            const item
+                            of row.items
+                        ) {
+
+                            const gap =
+                                prev
+                                    ? item.x -
+                                    (
+                                        prev.x +
+                                        prev.w
+                                    )
+                                    : 0;
+
+
+                            const left =
+                                /^[\p{L}\p{N}]/u
+                                    .test(
+                                        item.str
+                                    );
+
+
+                            const right =
+                                prev &&
+                                /[\p{L}\p{N}]$/u
+                                    .test(
+                                        prev.str
+                                    );
+
+
+                            const addSpace =
+                                prev &&
+                                left &&
+                                right &&
+                                gap >
+                                Math.max(
+                                    1,
+                                    medianSize *
+                                    0.08
+                                );
+
+
+                            text +=
+                                (
+                                    addSpace
+                                        ? ' '
+                                        : ''
+                                ) +
+                                item.str;
+
+
+                            prev = item;
+                        }
+
+
+                        return {
+
+                            text:
+                                text
+                                    .replace(
+                                        /\s+/g,
+                                        ' '
+                                    )
+                                    .trim(),
+
+                            y:
+                                row.y,
+
+                            x:
+                                row.items[0]?.x ||
+                                0,
+
+                            fontSize:
+                                row.items.reduce(
+                                    (
+                                        sum,
+                                        item
+                                    ) =>
+                                        sum +
+                                        item.fontSize,
+                                    0
+                                ) /
+                                row.items.length
+                        };
+
+                    })
+
+                    .filter(
+                        line =>
+                            line.text
+                    );
+
+
+            if (!lines.length) {
+
+                return {
+
+                    blocks: [],
+
+                    wordCount: 0
+                };
+            }
+
+
+            // --------------------------------------------------
+            // Detecta fonte base
+            // --------------------------------------------------
+
+            const bodySizes =
+                lines
+                    .map(
+                        line =>
+                            line.fontSize
+                    )
+                    .sort(
+                        (a, b) =>
+                            a - b
+                    );
+
+
+            const base =
+                bodySizes[
+                Math.floor(
+                    bodySizes.length / 2
+                )
+                ] || medianSize;
+
+
+            // --------------------------------------------------
+            // Detecta títulos
+            // --------------------------------------------------
+
+            const isHeading =
+                line => {
+
+                    const strongWords =
+                        /^(cap[ií]tulo|chapter|parte|se[cç][aã]o|sess[aã]o|introdu[cç][aã]o|conclus[aã]o|pref[aá]cio|sum[aá]rio|bibliografia|refer[eê]ncias|ap[eê]ndice)\b/i;
+
+
+                    return (
+
+                        line.fontSize >=
+                        base *
+                        cfg.headingFactor
+
+                    )
+
+                        ||
+
+                        (
+
+                            strongWords.test(
+                                line.text
+                            )
+
+                            &&
+
+                            line.text.length <
+                            120
+                        );
+                };
+
+
+            const blocks = [];
+
+            let current = null;
+
+
+            // --------------------------------------------------
+            // Monta parágrafos
+            // --------------------------------------------------
+
+            for (
+                let i = 0;
+                i < lines.length;
+                i++
+            ) {
+
+                const line =
+                    lines[i];
+
+                const next =
+                    lines[i + 1];
+
+                const gap =
+                    next
+                        ? Math.abs(
+                            line.y -
+                            next.y
+                        )
+                        : 0;
+
+                const heading =
+                    isHeading(line);
+
+
+                // ------------------------------------------------
+                // Decide se começa um novo parágrafo
+                // ------------------------------------------------
+
+                const likelyNewParagraph =
+                    !current ||
+
+                    gap >
+                    Math.max(
+                        base *
+                        cfg.paragraphGapFactor,
+                        14
+                    ) ||
+
+                    heading ||
+
+                    (
+                        current &&
+
+                        /[.!?:;”")]$/.test(
+                            current.lines[
+                            current.lines.length - 1
+                            ]
+                        ) &&
+
+                        line.x <=
+                        current.firstX +
+                        base * 1.8 &&
+
+                        gap >
+                        base * 0.9
+                    );
+
+
+                // ------------------------------------------------
+                // Título
+                // ------------------------------------------------
+
+                if (heading) {
+
+                    blocks.push({
+
+                        type:
+                            line.fontSize >=
+                                base *
+                                cfg.strongHeadingFactor
+                                ? 'h1'
+                                : 'h2',
+
+                        text:
+                            line.text
+                    });
+
+
+                    current = null;
+
+                    continue;
+                }
+
+
+                // ------------------------------------------------
+                // Novo parágrafo
+                // ------------------------------------------------
+
+                if (
+                    likelyNewParagraph
+                ) {
+
+                    current = {
+
+                        type: 'p',
+
+                        lines: [
+                            line.text
+                        ],
+
+                        firstX:
+                            line.x
+                    };
+
+
+                    blocks.push(current);
+
+                } else {
+
+                    // Continuação do parágrafo.
+                    current.lines.push(
+                        line.text
+                    );
+                }
+            }
+
+
+            // --------------------------------------------------
+            // Finaliza os blocos
+            // --------------------------------------------------
+
+            const finalBlocks =
+                blocks
+
+                    .map(
+                        block =>
+                            block.type === 'p'
+
+                                ? {
+
+                                    type: 'p',
+
+                                    text:
+                                        block.lines
+                                            .join(' ')
+                                            .replace(
+                                                /\s+/g,
+                                                ' '
+                                            )
+                                            .trim()
+                                }
+
+                                : block
+                    )
+
+                    .filter(
+                        block =>
+                            block.text
+                    );
+
+
+            // --------------------------------------------------
+            // Contagem de palavras
+            // --------------------------------------------------
+
+            const words =
+                finalBlocks.reduce(
+                    (
+                        total,
+                        block
+                    ) => {
+
+                        return (
+                            total +
+                            block.text
+                                .split(
+                                    /\s+/
+                                )
+                                .filter(Boolean)
+                                .length
+                        );
+                    },
+                    0
+                );
+
+
+            return {
+
+                blocks:
+                    finalBlocks,
+
+                wordCount:
+                    words
+            };
+        }
+
+
+        // ======================================================
+        // RENDERIZA UMA PÁGINA DO PDF COMO IMAGEM
+        // ======================================================
+
+        static async _renderPageImage(
+            page,
+            maxWidth,
+            quality
+        ) {
+
+            const baseViewport =
+                page.getViewport({
+                    scale: 1
+                });
+
+
+            // Mantém a escala em faixa
+            // razoável para evitar imagens gigantes.
+            const scale =
+                Math.min(
+                    2,
+                    Math.max(
+                        1,
+                        maxWidth /
+                        baseViewport.width
+                    )
+                );
+
+
+            const viewport =
+                page.getViewport({
+                    scale
+                });
+
+
+            const canvas =
+                document.createElement(
+                    'canvas'
+                );
+
+
+            canvas.width =
+                Math.ceil(
+                    viewport.width
+                );
+
+
+            canvas.height =
+                Math.ceil(
+                    viewport.height
+                );
+
+
+            const context =
+                canvas.getContext(
+                    '2d',
+                    {
+                        alpha: false,
+
+                        willReadFrequently: true
+                    }
+                );
+
+
+            await page.render({
+
+                canvasContext:
+                    context,
+
+                viewport,
+
+                background:
+                    '#ffffff'
+
+            }).promise;
+
+
+            return {
+
+                canvas,
+
+                dataUrl:
+                    canvas.toDataURL(
+                        'image/jpeg',
+                        quality
+                    )
+            };
+        }
+
+
+        // ======================================================
+        // VERIFICA SE UMA PÁGINA É REALMENTE VAZIA
+        // ======================================================
+
+        static _canvasHasVisibleContent(
+            canvas,
+            cfg
+        ) {
+
+            const sourceWidth =
+                canvas.width;
+
+            const sourceHeight =
+                canvas.height;
+
+
+            if (
+                !sourceWidth ||
+                !sourceHeight
+            ) {
+
+                return false;
+            }
+
+
+            const sampleSize =
+                cfg.blankSampleSize;
+
+
+            const width =
+                Math.min(
+                    sampleSize,
+                    sourceWidth
+                );
+
+
+            const height =
+                Math.min(
+                    sampleSize,
+                    sourceHeight
+                );
+
+
+            // Pequena tela para análise.
+            const sample =
+                document.createElement(
+                    'canvas'
+                );
+
+
+            sample.width =
+                width;
+
+            sample.height =
+                height;
+
+
+            const context =
+                sample.getContext(
+                    '2d',
+                    {
+                        willReadFrequently:
+                            true
+                    }
+                );
+
+
+            context.drawImage(
+                canvas,
+                0,
+                0,
+                width,
+                height
+            );
+
+
+            const pixels =
+                context.getImageData(
+                    0,
+                    0,
+                    width,
+                    height
+                ).data;
+
+
+            let visible = 0;
+
+            const total =
+                width *
+                height;
+
+
+            // --------------------------------------------------
+            // Analisa pixels
+            // --------------------------------------------------
+
+            for (
+                let i = 0;
+                i < pixels.length;
+                i += 4
+            ) {
+
+                const r =
+                    pixels[i];
+
+                const g =
+                    pixels[i + 1];
+
+                const b =
+                    pixels[i + 2];
+
+                const a =
+                    pixels[i + 3];
+
+
+                if (
+
+                    a > 8 &&
+
+                    (
+
+                        255 -
+                        Math.max(
+                            r,
+                            g,
+                            b
+                        ) > 14
+
+                        ||
+
+                        Math.abs(
+                            r - g
+                        ) > 10
+
+                        ||
+
+                        Math.abs(
+                            g - b
+                        ) > 10
+                    )
+
+                ) {
+
+                    visible++;
+                }
+            }
+
+
+            return (
+                visible /
+                total
+            ) >=
+                cfg.blankThreshold;
+        }
+
+
+        // ======================================================
+        // ESTILOS DO EPUB
+        // ======================================================
+
+        static _styles() {
+
+            return `
+
+body{
+    font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+    line-height:
+        1.7;
+
+    margin:
+        0 auto;
+
+    padding:
+        0 6%;
+
+    max-width:
+        46em;
+
+    color:
+        #222;
+}
+
+h1{
+    font-size:
+        2em;
+
+    line-height:
+        1.15;
+
+    margin:
+        0 0 .65em;
+}
+
+h2{
+    font-size:
+        1.35em;
+
+    line-height:
+        1.25;
+
+    margin:
+        1.8em 0 .65em;
+}
+
+p{
+    margin:
+        .9em 0;
+}
+
+.cover-page{
+    margin:
+        0;
+
+    padding:
+        0;
+
+    max-width:
+        none;
+
+    text-align:
+        center;
+
+    background:
+        #fff;
+}
+
+.cover-image{
+    display:
+        block;
+
+    width:
+        auto;
+
+    height:
+        100vh;
+
+    max-width:
+        100%;
+
+    margin:
+        0 auto;
+
+    object-fit:
+        contain;
+}
+
+.frontmatter{
+    min-height:
+        70vh;
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    justify-content:
+        center;
+
+    text-align:
+        center;
+}
+
+.frontmatter h1{
+    font-size:
+        2.4em;
+}
+
+.author{
+    font-style:
+        italic;
+
+    color:
+        #555;
+}
+
+.content-page{
+    margin:
+        0;
+
+    padding:
+        0;
+}
+
+.embedded-page-image{
+    margin:
+        1.4em 0;
+
+    text-align:
+        center;
+}
+
+.embedded-page-image img{
+    display:
+        block;
+
+    max-width:
+        100%;
+
+    height:
+        auto;
+
+    margin:
+        0 auto;
+}
+
+nav ol{
+    line-height:
+        1.8;
+}
+
+`;
+        }
+
+
+        // ======================================================
+        // COLETA TÍTULOS
+        // ======================================================
+
+        static _collectHeadings(
+            data
+        ) {
+
+            const headings = [];
+
+            let counter = 0;
+
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    if (
+                        block.type === 'h1' ||
+                        block.type === 'h2'
+                    ) {
+
+                        counter++;
+
+
+                        headings.push({
+
+                            id:
+                                `heading-${counter}`,
+
+                            text:
+                                block.text,
+
+                            type:
+                                block.type
+                        });
+                    }
+                }
+            }
+
+
+            return headings;
+        }
+
+
+        // ======================================================
+        // COVER.XHTML
+        // ======================================================
+
+        static _buildCoverXhtml(
+            meta
+        ) {
+
+            return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html
+    xmlns="http://www.w3.org/1999/xhtml"
+    xmlns:epub="http://www.idpf.org/2007/ops"
+    lang="${this._escapeXml(meta.lang)}">
+
+<head>
+    <meta charset="utf-8"/>
+    <title>
+        ${this._escapeXml(meta.title)}
+    </title>
+
+    <link
+        rel="stylesheet"
+        type="text/css"
+        href="styles.css"/>
+</head>
+
+<body class="cover-page">
+
+    <img
+        class="cover-image"
+        src="cover.jpg"
+        alt="Capa de ${this._escapeXml(meta.title)}"
+        epub:type="cover"/>
+
+</body>
+
+</html>`;
+        }
+
+
+        // ======================================================
+        // BOOK.XHTML
+        // ======================================================
+
+        static _buildBookXhtml(
+            meta,
+            data
+        ) {
+
+            const body = [];
+
+
+            // --------------------------------------------------
+            // Folha inicial com título
+            // --------------------------------------------------
+
+            body.push(
+
+                `<section class="frontmatter" id="top">` +
+
+                `<h1>` +
+                this._escapeHtml(
+                    meta.title
+                ) +
+                `</h1>` +
+
+                (
+
+                    meta.author
+
+                        ? `<p class="author">` +
+                        this._escapeHtml(
+                            meta.author
+                        ) +
+                        `</p>`
+
+                        : ''
+                ) +
+
+                `</section>`
+            );
+
+
+            let headingIndex = 0;
+
+            let imageIndex = 0;
+
+
+            // --------------------------------------------------
+            // Conteúdo
+            // --------------------------------------------------
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    // ------------------------------------------
+                    // Títulos
+                    // ------------------------------------------
+
+                    if (
+                        block.type === 'h1' ||
+                        block.type === 'h2'
+                    ) {
+
+                        headingIndex++;
+
+
+                        body.push(
+
+                            `<${block.type} ` +
+                            `id="heading-${headingIndex}">` +
+
+                            this._escapeHtml(
+                                block.text
+                            ) +
+
+                            `</${block.type}>`
+                        );
+
+
+                        continue;
+                    }
+
+
+                    // ------------------------------------------
+                    // Imagens
+                    // ------------------------------------------
+
+                    if (
+                        block.type === 'image'
+                    ) {
+
+                        imageIndex++;
+
+
+                        const fileName =
+                            block.epubFile ||
+                            `page-image-${imageIndex}.jpg`;
+
+
+                        body.push(
+
+                            `<figure ` +
+                            `class="embedded-page-image">` +
+
+                            `<img ` +
+
+                            `src="${this._escapeXml(
+                                fileName
+                            )}" ` +
+
+                            `alt="${this._escapeHtml(
+                                block.alt ||
+                                'Imagem'
+                            )}"/>` +
+
+                            `</figure>`
+                        );
+
+
+                        continue;
+                    }
+
+
+                    // ------------------------------------------
+                    // Parágrafo
+                    // ------------------------------------------
+
+                    if (
+                        block.type === 'p' &&
+                        block.text
+                    ) {
+
+                        body.push(
+
+                            `<p>` +
+
+                            this._escapeHtml(
+                                block.text
+                            ) +
+
+                            `</p>`
+                        );
+                    }
+                }
+            }
+
+
+            return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html
+    xmlns="http://www.w3.org/1999/xhtml"
+    lang="${this._escapeXml(meta.lang)}">
+
+<head>
+
+    <meta charset="utf-8"/>
+
+    <title>
+        ${this._escapeHtml(meta.title)}
+    </title>
+
+    <link
+        rel="stylesheet"
+        type="text/css"
+        href="styles.css"/>
+
+</head>
+
+<body>
+
+    ${body.join('')}
+
+</body>
+
+</html>`;
+        }
+
+
+        // ======================================================
+        // NAV.XHTML
+        // ======================================================
+
+        static _buildNav(
+            meta,
+            data
+        ) {
+
+            const headings =
+                this._collectHeadings(
+                    data
+                );
+
+
+            const entries =
+                (
+                    headings.length
+                        ? headings
+                        : [
+                            {
+                                id: 'top',
+                                text: 'Início'
+                            }
+                        ]
+                )
+
+                    .map(
+                        heading =>
+
+                            `<li>` +
+
+                            `<a href="book.xhtml#${heading.id}">` +
+
+                            this._escapeHtml(
+                                heading.text
+                            ) +
+
+                            `</a>` +
+
+                            `</li>`
+                    )
+
+                    .join('');
+
+
+            return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html
+    xmlns="http://www.w3.org/1999/xhtml"
+    xmlns:epub="http://www.idpf.org/2007/ops"
+    lang="${this._escapeXml(meta.lang)}">
+
+<head>
+
+    <title>
+        Sumário
+    </title>
+
+</head>
+
+<body>
+
+    <nav
+        epub:type="toc"
+        id="toc">
+
+        <h1>
+            Sumário
+        </h1>
+
+        <ol>
+            ${entries}
+        </ol>
+
+    </nav>
+
+</body>
+
+</html>`;
+        }
+
+
+        // ======================================================
+        // TOC.NCX
+        // ======================================================
+
+        static _buildNcx(
+            meta,
+            data
+        ) {
+
+            const headings =
+                this._collectHeadings(
+                    data
+                );
+
+
+            const points =
+                (
+                    headings.length
+                        ? headings
+                        : [
+                            {
+                                id: 'top',
+                                text: 'Início'
+                            }
+                        ]
+                )
+
+                    .map(
+                        (
+                            heading,
+                            index
+                        ) =>
+
+                            `<navPoint ` +
+                            `id="nav-${index + 1}" ` +
+                            `playOrder="${index + 1}">` +
+
+                            `<navLabel>` +
+
+                            `<text>` +
+                            this._escapeXml(
+                                heading.text
+                            ) +
+                            `</text>` +
+
+                            `</navLabel>` +
+
+                            `<content ` +
+                            `src="book.xhtml#${heading.id}"/>` +
+
+                            `</navPoint>`
+                    )
+
+                    .join('');
+
+
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<ncx
+    xmlns="http://www.daisy.org/z3986/2005/ncx/"
+    version="2005-1"
+    xml:lang="${this._escapeXml(meta.lang)}">
+
+<head>
+
+    <meta
+        name="dtb:uid"
+        content="urn:uuid:${meta.id}"/>
+
+</head>
+
+<docTitle>
+
+    <text>
+        ${this._escapeXml(meta.title)}
+    </text>
+
+</docTitle>
+
+<navMap>
+
+    ${points}
+
+</navMap>
+
+</ncx>`;
+        }
+
+
+        // ======================================================
+        // CONTENT.OPF
+        // ======================================================
+
+        static _buildOpf(
+            meta,
+            data
+        ) {
+
+            const images = [];
+
+            let imageIndex = 0;
+
+
+            // --------------------------------------------------
+            // Imagens internas
+            // --------------------------------------------------
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    if (
+                        block.type === 'image'
+                    ) {
+
+                        imageIndex++;
+
+                        block.epubFile =
+                            block.epubFile ||
+                            `page-image-${imageIndex}.jpg`;
+
+
+                        images.push(
+
+                            `<item ` +
+                            `id="page-image-${imageIndex}" ` +
+                            `href="${this._escapeXml(
+                                block.epubFile
+                            )}" ` +
+                            `media-type="image/jpeg"/>`
+                        );
+                    }
+                }
+            }
+
+
+            const modified =
+                new Date()
+                    .toISOString()
+                    .replace(
+                        /\.\d{3}Z$/,
+                        'Z'
+                    );
+
+
+            return `<?xml version="1.0" encoding="utf-8"?>
+
+<package
+    xmlns="http://www.idpf.org/2007/opf"
+    version="3.0"
+    unique-identifier="pub-id">
+
+    <metadata
+        xmlns:dc="http://purl.org/dc/elements/1.1/">
+
+        <dc:identifier id="pub-id">
+            urn:uuid:${meta.id}
+        </dc:identifier>
+
+        <dc:title>
+            ${this._escapeXml(meta.title)}
+        </dc:title>
+
+        ${meta.author
+                    ? `<dc:creator>
+                    ${this._escapeXml(meta.author)}
+                   </dc:creator>`
+                    : ''
+                }
+
+        <dc:language>
+            ${this._escapeXml(meta.lang)}
+        </dc:language>
+
+        ${meta.publisher
+                    ? `<dc:publisher>
+                    ${this._escapeXml(meta.publisher)}
+                   </dc:publisher>`
+                    : ''
+                }
+
+        <meta
+            name="cover"
+            content="cover-image"/>
+
+        <meta
+            property="dcterms:modified">
+            ${modified}
+        </meta>
+
+    </metadata>
+
+
+    <manifest>
+
+        <item
+            id="cover-page"
+            href="cover.xhtml"
+            media-type="application/xhtml+xml"/>
+
+        <item
+            id="cover-image"
+            href="cover.jpg"
+            media-type="image/jpeg"
+            properties="cover-image"/>
+
+        <item
+            id="book"
+            href="book.xhtml"
+            media-type="application/xhtml+xml"/>
+
+        <item
+            id="nav"
+            href="nav.xhtml"
+            media-type="application/xhtml+xml"
+            properties="nav"/>
+
+        <item
+            id="ncx"
+            href="toc.ncx"
+            media-type="application/x-dtbncx+xml"/>
+
+        <item
+            id="css"
+            href="styles.css"
+            media-type="text/css"/>
+
+        ${images.join('\n        ')}
+
+    </manifest>
+
+
+    <spine toc="ncx">
+
+        <itemref
+            idref="cover-page"/>
+
+        <itemref
+            idref="book"/>
+
+    </spine>
+
+</package>`;
+        }
+
+
+        // ======================================================
+        // GERA O EPUB
+        // ======================================================
+
+        static async _createEpub(
+            meta,
+            data,
+            cfg,
+            setProgress
+        ) {
+
+            const zip =
+                new JSZip();
+
+
+            // --------------------------------------------------
+            // MIME TYPE
+            // --------------------------------------------------
+
+            // O padrão EPUB exige que o arquivo
+            // mimetype seja armazenado sem compressão.
+            zip.file(
+                'mimetype',
+                'application/epub+zip',
+                {
+                    compression:
+                        'STORE'
+                }
+            );
+
+
+            // --------------------------------------------------
+            // CONTAINER.XML
+            // --------------------------------------------------
+
+            zip.file(
+
+                'META-INF/container.xml',
+
+                `<?xml version="1.0" encoding="UTF-8"?>
+
+<container
+    version="1.0"
+    xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+
+    <rootfiles>
+
+        <rootfile
+            full-path="OEBPS/content.opf"
+            media-type="application/oebps-package+xml"/>
+
+    </rootfiles>
+
+</container>`
+            );
+
+
+            const oebps =
+                zip.folder(
+                    'OEBPS'
+                );
+
+
+            // --------------------------------------------------
+            // CAPA
+            // --------------------------------------------------
+
+            const coverBase64 =
+                data.coverDataUrl
+                    ? data.coverDataUrl.split(',')[1]
+                    : '';
+
+
+            if (!coverBase64) {
+
+                throw new Error(
+                    'Não foi possível gerar a capa ' +
+                    'a partir da primeira página do PDF.'
+                );
+            }
+
+
+            // --------------------------------------------------
+            // DEFINE IMAGENS
+            // --------------------------------------------------
+
+            let imageCounter = 0;
+
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    if (
+                        block.type === 'image'
+                    ) {
+
+                        imageCounter++;
+
+                        block.epubFile =
+                            `page-image-${imageCounter}.jpg`;
+                    }
+                }
+            }
+
+
+            // --------------------------------------------------
+            // ARQUIVOS EPUB
+            // --------------------------------------------------
+
+            oebps.file(
+                'content.opf',
+                this._buildOpf(
+                    meta,
+                    data
+                )
+            );
+
+
+            oebps.file(
+                'cover.xhtml',
+                this._buildCoverXhtml(
+                    meta
+                )
+            );
+
+
+            oebps.file(
+                'cover.jpg',
+                coverBase64,
+                {
+                    base64: true
+                }
+            );
+
+
+            oebps.file(
+                'book.xhtml',
+                this._buildBookXhtml(
+                    meta,
+                    data
+                )
+            );
+
+
+            oebps.file(
+                'nav.xhtml',
+                this._buildNav(
+                    meta,
+                    data
+                )
+            );
+
+
+            oebps.file(
+                'toc.ncx',
+                this._buildNcx(
+                    meta,
+                    data
+                )
+            );
+
+
+            oebps.file(
+                'styles.css',
+                this._styles()
+            );
+
+
+            // --------------------------------------------------
+            // IMAGENS DE PÁGINAS
+            // --------------------------------------------------
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    if (
+
+                        block.type === 'image' &&
+
+                        block.src &&
+
+                        block.epubFile
+
+                    ) {
+
+                        oebps.file(
+
+                            block.epubFile,
+
+                            block.src.split(',')[1],
+
+                            {
+                                base64: true
+                            }
+                        );
+                    }
+                }
+            }
+
+
+            setProgress({
+
+                stage: 'epub',
+
+                percent: 84,
+
+                message:
+                    'Compactando EPUB…'
+            });
+
+
+            // --------------------------------------------------
+            // ZIP FINAL
+            // --------------------------------------------------
+
+            return zip.generateAsync(
+
+                {
+
+                    type:
+                        'arraybuffer',
+
+                    compression:
+                        'DEFLATE',
+
+                    compressionOptions: {
+
+                        level:
+                            6
+                    }
+
+                },
+
+                metadata => {
+
+                    setProgress({
+
+                        stage:
+                            'epub',
+
+                        percent:
+                            84 +
+                            (
+                                metadata.percent *
+                                0.16
+                            ),
+
+                        message:
+                            'Compactando EPUB…'
+                    });
+                }
+            );
+        }
+
+
+        // ======================================================
+        // PRÉVIA OPCIONAL
+        // ======================================================
+
+        static _buildPreviewHtml(
+            meta,
+            data
+        ) {
+
+            const parts = [];
+
+
+            // --------------------------------------------------
+            // Capa
+            // --------------------------------------------------
+
+            if (
+                data.coverDataUrl
+            ) {
+
+                parts.push(
+
+                    `<div ` +
+                    `class="veredas-preview-cover">` +
+
+                    `<img ` +
+                    `src="${this._escapeHtml(
+                        data.coverDataUrl
+                    )}" ` +
+                    `alt="Capa"/>` +
+
+                    `</div>`
+                );
+            }
+
+
+            // --------------------------------------------------
+            // Título
+            // --------------------------------------------------
+
+            parts.push(
+
+                `<div ` +
+                `class="veredas-preview-front">` +
+
+                `<h1>` +
+                this._escapeHtml(
+                    meta.title
+                ) +
+                `</h1>`
+            );
+
+
+            if (
+                meta.author
+            ) {
+
+                parts.push(
+
+                    `<p>` +
+
+                    `<em>` +
+
+                    this._escapeHtml(
+                        meta.author
+                    ) +
+
+                    `</em>` +
+
+                    `</p>`
+                );
+            }
+
+
+            parts.push(
+                '</div>'
+            );
+
+
+            // --------------------------------------------------
+            // Conteúdo
+            // --------------------------------------------------
+
+            for (
+                const page
+                of data.pages
+            ) {
+
+                for (
+                    const block
+                    of page.blocks || []
+                ) {
+
+                    if (
+                        block.type === 'image'
+                    ) {
+
+                        parts.push(
+
+                            `<figure>` +
+
+                            `<img ` +
+                            `src="${this._escapeHtml(
+                                block.src
+                            )}" ` +
+                            `alt="${this._escapeHtml(
+                                block.alt ||
+                                'Imagem'
+                            )}"/>` +
+
+                            `</figure>`
+                        );
+
+                    } else {
+
+                        parts.push(
+
+                            `<${block.type}>` +
+
+                            this._escapeHtml(
+                                block.text
+                            ) +
+
+                            `</${block.type}>`
+                        );
+                    }
+                }
+            }
+
+
+            return parts.join('');
+        }
+    }
+
+
+    // ==========================================================
+    // EXPORTAÇÃO GLOBAL
+    // ==========================================================
+
+    window.VeredasPDFToEPUB =
+        VeredasPDFToEPUB;
+
+})();
+</script>
 
 <script>
 /* ============================================================
@@ -3445,6 +6170,206 @@ ReaderEngine.OPEN_TIMEOUT=90000;
    armazenamento do aparelho com imagens embutidas. */
 ReaderEngine.MAX_CACHE_CHARS=14*1024*1024;
 
+
+/* ============================================================
+   LOCAL FILE ACCESS — grava EPUB na pasta do PDF quando suportado
+   ============================================================ */
+const LocalFileAccess = {
+  supported() {
+    return typeof window.showDirectoryPicker === 'function';
+  },
+  async pickDirectory() {
+    if (!this.supported()) return null;
+    return window.showDirectoryPicker({
+      id: 'veredas-epub-output',
+      mode: 'readwrite'
+    });
+  },
+  async ensureReadWritePermission(handle) {
+    if (!handle) return false;
+    try {
+      if (typeof handle.queryPermission === 'function') {
+        const current = await handle.queryPermission({mode:'readwrite'});
+        if (current === 'granted') return true;
+      }
+      if (typeof handle.requestPermission === 'function') {
+        const asked = await handle.requestPermission({mode:'readwrite'});
+        return asked === 'granted';
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  async containsFile(handle, fileName) {
+    if (!handle || !fileName) return false;
+    try {
+      await handle.getFileHandle(fileName);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  async uniqueName(handle, desiredName) {
+    if (!handle) return desiredName;
+    const clean = desiredName.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'livro.epub';
+    const dot = clean.lastIndexOf('.');
+    const base = dot > 0 ? clean.slice(0, dot) : clean;
+    const ext = dot > 0 ? clean.slice(dot) : '.epub';
+    if (!(await this.containsFile(handle, clean))) return clean;
+    for (let i=2;i<=999;i++) {
+      const candidate = `${base} (${i})${ext}`;
+      if (!(await this.containsFile(handle, candidate))) return candidate;
+    }
+    return `${base} (${Date.now()})${ext}`;
+  },
+  async writeBlob(handle, fileName, blob) {
+    const fileHandle = await handle.getFileHandle(fileName, {create:true});
+    const writable = await fileHandle.createWritable();
+    try {
+      await writable.write(blob);
+    } finally {
+      await writable.close();
+    }
+    return fileHandle;
+  }
+};
+
+/* ============================================================
+   CONVERSION DIALOG CONTROLLER
+   ============================================================ */
+const ConversionDialog = {
+  el:null,
+  body:null,
+  footer:null,
+  title:null,
+  subtitle:null,
+  confirm:null,
+  cancel:null,
+  closeBtn:null,
+  active:false,
+  resolve:null,
+
+  init() {
+    this.el=document.getElementById('conversion-modal');
+    this.body=document.getElementById('conversion-body');
+    this.footer=document.getElementById('conversion-footer');
+    this.title=document.getElementById('conversion-title');
+    this.subtitle=document.getElementById('conversion-subtitle');
+    this.confirm=document.getElementById('conversion-confirm');
+    this.cancel=document.getElementById('conversion-cancel');
+    this.closeBtn=document.getElementById('conversion-close');
+
+    const close=()=>this.close(false);
+    this.cancel?.addEventListener('click',close);
+    this.closeBtn?.addEventListener('click',close);
+    this.el?.addEventListener('click',e=>{if(e.target===this.el)close()});
+  },
+  open(book) {
+    if (!this.el) this.init();
+    this.title.textContent='Converter PDF para EPUB';
+    this.subtitle.textContent=book.title || 'Livro em PDF';
+    this.body.innerHTML=`
+      <p>O EPUB é melhor para livros com texto selecionável, porque permite ajustar fonte, tamanho, margens e modo de leitura.</p>
+      <div class="conversion-warning">
+        <i data-lucide="triangle-alert"></i>
+        <div>
+          <strong>Funcionalidade indicada apenas para livros</strong>
+          <div>Revistas, apostilas complexas, formulários, documentos com muitas tabelas ou PDFs escaneados podem perder parte do layout original.</div>
+        </div>
+      </div>
+      <p style="margin-top:12px">O PDF original <strong>não será apagado da pasta do usuário</strong>. Apenas a cópia desse PDF será retirada da biblioteca depois que o EPUB for salvo com sucesso.</p>
+    `;
+    this.footer.style.display='flex';
+    this.confirm.innerHTML='<i data-lucide="file-output"></i>Converter para EPUB';
+    this.confirm.disabled=false;
+    this.cancel.disabled=false;
+    this.el.classList.add('show');
+    this.active=true;
+    lucide.createIcons({root:this.el});
+    return new Promise(resolve=>{
+      this.resolve=resolve;
+      const c=this.confirm, x=this.cancel;
+      const onConfirm=()=>{c.removeEventListener('click',onConfirm);x.removeEventListener('click',onCancel);this.resolve=null;resolve(true)};
+      const onCancel=()=>{c.removeEventListener('click',onConfirm);x.removeEventListener('click',onCancel);this.resolve=null;resolve(false)};
+      c.addEventListener('click',onConfirm,{once:true});
+      x.addEventListener('click',onCancel,{once:true});
+    });
+  },
+  close(result=false) {
+    if (!this.el) return;
+    this.el.classList.remove('show');
+    this.active=false;
+    const r=this.resolve;
+    this.resolve=null;
+    if(r)r(result);
+  },
+  showWorking() {
+    this.title.textContent='Convertendo livro';
+    this.subtitle.textContent='Processamento local no navegador';
+    this.body.innerHTML=`
+      <p>O arquivo está sendo lido e reconstruído. Livros grandes podem levar alguns instantes.</p>
+      <div class="conversion-status show">
+        <div class="spinner"></div>
+        <div class="conversion-status-text">
+          <strong id="conversion-live-stage">Preparando…</strong>
+          <small id="conversion-live-detail">0%</small>
+        </div>
+      </div>
+      <div class="conversion-details" id="conversion-live-stats"></div>
+    `;
+    this.footer.style.display='none';
+    lucide.createIcons({root:this.el});
+  },
+  updateProgress(percent,message) {
+    const stage=document.getElementById('conversion-live-stage');
+    const detail=document.getElementById('conversion-live-detail');
+    if(stage)stage.textContent=message || 'Processando…';
+    if(detail)detail.textContent=`${Utils.clamp(Math.round(percent||0),0,100)}%`;
+  },
+  showFallbackFolder(book) {
+    this.title.textContent='Escolha a pasta do PDF';
+    this.subtitle.textContent='Necessário para salvar o EPUB ao lado do original';
+    this.body.innerHTML=`
+      <p>Para gravar o EPUB <strong>na mesma pasta do PDF</strong>, o navegador precisa de permissão para acessar essa pasta.</p>
+      <div class="conversion-warning">
+        <i data-lucide="folder-open"></i>
+        <div>
+          <strong>Selecione a pasta que contém o PDF</strong>
+          <div>Essa permissão é dada somente a esta aplicação e evita que o arquivo original seja alterado.</div>
+        </div>
+      </div>
+      <p style="margin-top:12px;font-size:11px;color:var(--muted)">Em navegadores sem suporte a acesso direto ao sistema de arquivos, o EPUB será baixado como alternativa.</p>
+    `;
+    this.footer.style.display='flex';
+    this.confirm.innerHTML='<i data-lucide="folder-open"></i>Selecionar pasta e continuar';
+    this.cancel.textContent='Cancelar';
+    this.confirm.disabled=false;
+    this.cancel.disabled=false;
+    lucide.createIcons({root:this.el});
+  },
+  showSuccess(result, savedInfo) {
+    this.title.textContent='Conversão concluída';
+    this.subtitle.textContent=result.meta?.title || 'EPUB pronto';
+    const stats=result.stats||{};
+    this.body.innerHTML=`
+      <p><strong>${Utils.esc(savedInfo.message)}</strong></p>
+      <div class="conversion-details">
+        <div class="conversion-detail"><strong>${stats.pdfPages||0}</strong><span>Páginas do PDF</span></div>
+        <div class="conversion-detail"><strong>${stats.words||0}</strong><span>Palavras</span></div>
+        <div class="conversion-detail"><strong>${stats.imagePages||0}</strong><span>Páginas como imagem</span></div>
+      </div>
+      <p style="margin-top:12px">O PDF original permanece intacto na pasta do usuário.</p>
+    `;
+    this.footer.style.display='flex';
+    this.confirm.innerHTML='<i data-lucide="book-open"></i>Ler agora';
+    this.cancel.textContent='Concluir';
+    this.confirm.disabled=false;
+    this.cancel.disabled=false;
+    lucide.createIcons({root:this.el});
+  }
+};
+
 /* ============================================================
    LIBRARY MANAGER
    ============================================================ */
@@ -3675,12 +6600,15 @@ class LibraryManager{
       :`<div class="fallback"><strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
     el.innerHTML=`
       <div class="book-menu-wrap">
+        ${book.format==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
         <button class="book-menu" title="Organizar" aria-label="Organizar livro"><i data-lucide="more-horizontal"></i></button>
-        <button class="book-delete" title="Excluir" aria-label="Excluir livro"><i data-lucide="trash-2"></i></button>
+        <button class="book-delete" title="Excluir da biblioteca" aria-label="Excluir da biblioteca"><i data-lucide="trash-2"></i></button>
       </div>
       <div class="book-cover">
         ${cover}
         <div class="cover-badges">
+          ${book.format==='pdf'?'<span class="badge pdf-badge">PDF</span>':''}
+          ${book.format==='epub'&&book.convertedFromPdf?'<span class="badge">EPUB</span>':''}
           ${book.favorite?'<span class="badge">♥</span>':''}
           ${book.status==='read'?'<span class="badge">Lido</span>':''}
         </div>
@@ -3691,7 +6619,10 @@ class LibraryManager{
         <div class="book-progress"><span style="width:${pct}%"></span></div>
         <div class="book-sub"><span>${pct}%</span><span>${book.progress?.readPages?`p. ${book.progress.readPages}`:''}</span></div>
       </div>`;
-    el.querySelector('.book-menu').onclick=e=>{e.stopPropagation();this.openOrganizer(book)};
+    const organizeBtn=el.querySelector('.book-menu:not(.convert-btn)');
+    organizeBtn.onclick=e=>{e.stopPropagation();this.openOrganizer(book)};
+    const convertBtn=el.querySelector('.convert-btn');
+    if(convertBtn)convertBtn.onclick=async e=>{e.stopPropagation();await this.convertPdf(book)};
     el.querySelector('.book-delete').onclick=async e=>{e.stopPropagation();await this.deleteBook(book)};
     el.onclick=e=>{
       if(e.target.closest('.book-menu-wrap'))return;
@@ -3713,6 +6644,211 @@ class LibraryManager{
     });
     return el;
   }
+
+async convertPdf(book){
+  if(!book || book.format!=='pdf')return;
+
+  const accepted=await ConversionDialog.open(book);
+  if(!accepted)return;
+
+  let outputDirectory=book.sourceDirectoryHandle || null;
+  let mustPickDirectory=!outputDirectory;
+  const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
+
+  // Prefer a persisted directory handle so repeat conversions remain one-tap.
+  // Also verify that the original PDF is still in that folder.
+  if(outputDirectory){
+    const granted=await LocalFileAccess.ensureReadWritePermission(outputDirectory);
+    const contains=granted && await LocalFileAccess.containsFile(outputDirectory,sourceName);
+    if(!granted || !contains)mustPickDirectory=true;
+  }
+
+  if(mustPickDirectory && !LocalFileAccess.supported()){
+    ConversionDialog.close(false);
+    Utils.toast('Para salvar o EPUB na mesma pasta do PDF, use um navegador com acesso local a arquivos, como Chrome ou Edge atuais.','info');
+    return;
+  }
+
+  if(mustPickDirectory && LocalFileAccess.supported()){
+    ConversionDialog.showFallbackFolder(book);
+    const choice=await new Promise(resolve=>{
+      const confirm=ConversionDialog.confirm;
+      const cancel=ConversionDialog.cancel;
+      const handler=()=>{cleanup();resolve(true)};
+      const cancelHandler=()=>{cleanup();resolve(false)};
+      const cleanup=()=>{
+        confirm?.removeEventListener('click',handler);
+        cancel?.removeEventListener('click',cancelHandler);
+      };
+      confirm?.addEventListener('click',handler,{once:true});
+      cancel?.addEventListener('click',cancelHandler,{once:true});
+    });
+    if(!choice){
+      ConversionDialog.close(false);
+      return;
+    }
+    try{
+      outputDirectory=await LocalFileAccess.pickDirectory();
+      if(!outputDirectory){
+        ConversionDialog.close(false);
+        return;
+      }
+      const granted=await LocalFileAccess.ensureReadWritePermission(outputDirectory);
+      if(!granted)throw new Error('A pasta escolhida não concedeu permissão de gravação.');
+      const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
+      if(!(await LocalFileAccess.containsFile(outputDirectory,sourceName))){
+        const proceed=await new Promise(resolve=>{
+          ConversionDialog.title.textContent='Confirmar pasta';
+          ConversionDialog.subtitle.textContent='O PDF não foi localizado com este nome';
+          ConversionDialog.body.innerHTML=`
+            <p>Não encontrei <strong>${Utils.esc(sourceName)}</strong> dentro da pasta escolhida.</p>
+            <p style="margin-top:8px">Para evitar gravar o EPUB em outro lugar por engano, escolha a pasta que realmente contém o PDF.</p>
+          `;
+          ConversionDialog.footer.style.display='flex';
+          ConversionDialog.confirm.innerHTML='<i data-lucide="folder-open"></i>Escolher outra pasta';
+          ConversionDialog.cancel.textContent='Cancelar';
+          const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
+          const onceC=()=>{cleanup();resolve('again')};
+          const onceX=()=>{cleanup();resolve(false)};
+          const cleanup=()=>{c.removeEventListener('click',onceC);x.removeEventListener('click',onceX)};
+          c.addEventListener('click',onceC,{once:true});
+          x.addEventListener('click',onceX,{once:true});
+          lucide.createIcons({root:ConversionDialog.el});
+        });
+        if(proceed==='again'){
+          ConversionDialog.showFallbackFolder(book);
+          // Re-open the picker once.
+          const confirmed=await new Promise(resolve=>{
+            const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
+            const cc=()=>{cleanup();resolve(true)}, xx=()=>{cleanup();resolve(false)};
+            const cleanup=()=>{c.removeEventListener('click',cc);x.removeEventListener('click',xx)};
+            c.addEventListener('click',cc,{once:true});x.addEventListener('click',xx,{once:true});
+          });
+          if(!confirmed){ConversionDialog.close(false);return;}
+          outputDirectory=await LocalFileAccess.pickDirectory();
+          if(!outputDirectory || !(await LocalFileAccess.ensureReadWritePermission(outputDirectory))){
+            ConversionDialog.close(false);return;
+          }
+          if(!(await LocalFileAccess.containsFile(outputDirectory,sourceName))){
+            ConversionDialog.close(false);
+            Utils.toast('A pasta escolhida ainda não contém o PDF original. Nenhum arquivo foi alterado.','alert-triangle');
+            return;
+          }
+        }else{
+          ConversionDialog.close(false);
+          return;
+        }
+      }
+      book.sourceDirectoryHandle=outputDirectory;
+      await this.db.updateBook(book).catch(()=>{});
+    }catch(err){
+      console.error(err);
+      ConversionDialog.body.innerHTML=`<p class="danger-note">${Utils.esc(err.message||'Não foi possível acessar a pasta escolhida.')}</p>`;
+      ConversionDialog.footer.style.display='flex';
+      ConversionDialog.confirm.innerHTML='<i data-lucide="x"></i>Fechar';
+      ConversionDialog.confirm.onclick=()=>ConversionDialog.close(false);
+      ConversionDialog.cancel.style.display='none';
+      lucide.createIcons({root:ConversionDialog.el});
+      return;
+    }
+  }
+
+  ConversionDialog.showWorking();
+  Utils.showLoader('Convertendo PDF','Reconstruindo o livro localmente.',{progress:true});
+
+  try{
+    const rec=await this.db.getFile(book.id);
+    if(!rec?.buffer)throw new Error('A cópia do PDF não está disponível na biblioteca.');
+
+    const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
+    const sourceFile=new File([rec.buffer],sourceName,{type:'application/pdf'});
+    const result=await VeredasPDFToEPUB.convert(sourceFile,{
+      title:book.title||sourceName.replace(/\.pdf$/i,''),
+      author:book.author||'',
+      lang:'pt-BR',
+      publisher:'Veredas Reader',
+      onProgress:({percent,message})=>{
+        Utils.setLoaderProgress(percent,message);
+        ConversionDialog.updateProgress(percent,message);
+      }
+    });
+
+    Utils.setLoaderProgress(98,'Salvando o EPUB…');
+    ConversionDialog.updateProgress(98,'Salvando o EPUB…');
+
+    let savedMessage='O EPUB está pronto.';
+    let outputName=result.filename;
+
+    if(!outputDirectory){
+      throw new Error('Não foi possível obter acesso à pasta original do PDF.');
+    }
+    outputName=await LocalFileAccess.uniqueName(outputDirectory,outputName);
+    await LocalFileAccess.writeBlob(outputDirectory,outputName,result.blob);
+    savedMessage=`EPUB salvo na mesma pasta do PDF: ${outputName}`;
+
+    const epubMeta={
+      ...Utils.normalizeBook({
+        id:Utils.id(),
+        title:result.meta?.title||book.title,
+        author:result.meta?.author||book.author||'Autor Desconhecido',
+        format:'epub',
+        addedAt:Date.now(),
+        cover:result.coverDataUrl||book.cover||null,
+        progress:null,
+        totalPages:result.stats?.contentPages||result.stats?.pdfPages||0,
+        status:book.status||'toread',
+        favorite:!!book.favorite,
+        tags:Array.isArray(book.tags)?[...book.tags]:[],
+        collections:Array.isArray(book.collections)?[...book.collections]:[],
+        series:book.series||'',
+        folder:book.folder||'',
+        bookmarks:[],
+        annotations:[],
+        order:Number.isFinite(book.order)?book.order:Date.now(),
+        manualOrder:!!book.manualOrder,
+        convertedFromPdf:true,
+        convertedFromBookId:book.id,
+        convertedAt:Date.now(),
+        sourceFileName:sourceName,
+        sourceDirectoryHandle:outputDirectory||book.sourceDirectoryHandle||null,
+        conversionStats:result.stats||null
+      }),
+    };
+
+    // Save EPUB to the app's library first. Only then remove the PDF entry.
+    await this.db.saveBook(epubMeta,result.buffer);
+    await this.db.deleteBook(book.id);
+    await this.db.clearBookCache(book.id);
+    if(App.reader.currentBook?.id===book.id)App.reader.close();
+
+    await this.render();
+    Utils.setLoaderProgress(100,'Conversão concluída.');
+    ConversionDialog.showSuccess(result,{message:savedMessage});
+
+    const learnNow=await new Promise(resolve=>{
+      const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
+      const onC=()=>{cleanup();resolve(true)};
+      const onX=()=>{cleanup();resolve(false)};
+      const cleanup=()=>{c.removeEventListener('click',onC);x.removeEventListener('click',onX)};
+      c.addEventListener('click',onC,{once:true});
+      x.addEventListener('click',onX,{once:true});
+    });
+    ConversionDialog.close(false);
+
+    if(learnNow)await App.reader.openBook(epubMeta);
+  }catch(err){
+    console.error(err);
+    ConversionDialog.close(false);
+    if(err?.name==='NotAllowedError'){
+      Utils.toast('A permissão para a pasta foi cancelada. Nenhum arquivo original foi alterado.','info');
+    }else{
+      Utils.toast(`Falha ao converter o PDF: ${err.message||'erro desconhecido'}`,'alert-circle');
+    }
+  }finally{
+    Utils.hideLoader();
+  }
+}
+
   async reorder(a,b){
     const ordered=this.sortedBooks([...this.allBooks]).filter(x=>x.id!==a.id);
     const idx=ordered.findIndex(x=>x.id===b.id);
@@ -3727,7 +6863,7 @@ class LibraryManager{
     await this.render();
   }
   async deleteBook(book){
-    const ok=confirm(`Excluir “${book.title}” da biblioteca?\n\nO arquivo local, progresso, marcadores e anotações serão removidos.`);
+    const ok=confirm(`Excluir “${book.title}” da biblioteca?\n\nIsso remove apenas a cópia armazenada pela biblioteca, além do progresso, marcadores e anotações. O arquivo original da pasta do usuário não será apagado.`);
     if(!ok)return;
     try{
       if(App.reader.currentBook?.id===book.id)App.reader.close();
@@ -3937,12 +7073,14 @@ class LibraryManager{
           title:file.name.replace(/\.[^/.]+$/,''),
           author:'Autor Desconhecido',
           format:ext,
+          sourceFileName:file.name,
           addedAt:Date.now(),
           cover:null,progress:null,status:'toread',favorite:false,
           tags:[],collections:[],series:'',folder:'',bookmarks:[],annotations:[],
           order:Date.now(),manualOrder:false
         };
         if(ext==='epub'){
+          meta.sourceFileName=file.name;
           const parsed=await EPUBParser.parse(buffer);
           meta.title=parsed.metadata.title;
           meta.author=parsed.metadata.author;
@@ -3997,6 +7135,8 @@ class LibraryManager{
 /* ============================================================
    APP
    ============================================================ */
+ConversionDialog.init();
+
 const App={
   state:{settings:{...AppDefaults.settings}},
   lastScrollTop:0,
