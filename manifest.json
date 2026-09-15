@@ -4,8 +4,8 @@
   "description": "Leitor de e-books e PDF",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#121212",
-  "theme_color": "#bb7a3a",
+  "background_color": "#f2ead8",
+  "theme_color": "#121212",
   "orientation": "any",
   "icons": [
     {
