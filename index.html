@@ -309,8 +309,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .book-card{position:relative;cursor:pointer;min-width:0;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .book-card.dragging{opacity:.4;transform:scale(.985);z-index:10}
-.book-card.touch-dragging{cursor:grabbing;transition:transform .12s ease,opacity .12s ease}
-.book-card.touch-dragging .book-cover{box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.book-card.touch-dragging{cursor:grabbing;transition:none;z-index:30}.book-card.touch-dragging .book-cover{box-shadow:0 18px 42px rgba(0,0,0,.24)}.book-drag-ghost{position:fixed;z-index:1000;pointer-events:none;width:var(--ghost-w,140px);opacity:.72;transform:translate3d(-50%,-50%,0) scale(1.025) rotate(1deg);filter:drop-shadow(0 16px 24px rgba(0,0,0,.28));will-change:left,top}.book-drag-ghost .book-cover{box-shadow:none!important}
 .book-card img{ -webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none; user-select:none }
 .book-cover{
   aspect-ratio:2/3;border-radius:14px;overflow:hidden;
@@ -911,8 +910,7 @@ body.reader-open .search-bar{display:none!important}
 .mobi-badge{background:color-mix(in srgb,#ea580c 13%,#fff);color:#c2410c;}
 .epub-badge{background:color-mix(in srgb,#059669 12%,#fff);color:#047857;}
 .txt-badge{background:color-mix(in srgb,#64748b 12%,#fff);color:#475569;}
-.share-btn{color:var(--text)}
-.share-btn:hover{background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--accent)}
+.share-btn{background:var(--surface)!important;color:var(--accent)!important;border:1px solid var(--border);opacity:1!important}.share-btn svg{stroke:currentColor!important;opacity:1!important}.share-btn:hover{background:color-mix(in srgb,var(--accent) 9%,var(--surface))!important;color:var(--accent)!important}.share-btn:active{background:var(--surface)!important;color:var(--accent)!important}[data-theme="dark"] .share-btn,[data-theme="ocean"] .share-btn{background:#fff!important;color:var(--accent)!important;border-color:rgba(255,255,255,.8)}
 .convert-btn{
   color:var(--accent);
 }
@@ -6864,52 +6862,53 @@ class LibraryManager{
     });
 
     /* Mobile: toque comum abre o livro; toque longo inicia a movimentação.
-       Isso evita o menu nativo de imagem e torna o gesto de reorganização
-       descobrível sem sacrificar a rolagem normal da biblioteca. */
-    let pressTimer=null, touchDragging=false, touchTarget=null, startTX=0, startTY=0, suppressClick=false;
+       A capa inteira participa do gesto. O ghost acompanha o dedo e o alvo
+       é calculado pela posição real do ponteiro, permitindo qualquer direção. */
+    let pressTimer=null, touchDragging=false, touchTarget=null, startTX=0, startTY=0;
+    let ghost=null, activePointerId=null, suppressClick=false;
     const clearPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null}};
     const clearTargets=()=>document.querySelectorAll('.book-card.drop-target').forEach(x=>x.classList.remove('drop-target'));
-    const finishTouchDrag=async(e)=>{
-      clearPress();
-      if(!touchDragging)return;
-      e.preventDefault();
-      const target=touchTarget;
-      touchDragging=false;touchTarget=null;
-      el.classList.remove('touch-dragging','dragging');
-      clearTargets();
-      try{el.releasePointerCapture?.(e.pointerId)}catch{}
-      suppressClick=true;setTimeout(()=>{suppressClick=false},420);
-      if(target&&target.dataset.id&&target.dataset.id!==book.id){
-        const targetBook=this.allBooks.find(x=>x.id===target.dataset.id);
-        if(targetBook)await this.reorder(book,targetBook);
-      }
+    const removeGhost=()=>{if(ghost){ghost.remove();ghost=null}};
+    const targetAt=(x,y)=>{
+      const node=document.elementFromPoint(x,y);
+      const card=node?.closest?.('.book-card');
+      return card && card.isConnected ? card : null;
+    };
+    const moveGhost=(x,y)=>{if(ghost){ghost.style.left=`${x}px`;ghost.style.top=`${y}px`}};
+    const beginTouchDrag=(x,y,pointerId)=>{
+      clearPress();touchDragging=true;touchTarget=el;activePointerId=pointerId;
+      el.classList.add('touch-dragging','dragging');el.style.touchAction='none';
+      try{el.setPointerCapture?.(pointerId)}catch{}
+      ghost=el.cloneNode(true);ghost.className='book-drag-ghost';
+      ghost.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+      ghost.style.setProperty('--ghost-w',`${Math.min(180,Math.max(112,el.getBoundingClientRect().width))}px`);
+      document.body.appendChild(ghost);moveGhost(x,y);
+      if(navigator.vibrate)navigator.vibrate(22);
+    };
+    const finishTouchDrag=async e=>{
+      clearPress();if(!touchDragging)return;
+      e?.preventDefault?.();
+      const target=touchTarget;const targetBook=target&&target.dataset.id&&target.dataset.id!==book.id?this.allBooks.find(x=>x.id===target.dataset.id):null;
+      touchDragging=false;touchTarget=null;activePointerId=null;
+      el.classList.remove('touch-dragging','dragging');el.style.touchAction='pan-y';clearTargets();removeGhost();
+      try{el.releasePointerCapture?.(e?.pointerId)}catch{}
+      suppressClick=true;setTimeout(()=>{suppressClick=false},targetBook?150:420);
+      if(targetBook)await this.reorder(book,targetBook);
     };
     el.addEventListener('pointerdown',e=>{
-      if(e.pointerType!=='touch')return;
-      if(e.target.closest('.book-menu-wrap'))return;
-      startTX=e.clientX;startTY=e.clientY;
-      clearPress();
-      pressTimer=setTimeout(()=>{
-        pressTimer=null;touchDragging=true;touchTarget=el;
-        el.classList.add('touch-dragging','dragging');
-        try{el.setPointerCapture?.(e.pointerId)}catch{}
-        if(navigator.vibrate)navigator.vibrate(22);
-      },430);
+      if(e.pointerType!=='touch'||e.target.closest('.book-menu-wrap'))return;
+      activePointerId=e.pointerId;startTX=e.clientX;startTY=e.clientY;clearPress();
+      pressTimer=setTimeout(()=>beginTouchDrag(startTX,startTY,e.pointerId),430);
     },{passive:true});
     el.addEventListener('pointermove',e=>{
-      if(e.pointerType!=='touch')return;
-      const dx=Math.abs(e.clientX-startTX),dy=Math.abs(e.clientY-startTY);
-      if(!touchDragging){
-        if(dx>10||dy>10)clearPress();
-        return;
-      }
-      e.preventDefault();
-      const under=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.book-card');
-      clearTargets();
-      if(under&&under!==el){under.classList.add('drop-target');touchTarget=under}
+      if(e.pointerType!=='touch'||activePointerId!==e.pointerId)return;
+      if(!touchDragging){if(Math.hypot(e.clientX-startTX,e.clientY-startTY)>12)clearPress();return}
+      e.preventDefault();moveGhost(e.clientX,e.clientY);
+      const under=targetAt(e.clientX,e.clientY);clearTargets();
+      if(under&&under!==el){under.classList.add('drop-target');touchTarget=under}else touchTarget=el;
     },{passive:false});
     el.addEventListener('pointerup',finishTouchDrag,{passive:false});
-    el.addEventListener('pointercancel',e=>{clearPress();finishTouchDrag(e)},{passive:false});
+    el.addEventListener('pointercancel',e=>{clearPress();if(touchDragging)finishTouchDrag(e)},{passive:false});
     el.addEventListener('contextmenu',e=>{if(e.pointerType==='touch'||window.matchMedia('(pointer:coarse)').matches)e.preventDefault()});
     el.addEventListener('dragstart',e=>{if(e.pointerType==='touch')e.preventDefault()});
     el.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopPropagation()}},true);
