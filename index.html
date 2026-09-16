@@ -60,6 +60,7 @@
    ============================================================ */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden}
+body.modal-open{overflow:hidden}
 body{
   font-family:var(--ui-font);background:var(--bg);color:var(--text);
   -webkit-text-size-adjust:100%;touch-action:manipulation;
@@ -236,14 +237,28 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .hero-card .soft-btn:hover{background:rgba(255,255,255,.24)}
 
-.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .stat-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:18px;padding:14px 16px;box-shadow:var(--shadow-sm);
-  min-height:88px;display:flex;flex-direction:column;justify-content:center;
+  position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:18px;padding:14px 14px 13px;box-shadow:var(--shadow-sm);
+  min-height:106px;display:flex;flex-direction:column;justify-content:space-between;
+  text-align:left;overflow:hidden;transition:transform .16s,box-shadow .16s,border-color .16s;
 }
-.stat-card .k{font-size:24px;font-weight:800;letter-spacing:-1px;line-height:1}
-.stat-card .l{font-size:11px;color:var(--muted);margin-top:5px;font-weight:600}
+.stat-card.stat-action{cursor:pointer}
+.stat-card.stat-action:hover,.stat-card.stat-action:focus-visible{
+  transform:translateY(-2px);box-shadow:var(--shadow);
+  border-color:color-mix(in srgb,var(--accent) 24%,var(--border));
+}
+.stat-card .stat-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.stat-card .stat-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+  color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.stat-card .stat-icon svg{width:16px;height:16px}
+.stat-card .stat-arrow{color:var(--muted);opacity:.7}
+.stat-card .k{font-size:25px;font-weight:850;letter-spacing:-1px;line-height:1}
+.stat-card .l{font-size:11px;color:var(--text);margin-top:6px;font-weight:800}
+.stat-card .stat-caption{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35}
+.stat-card .stat-progress{height:4px;margin-top:8px;background:var(--surface-hover);border-radius:99px;overflow:hidden}
+.stat-card .stat-progress span{display:block;height:100%;background:var(--accent);border-radius:99px}
 
 /* ============================================================
    TOOLBAR
@@ -268,6 +283,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 .soft-btn:active{transform:scale(.97)}
 .soft-btn svg{width:17px;height:17px}
 .soft-btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+.soft-btn.danger{background:#b42336;color:#fff;border-color:transparent}
 .icon-btn{
   width:42px;height:42px;border:1px solid var(--border);border-radius:12px;
   background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow-sm);
@@ -310,7 +326,14 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
 }
 .fallback small{margin-top:6px;color:var(--muted);font-size:10px}
-.cover-badges{position:absolute;top:7px;left:7px;display:flex;gap:4px;pointer-events:none}
+.cover-badges{position:absolute;top:7px;left:7px;display:flex;gap:4px;pointer-events:none;z-index:2}
+.cover-format-badge{position:absolute;top:7px;right:7px;display:flex;gap:4px;pointer-events:none;z-index:4}
+.cover-format-badge .badge{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.pdf-badge{background:color-mix(in srgb,#d94841 14%,#fff);color:#a92822}
+.epub-badge{background:color-mix(in srgb,#176b67 14%,#fff);color:#176b67}
+.docx-badge{background:color-mix(in srgb,#2563eb 14%,#fff);color:#1d4ed8}
+.mobi-badge{background:color-mix(in srgb,#7c3aed 14%,#fff);color:#6d28d9}
+.txt-badge{background:color-mix(in srgb,#64748b 14%,#fff);color:#475569}
 .badge{
   font-size:9px;padding:4px 7px;border-radius:999px;
   background:rgba(255,255,255,.92);color:#27272a;font-weight:800;
@@ -318,7 +341,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .badge.dark{background:rgba(20,20,20,.75);color:#fff}
 .book-menu-wrap{
-  position:absolute;right:6px;top:6px;z-index:3;
+  position:absolute;right:6px;top:44px;z-index:5;
   display:flex;gap:4px;
 }
 @media(hover:hover){
@@ -623,6 +646,16 @@ body.reader-open .search-bar{display:none!important}
 .seg button{min-height:38px;border-radius:9px;font-size:11.5px;font-weight:700;color:var(--muted);transition:.15s}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
 
+.sort-options{display:flex;flex-direction:column;gap:8px}
+.sort-option{width:100%;min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);text-align:left;transition:background .15s,border-color .15s,transform .1s}
+.sort-option:hover{background:var(--surface-hover)}
+.sort-option:active{transform:scale(.99)}
+.sort-option svg{width:19px;height:19px;flex:none;color:var(--muted)}
+.sort-option span{flex:1;font-size:13px;font-weight:750}
+.sort-option small{font-size:10.5px;color:var(--muted)}
+.sort-option.active{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--accent)}
+.sort-option.active svg{color:var(--accent)}
+.sort-option.active:after{content:'✓';font-weight:900;font-size:15px}
 .form-grid{display:grid;grid-template-columns:1fr;gap:12px}
 .form-group{margin-bottom:14px}
 .form-group.full{grid-column:1/-1}
@@ -838,8 +871,8 @@ body.reader-open .search-bar{display:none!important}
 }
 @media (max-width:360px){
   .book-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px}
-  .stat-card{padding:12px 14px;min-height:76px}
-  .stat-card .k{font-size:21px}
+  .stat-card{padding:12px;min-height:100px}
+  .stat-card .k{font-size:22px}
   .hero-title{font-size:19px}
   .bottom-nav button span{font-size:9.5px}
 }
@@ -851,6 +884,12 @@ body.reader-open .search-bar{display:none!important}
   background:color-mix(in srgb,#d94841 14%,#fff);
   color:#a92822;
 }
+.docx-badge{background:color-mix(in srgb,#2563eb 13%,#fff);color:#1d4ed8;}
+.mobi-badge{background:color-mix(in srgb,#ea580c 13%,#fff);color:#c2410c;}
+.epub-badge{background:color-mix(in srgb,#059669 12%,#fff);color:#047857;}
+.txt-badge{background:color-mix(in srgb,#64748b 12%,#fff);color:#475569;}
+.share-btn{color:var(--text)}
+.share-btn:hover{background:color-mix(in srgb,var(--accent) 9%,var(--surface));color:var(--accent)}
 .convert-btn{
   color:var(--accent);
 }
@@ -863,6 +902,12 @@ body.reader-open .search-bar{display:none!important}
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .conversion-modal.show{display:grid;animation:fadeIn .16s ease}
+.app-modal{position:fixed;inset:0;z-index:530;display:none;place-items:center;padding:20px;background:rgba(10,10,10,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.app-modal.show{display:grid;animation:fadeIn .16s ease}
+.app-modal .conversion-dialog{width:min(460px,calc(100vw - 28px));max-height:min(84dvh,700px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.24)}
+.app-modal .conversion-dialog-footer{flex-wrap:wrap}
+.app-modal .soft-btn{flex:0 0 auto}
+@media(max-width:520px){.app-modal .conversion-dialog-footer{flex-direction:column-reverse}.app-modal .conversion-dialog-footer .soft-btn{width:100%;justify-content:center}}
 .conversion-dialog{
   width:min(440px,calc(100vw - 28px));max-height:min(82dvh,680px);
   overflow:auto;background:var(--surface);border:1px solid var(--border);
@@ -1005,16 +1050,9 @@ body.reader-open .search-bar{display:none!important}
               <p id="section-subtitle">Toque em um livro para começar a ler.</p>
             </div>
             <div class="toolbar-right">
-              <select class="select" id="sort-select" aria-label="Ordenar">
-                <option value="custom">Minha ordem</option>
-                <option value="author">Agrupar por autor</option>
-                <option value="title">Título</option>
-                <option value="recent">Recentes</option>
-                <option value="progress">Progresso</option>
-              </select>
-              <button class="soft-btn" id="btn-organize" aria-label="Organizar">
-                <i data-lucide="sliders-horizontal"></i>
-                <span>Organizar</span>
+              <button class="soft-btn" id="btn-organize" aria-label="Agrupar livros" aria-haspopup="dialog" aria-controls="panel-sort">
+                <i data-lucide="list-filter"></i>
+                <span>Agrupar</span>
               </button>
             </div>
           </div>
@@ -1231,6 +1269,16 @@ body.reader-open .search-bar{display:none!important}
   </div>
 </section>
 
+<section class="panel" id="panel-sort">
+  <div class="panel-head">
+    <div><h3>Agrupar biblioteca</h3><p>Escolha como os livros serão organizados na estante.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+  </div>
+  <div class="panel-body">
+    <div id="sort-options" class="sort-options"></div>
+  </div>
+</section>
+
 <section class="panel" id="panel-library-filter">
   <div class="panel-head">
     <div><h3 id="filter-panel-title">Organização</h3><p>Escolha uma dimensão para explorar sua biblioteca.</p></div>
@@ -1255,6 +1303,25 @@ body.reader-open .search-bar{display:none!important}
     <div class="conversion-dialog-footer" id="conversion-footer">
       <button class="soft-btn" id="conversion-cancel">Cancelar</button>
       <button class="soft-btn primary" id="conversion-confirm"><i data-lucide="file-output"></i>Converter para EPUB</button>
+    </div>
+  </div>
+</div>
+
+<!-- GENERIC APP MODAL (confirmações / alertas) -->
+<div class="app-modal" id="app-modal" role="dialog" aria-modal="true" aria-labelledby="app-modal-title" aria-describedby="app-modal-body">
+  <div class="conversion-dialog" role="document">
+    <div class="conversion-dialog-head">
+      <div class="conversion-dialog-icon" id="app-modal-icon"><i data-lucide="circle-alert"></i></div>
+      <div style="min-width:0;flex:1">
+        <h3 id="app-modal-title">Confirmação</h3>
+        <p id="app-modal-subtitle"></p>
+      </div>
+      <button class="icon-btn" id="app-modal-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+    </div>
+    <div class="conversion-dialog-body" id="app-modal-body"></div>
+    <div class="conversion-dialog-footer" id="app-modal-footer">
+      <button class="soft-btn" id="app-modal-cancel">Cancelar</button>
+      <button class="soft-btn primary" id="app-modal-confirm">Confirmar</button>
     </div>
   </div>
 </div>
@@ -5964,7 +6031,14 @@ class ReaderEngine{
   }
   async deleteAnnotationFromPopover(annotation){
     const message=annotation.type==='note'?'Apagar este comentário?':'Remover este grifo?';
-    if(!confirm(message))return;
+    const ok=await AppModal.confirm({
+      title:annotation.type==='note'?'Apagar comentário?':'Remover grifo?',
+      subtitle:this.currentBook?.title||'Livro',
+      message,
+      confirmText:annotation.type==='note'?'Apagar comentário':'Remover grifo',
+      confirmIcon:'trash',danger:true
+    });
+    if(!ok)return;
     await this.db.deleteAnnotation(this.currentBook.id,annotation.id);
     this.currentBook=await this.db.getBook(this.currentBook.id);
     this.hideAnnotationPopover();
@@ -6382,8 +6456,6 @@ class LibraryManager{
   async render(){
     this.allBooks=await this.db.getBooks();
     this.allBooks.forEach((b,i)=>{if(!Number.isFinite(b.order))b.order=i});
-    const ss=document.getElementById('sort-select');
-    if(ss)ss.value=App.state.settings.sort||'custom';
     this.updateCounts();
     this.renderView();
   }
@@ -6430,12 +6502,39 @@ class LibraryManager{
     if(ns)ns.onclick=()=>{App.closeDrawer();App.openPanel('panel-settings')};
   }
   setupSort(){
-    document.getElementById('sort-select').onchange=e=>{
-      App.state.settings.sort=e.target.value;
-      if(e.target.value==='author')App.state.settings.groupAuthors=true;
-      App.persistSettings();
-      this.renderView();
-    };
+    const btn=document.getElementById('btn-organize');
+    if(btn)btn.onclick=()=>this.openSortPanel();
+  }
+  openSortPanel(){
+    const body=document.getElementById('sort-options');
+    if(!body)return;
+    const options=[
+      {value:'custom',label:'Minha Ordem',desc:'Use a ordem manual da sua estante.',icon:'arrow-down-up'},
+      {value:'author',label:'Agrupar por Autor',desc:'Organiza e separa os livros por autor.',icon:'users'},
+      {value:'title',label:'Título',desc:'Ordem alfabética pelo título.',icon:'type'},
+      {value:'recent',label:'Recentes',desc:'Livros adicionados ou lidos mais recentemente.',icon:'clock-3'},
+      {value:'progress',label:'Progresso',desc:'Do maior para o menor progresso de leitura.',icon:'chart-no-axes-column-increasing'}
+    ];
+    const current=App.state.settings.sort||'custom';
+    body.innerHTML='';
+    options.forEach(opt=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className=`sort-option ${current===opt.value?'active':''}`;
+      button.setAttribute('aria-pressed',current===opt.value?'true':'false');
+      button.innerHTML=`<i data-lucide="${opt.icon}"></i><span>${Utils.esc(opt.label)}</span><small>${Utils.esc(opt.desc)}</small>`;
+      button.onclick=async()=>{
+        App.state.settings.sort=opt.value;
+        App.state.settings.groupAuthors=opt.value==='author';
+        await App.persistSettings();
+        App.closePanels();
+        Utils.toast(`Agrupamento: ${opt.label}.`,'check');
+        await this.render();
+      };
+      body.appendChild(button);
+    });
+    lucide.createIcons({root:body});
+    App.openPanel('panel-sort');
   }
   setupSearch(){
     document.getElementById('library-search-input').addEventListener('input',
@@ -6443,7 +6542,6 @@ class LibraryManager{
   }
   setupGlobalActions(){
     document.getElementById('btn-import').onclick=()=>document.getElementById('file-input').click();
-    document.getElementById('btn-organize').onclick=()=>this.openOrganizer(this.allBooks[0]||null);
     document.getElementById('btn-search-toggle').onclick=()=>App.openSearch();
     document.getElementById('btn-close-search').onclick=()=>App.closeSearch();
     
@@ -6517,7 +6615,7 @@ class LibraryManager{
       this.currentFilter==='toread'?'Para ler':'Pausados';
     sub.textContent=this.search
       ?`${b.length} resultado(s) para “${this.search}”`
-      :(App.state.settings.groupAuthors?'Autores agrupados; arraste para personalizar.':'Ordem manual da sua estante.');
+      :(App.state.settings.sort==='author'?'Autores agrupados em ordem alfabética.':App.state.settings.sort==='custom'?'Ordem manual da sua estante.':'Livros organizados pela opção selecionada.');
     this.renderHero();
     if(!b.length){
       content.innerHTML=`<div class="empty"><i data-lucide="library"></i><h3>Nada por aqui ainda</h3><p>Importe um livro ou ajuste seus filtros de organização.</p></div>`;
@@ -6526,7 +6624,7 @@ class LibraryManager{
     }
     const grouped=new Map();
     b.forEach(book=>{
-      const key=App.state.settings.groupAuthors&&!book.manualOrder?(book.author||'Autor desconhecido'):'Sua estante';
+      const key=App.state.settings.sort==='author'?(book.author||'Autor desconhecido'):'Sua estante';
       if(!grouped.has(key))grouped.set(key,[]);
       grouped.get(key).push(book);
     });
@@ -6544,30 +6642,55 @@ class LibraryManager{
     const hero=document.getElementById('hero-area');
     const reading=[...this.allBooks].filter(b=>b.status==='reading').sort((a,c)=>(c.lastRead||0)-(a.lastRead||0));
     const b=reading[0]||this.allBooks.find(x=>x.progress?.percentage>0);
+    const total=this.allBooks.length;
+    const toRead=this.allBooks.filter(x=>x.status==='toread').length;
+    const readingCount=this.allBooks.filter(x=>x.status==='reading').length;
+    const finished=this.allBooks.filter(x=>x.status==='read').length;
+    const withProgress=this.allBooks.filter(x=>Number.isFinite(x.progress?.percentage));
+    const avg=withProgress.length?Math.round(withProgress.reduce((n,x)=>n+Math.max(0,Math.min(100,Number(x.progress?.percentage)||0)),0)/withProgress.length):0;
+
+    const statCard=(icon,label,value,caption,filter='',progress=null)=>`
+      <button type="button" class="stat-card${filter?' stat-action':''}" ${filter?`data-stat-filter="${filter}"`:''}>
+        <div class="stat-top">
+          <span class="stat-icon"><i data-lucide="${icon}"></i></span>
+          ${filter?'<i class="stat-arrow" data-lucide="chevron-right"></i>':''}
+        </div>
+        <div>
+          <div class="k">${value}</div>
+          <div class="l">${label}</div>
+          <div class="stat-caption">${caption}</div>
+          ${progress!==null?`<div class="stat-progress"><span style="width:${progress}%"></span></div>`:''}
+        </div>
+      </button>`;
+
     if(!b){
       hero.innerHTML=`
         <div class="hero-card">
           <div>
-            <div class="hero-label">Bem-vindo</div>
-            <div class="hero-title">Sua biblioteca, do seu jeito.</div>
-            <div class="hero-meta">Importe seus livros e organize estantes, coleções, séries, tags e marcações.</div>
+            <div class="hero-label">Sua biblioteca</div>
+            <div class="hero-title">Tudo pronto para a próxima leitura.</div>
+            <div class="hero-meta">Adicione livros e acompanhe o que está por ler, o que está em andamento e seu progresso.</div>
           </div>
-          <button class="soft-btn" id="hero-import"><i data-lucide="plus"></i>Adicionar primeiro livro</button>
+          <button class="soft-btn" id="hero-import"><i data-lucide="plus"></i>Adicionar livro</button>
         </div>
         <div class="stat-grid">
-          <div class="stat-card"><div class="k">${this.allBooks.length}</div><div class="l">livros</div></div>
-          <div class="stat-card"><div class="k">${this.allBooks.reduce((n,x)=>n+x.annotations.length,0)}</div><div class="l">marcações</div></div>
-          <div class="stat-card"><div class="k">${this.allBooks.filter(x=>x.favorite).length}</div><div class="l">favoritos</div></div>
-          <div class="stat-card"><div class="k">${this.allBooks.filter(x=>x.status==='read').length}</div><div class="l">lidos</div></div>
+          ${statCard('library','Livros',total,'Na sua biblioteca','all')}
+          ${statCard('bookmark-plus','Para ler',toRead,'Na fila de leitura','toread')}
+          ${statCard('book-open','Lendo agora',readingCount,readingCount===1?'Livro em andamento':'Livros em andamento','reading')}
+          ${statCard('gauge','Progresso médio',`${avg}%`,'Entre os livros com progresso',null,avg)}
         </div>`;
       lucide.createIcons({root:hero});
       const hb=document.getElementById('hero-import');
       if(hb)hb.onclick=()=>document.getElementById('file-input').click();
+      this.bindHeroStats(hero);
       return;
     }
-    const pct=b.progress?.percentage||0;
+
+    const pct=Math.max(0,Math.min(100,Number(b.progress?.percentage)||0));
+    const page=b.progress?.readPages||1;
+    const totalPages=b.progress?.totalPages||b.totalPages||'—';
     hero.innerHTML=`
-      <div class="hero-card" id="hero-continue">
+      <div class="hero-card" id="hero-continue" role="button" tabindex="0" aria-label="Continuar lendo ${Utils.esc(b.title)}">
         <div>
           <div class="hero-label">Continue lendo</div>
           <div class="hero-title">${Utils.esc(b.title)}</div>
@@ -6576,20 +6699,40 @@ class LibraryManager{
         <div>
           <div class="hero-progress"><span style="width:${pct}%"></span></div>
           <div class="hero-footer">
-            <span>Página ${b.progress?.readPages||1} de ${b.progress?.totalPages||b.totalPages||'—'}</span>
+            <span>Página ${page} de ${totalPages}</span>
             <strong>${pct}%</strong>
           </div>
         </div>
       </div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="k">${this.allBooks.length}</div><div class="l">livros</div></div>
-        <div class="stat-card"><div class="k">${this.allBooks.filter(x=>x.status==='reading').length}</div><div class="l">lendo</div></div>
-        <div class="stat-card"><div class="k">${this.allBooks.filter(x=>x.status==='read').length}</div><div class="l">lidos</div></div>
-        <div class="stat-card"><div class="k">${this.allBooks.reduce((n,x)=>n+x.annotations.length,0)}</div><div class="l">marcações</div></div>
+        ${statCard('library','Livros',total,'Na sua biblioteca','all')}
+        ${statCard('bookmark-plus','Para ler',toRead,'Na fila de leitura','toread')}
+        ${statCard('book-open','Lendo agora',readingCount,readingCount===1?'Livro em andamento':'Livros em andamento','reading')}
+        ${statCard('gauge','Progresso médio',`${avg}%`,'Entre os livros com progresso',null,avg)}
       </div>`;
     lucide.createIcons({root:hero});
     const hc=document.getElementById('hero-continue');
-    if(hc)hc.onclick=()=>App.reader.openBook(b);
+    if(hc){
+      const go=()=>App.reader.openBook(b);
+      hc.onclick=go;
+      hc.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+    }
+    this.bindHeroStats(hero);
+  }
+  bindHeroStats(root){
+    root.querySelectorAll('[data-stat-filter]').forEach(card=>{
+      card.onclick=()=>{
+        const filter=card.dataset.statFilter;
+        this.currentFilter=filter;
+        this.search='';
+        const si=document.getElementById('library-search-input');
+        if(si)si.value='';
+        document.querySelectorAll('#library-nav .nav-item').forEach(x=>x.classList.toggle('active',x.dataset.filter===filter));
+        App.syncBottomNav();
+        this.renderView();
+        document.getElementById('view-home')?.scrollTo({top:0,behavior:'smooth'});
+      };
+    });
   }
   card(book){
     const el=document.createElement('article');
@@ -6601,14 +6744,20 @@ class LibraryManager{
     el.innerHTML=`
       <div class="book-menu-wrap">
         ${book.format==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
-        <button class="book-menu" title="Organizar" aria-label="Organizar livro"><i data-lucide="more-horizontal"></i></button>
+        ${['pdf','docx','txt'].includes(book.format)?'<button class="book-menu share-btn" title="Compartilhar livro" aria-label="Compartilhar livro"><i data-lucide="share-2"></i></button>':''}
+        <button class="book-menu organize-btn" title="Organizar livro" aria-label="Organizar livro"><i data-lucide="more-horizontal"></i></button>
         <button class="book-delete" title="Excluir da biblioteca" aria-label="Excluir da biblioteca"><i data-lucide="trash-2"></i></button>
       </div>
       <div class="book-cover">
         ${cover}
-        <div class="cover-badges">
+        <div class="cover-format-badge">
           ${book.format==='pdf'?'<span class="badge pdf-badge">PDF</span>':''}
-          ${book.format==='epub'&&book.convertedFromPdf?'<span class="badge">EPUB</span>':''}
+          ${book.format==='epub'?'<span class="badge epub-badge">EPUB</span>':''}
+          ${book.format==='docx'?'<span class="badge docx-badge">DOCX</span>':''}
+          ${book.format==='mobi'?'<span class="badge mobi-badge">MOBI</span>':''}
+          ${book.format==='txt'?'<span class="badge txt-badge">TXT</span>':''}
+        </div>
+        <div class="cover-badges">
           ${book.favorite?'<span class="badge">♥</span>':''}
           ${book.status==='read'?'<span class="badge">Lido</span>':''}
         </div>
@@ -6619,10 +6768,12 @@ class LibraryManager{
         <div class="book-progress"><span style="width:${pct}%"></span></div>
         <div class="book-sub"><span>${pct}%</span><span>${book.progress?.readPages?`p. ${book.progress.readPages}`:''}</span></div>
       </div>`;
-    const organizeBtn=el.querySelector('.book-menu:not(.convert-btn)');
+    const organizeBtn=el.querySelector('.organize-btn');
     organizeBtn.onclick=e=>{e.stopPropagation();this.openOrganizer(book)};
     const convertBtn=el.querySelector('.convert-btn');
     if(convertBtn)convertBtn.onclick=async e=>{e.stopPropagation();await this.convertPdf(book)};
+    const shareBtn=el.querySelector('.share-btn');
+    if(shareBtn)shareBtn.onclick=async e=>{e.stopPropagation();await this.shareBook(book)};
     el.querySelector('.book-delete').onclick=async e=>{e.stopPropagation();await this.deleteBook(book)};
     el.onclick=e=>{
       if(e.target.closest('.book-menu-wrap'))return;
@@ -6645,113 +6796,60 @@ class LibraryManager{
     return el;
   }
 
+async shareBook(book){
+  if(!book)return;
+  const shareableFormats=new Set(['pdf','docx','txt']);
+  if(!shareableFormats.has(book.format)){
+    await AppModal.alert({
+      title:'Compartilhamento indisponível',
+      subtitle:'Formato protegido',
+      message:'Para manter a política de compartilhamento da biblioteca, arquivos EPUB e MOBI não podem ser compartilhados por este aplicativo.',
+      confirmText:'Entendi',
+      confirmIcon:'lock'
+    });
+    return;
+  }
+  try{
+    const rec=await this.db.getFile(book.id);
+    if(!rec?.buffer)throw new Error('A cópia deste livro não está disponível na biblioteca.');
+    const mime=({pdf:'application/pdf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',txt:'text/plain'})[book.format]||'application/octet-stream';
+    const safeTitle=(book.title||'livro').replace(/[\\/:*?"<>|]+/g,'-').trim()||'livro';
+    const name=book.sourceFileName||`${safeTitle}.${book.format}`;
+    const file=new File([rec.buffer],name,{type:mime});
+
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({
+        title:book.title||'Livro',
+        text:`${book.title||'Livro'} — ${book.author||'Autor desconhecido'}`,
+        files:[file]
+      });
+      Utils.toast('Livro compartilhado.','share-2');
+      return;
+    }
+
+    // Browser/device sem compartilhamento de arquivos: preserva a intenção do usuário
+    // oferecendo o arquivo pronto para compartilhar manualmente.
+    const url=URL.createObjectURL(file);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    Utils.toast('O arquivo foi preparado para você compartilhar em outro aplicativo.','download');
+  }catch(err){
+    if(err?.name==='AbortError')return;
+    console.error(err);
+    Utils.toast(err?.message||'Não foi possível compartilhar o livro.','alert-triangle');
+  }
+}
+
 async convertPdf(book){
   if(!book || book.format!=='pdf')return;
 
   const accepted=await ConversionDialog.open(book);
   if(!accepted)return;
-
-  let outputDirectory=book.sourceDirectoryHandle || null;
-  let mustPickDirectory=!outputDirectory;
-  const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
-
-  // Prefer a persisted directory handle so repeat conversions remain one-tap.
-  // Also verify that the original PDF is still in that folder.
-  if(outputDirectory){
-    const granted=await LocalFileAccess.ensureReadWritePermission(outputDirectory);
-    const contains=granted && await LocalFileAccess.containsFile(outputDirectory,sourceName);
-    if(!granted || !contains)mustPickDirectory=true;
-  }
-
-  if(mustPickDirectory && !LocalFileAccess.supported()){
-    ConversionDialog.close(false);
-    Utils.toast('Para salvar o EPUB na mesma pasta do PDF, use um navegador com acesso local a arquivos, como Chrome ou Edge atuais.','info');
-    return;
-  }
-
-  if(mustPickDirectory && LocalFileAccess.supported()){
-    ConversionDialog.showFallbackFolder(book);
-    const choice=await new Promise(resolve=>{
-      const confirm=ConversionDialog.confirm;
-      const cancel=ConversionDialog.cancel;
-      const handler=()=>{cleanup();resolve(true)};
-      const cancelHandler=()=>{cleanup();resolve(false)};
-      const cleanup=()=>{
-        confirm?.removeEventListener('click',handler);
-        cancel?.removeEventListener('click',cancelHandler);
-      };
-      confirm?.addEventListener('click',handler,{once:true});
-      cancel?.addEventListener('click',cancelHandler,{once:true});
-    });
-    if(!choice){
-      ConversionDialog.close(false);
-      return;
-    }
-    try{
-      outputDirectory=await LocalFileAccess.pickDirectory();
-      if(!outputDirectory){
-        ConversionDialog.close(false);
-        return;
-      }
-      const granted=await LocalFileAccess.ensureReadWritePermission(outputDirectory);
-      if(!granted)throw new Error('A pasta escolhida não concedeu permissão de gravação.');
-      const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
-      if(!(await LocalFileAccess.containsFile(outputDirectory,sourceName))){
-        const proceed=await new Promise(resolve=>{
-          ConversionDialog.title.textContent='Confirmar pasta';
-          ConversionDialog.subtitle.textContent='O PDF não foi localizado com este nome';
-          ConversionDialog.body.innerHTML=`
-            <p>Não encontrei <strong>${Utils.esc(sourceName)}</strong> dentro da pasta escolhida.</p>
-            <p style="margin-top:8px">Para evitar gravar o EPUB em outro lugar por engano, escolha a pasta que realmente contém o PDF.</p>
-          `;
-          ConversionDialog.footer.style.display='flex';
-          ConversionDialog.confirm.innerHTML='<i data-lucide="folder-open"></i>Escolher outra pasta';
-          ConversionDialog.cancel.textContent='Cancelar';
-          const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
-          const onceC=()=>{cleanup();resolve('again')};
-          const onceX=()=>{cleanup();resolve(false)};
-          const cleanup=()=>{c.removeEventListener('click',onceC);x.removeEventListener('click',onceX)};
-          c.addEventListener('click',onceC,{once:true});
-          x.addEventListener('click',onceX,{once:true});
-          lucide.createIcons({root:ConversionDialog.el});
-        });
-        if(proceed==='again'){
-          ConversionDialog.showFallbackFolder(book);
-          // Re-open the picker once.
-          const confirmed=await new Promise(resolve=>{
-            const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
-            const cc=()=>{cleanup();resolve(true)}, xx=()=>{cleanup();resolve(false)};
-            const cleanup=()=>{c.removeEventListener('click',cc);x.removeEventListener('click',xx)};
-            c.addEventListener('click',cc,{once:true});x.addEventListener('click',xx,{once:true});
-          });
-          if(!confirmed){ConversionDialog.close(false);return;}
-          outputDirectory=await LocalFileAccess.pickDirectory();
-          if(!outputDirectory || !(await LocalFileAccess.ensureReadWritePermission(outputDirectory))){
-            ConversionDialog.close(false);return;
-          }
-          if(!(await LocalFileAccess.containsFile(outputDirectory,sourceName))){
-            ConversionDialog.close(false);
-            Utils.toast('A pasta escolhida ainda não contém o PDF original. Nenhum arquivo foi alterado.','alert-triangle');
-            return;
-          }
-        }else{
-          ConversionDialog.close(false);
-          return;
-        }
-      }
-      book.sourceDirectoryHandle=outputDirectory;
-      await this.db.updateBook(book).catch(()=>{});
-    }catch(err){
-      console.error(err);
-      ConversionDialog.body.innerHTML=`<p class="danger-note">${Utils.esc(err.message||'Não foi possível acessar a pasta escolhida.')}</p>`;
-      ConversionDialog.footer.style.display='flex';
-      ConversionDialog.confirm.innerHTML='<i data-lucide="x"></i>Fechar';
-      ConversionDialog.confirm.onclick=()=>ConversionDialog.close(false);
-      ConversionDialog.cancel.style.display='none';
-      lucide.createIcons({root:ConversionDialog.el});
-      return;
-    }
-  }
 
   ConversionDialog.showWorking();
   Utils.showLoader('Convertendo PDF','Reconstruindo o livro localmente.',{progress:true});
@@ -6773,18 +6871,16 @@ async convertPdf(book){
       }
     });
 
-    Utils.setLoaderProgress(98,'Salvando o EPUB…');
-    ConversionDialog.updateProgress(98,'Salvando o EPUB…');
+    Utils.setLoaderProgress(98,'Preparando salvamento…');
+    ConversionDialog.updateProgress(98,'Preparando salvamento…');
+    Utils.hideLoader();
 
-    let savedMessage='O EPUB está pronto.';
-    let outputName=result.filename;
-
-    if(!outputDirectory){
-      throw new Error('Não foi possível obter acesso à pasta original do PDF.');
+    const saveResult=await this.saveConvertedEpub(result,book);
+    if(!saveResult?.saved){
+      ConversionDialog.close(false);
+      Utils.toast('Conversão cancelada. O PDF original permanece na biblioteca.','info');
+      return;
     }
-    outputName=await LocalFileAccess.uniqueName(outputDirectory,outputName);
-    await LocalFileAccess.writeBlob(outputDirectory,outputName,result.blob);
-    savedMessage=`EPUB salvo na mesma pasta do PDF: ${outputName}`;
 
     const epubMeta={
       ...Utils.normalizeBook({
@@ -6809,22 +6905,21 @@ async convertPdf(book){
         convertedFromPdf:true,
         convertedFromBookId:book.id,
         convertedAt:Date.now(),
-        sourceFileName:sourceName,
-        sourceDirectoryHandle:outputDirectory||book.sourceDirectoryHandle||null,
+        sourceFileName:saveResult.outputName,
+        sourceDirectoryHandle:null,
         conversionStats:result.stats||null
-      }),
+      })
     };
 
-    // Save EPUB to the app's library first. Only then remove the PDF entry.
+    // A biblioteca sempre guarda sua própria cópia do EPUB, independente de onde
+    // o usuário escolheu salvar o arquivo externo.
     await this.db.saveBook(epubMeta,result.buffer);
     await this.db.deleteBook(book.id);
     await this.db.clearBookCache(book.id);
     if(App.reader.currentBook?.id===book.id)App.reader.close();
 
     await this.render();
-    Utils.setLoaderProgress(100,'Conversão concluída.');
-    ConversionDialog.showSuccess(result,{message:savedMessage});
-
+    ConversionDialog.showSuccess(result,{message:saveResult.message});
     const learnNow=await new Promise(resolve=>{
       const c=ConversionDialog.confirm, x=ConversionDialog.cancel;
       const onC=()=>{cleanup();resolve(true)};
@@ -6834,19 +6929,85 @@ async convertPdf(book){
       x.addEventListener('click',onX,{once:true});
     });
     ConversionDialog.close(false);
-
     if(learnNow)await App.reader.openBook(epubMeta);
   }catch(err){
     console.error(err);
     ConversionDialog.close(false);
     if(err?.name==='NotAllowedError'){
-      Utils.toast('A permissão para a pasta foi cancelada. Nenhum arquivo original foi alterado.','info');
+      Utils.toast('A permissão para salvar o arquivo foi cancelada. Nenhum item da biblioteca foi alterado.','info');
     }else{
       Utils.toast(`Falha ao converter o PDF: ${err.message||'erro desconhecido'}`,'alert-circle');
     }
   }finally{
     Utils.hideLoader();
   }
+}
+
+async saveConvertedEpub(result,book){
+  const outputName=this.suggestEpubName(result,book);
+  const pickFile=async()=>{
+    if(typeof window.showSaveFilePicker!=='function')return null;
+    const handle=await window.showSaveFilePicker({
+      suggestedName:outputName,
+      types:[{description:'Livro EPUB',accept:{'application/epub+zip':['.epub']}}],
+      excludeAcceptAllOption:false
+    });
+    const writable=await handle.createWritable();
+    try{await writable.write(result.blob)}finally{await writable.close()}
+    return handle.name||outputName;
+  };
+
+  // Primeiro caminho: salvamento explícito em qualquer pasta/arquivo escolhido.
+  if(typeof window.showSaveFilePicker==='function'){
+    ConversionDialog.title.textContent='Salvar EPUB';
+    ConversionDialog.subtitle.textContent='Escolha livremente onde o arquivo será gravado.';
+    ConversionDialog.body.innerHTML=`
+      <p>O EPUB já foi convertido. Agora você pode escolher <strong>qualquer pasta do computador</strong> para salvar o arquivo.</p>
+      <div class="conversion-warning">
+        <i data-lucide="folder-open"></i>
+        <div><strong>O PDF original não precisa estar nessa pasta</strong><div>A gravação é independente da localização do PDF e não altera o arquivo original.</div></div>
+      </div>`;
+    ConversionDialog.footer.style.display='flex';
+    ConversionDialog.confirm.innerHTML='<i data-lucide="save"></i>Escolher local';
+    ConversionDialog.cancel.textContent='Baixar automaticamente';
+    ConversionDialog.confirm.disabled=false;ConversionDialog.cancel.disabled=false;
+    lucide.createIcons({root:ConversionDialog.el});
+
+    const choice=await new Promise(resolve=>{
+      const c=ConversionDialog.confirm,x=ConversionDialog.cancel;
+      const onC=()=>{cleanup();resolve('picker')};
+      const onX=()=>{cleanup();resolve('download')};
+      const onClose=()=>{cleanup();resolve(false)};
+      const cleanup=()=>{c.removeEventListener('click',onC);x.removeEventListener('click',onX);ConversionDialog.closeBtn?.removeEventListener('click',onClose)};
+      c.addEventListener('click',onC,{once:true});x.addEventListener('click',onX,{once:true});ConversionDialog.closeBtn?.addEventListener('click',onClose,{once:true});
+    });
+    if(choice==='picker'){
+      try{
+        const fileName=await pickFile();
+        return {saved:true,outputName:fileName,message:`EPUB salvo em ${fileName}.`};
+      }catch(err){
+        if(err?.name==='AbortError')return {saved:false};
+        throw err;
+      }
+    }
+    if(choice==='download')return this.downloadConvertedEpub(result,outputName);
+    return {saved:false};
+  }
+
+  return this.downloadConvertedEpub(result,outputName);
+}
+
+suggestEpubName(result,book){
+  const raw=result?.filename || `${result?.meta?.title||book?.title||'livro'}.epub`;
+  const clean=raw.replace(/[\\/:*?"<>|]+/g,'-').trim();
+  return /\.epub$/i.test(clean)?clean:`${clean||'livro'}.epub`;
+}
+
+downloadConvertedEpub(result,outputName){
+  const url=URL.createObjectURL(result.blob);
+  const a=document.createElement('a');a.href=url;a.download=outputName;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  return {saved:true,outputName,message:`EPUB baixado como ${outputName}.`};
 }
 
   async reorder(a,b){
@@ -6863,7 +7024,12 @@ async convertPdf(book){
     await this.render();
   }
   async deleteBook(book){
-    const ok=confirm(`Excluir “${book.title}” da biblioteca?\n\nIsso remove apenas a cópia armazenada pela biblioteca, além do progresso, marcadores e anotações. O arquivo original da pasta do usuário não será apagado.`);
+    const ok=await AppModal.confirm({
+      title:'Excluir livro?',
+      subtitle:book.title||'Livro',
+      message:'Isso remove apenas a cópia armazenada pela biblioteca, além do progresso, marcadores e anotações. O arquivo original da pasta do usuário não será apagado.',
+      confirmText:'Excluir livro',confirmIcon:'trash-2',danger:true
+    });
     if(!ok)return;
     try{
       if(App.reader.currentBook?.id===book.id)App.reader.close();
@@ -6903,7 +7069,7 @@ async convertPdf(book){
       
       c.querySelector('.delete-btn').onclick = async (e) => {
         e.stopPropagation();
-        if(confirm('Excluir este marcador?')) {
+        if(await AppModal.confirm({title:'Excluir marcador?',message:'O marcador será removido da biblioteca, mas o arquivo do livro permanecerá intacto.',confirmText:'Excluir marcador',confirmIcon:'trash',danger:true})) {
            await App.db.deleteBookmark(book.id, m.id);
            Utils.toast('Marcador excluído.', 'trash');
            this.render();
@@ -6945,7 +7111,7 @@ async convertPdf(book){
       
       c.querySelector('.delete-btn').onclick = async (e) => {
         e.stopPropagation();
-        if(confirm(`Excluir esta ${isNote ? 'anotação' : 'citação'}?`)) {
+        if(await AppModal.confirm({title:`Excluir ${isNote ? 'anotação' : 'citação'}?`,message:'Este registro será removido permanentemente da biblioteca.',confirmText:`Excluir ${isNote ? 'anotação' : 'citação'}`,confirmIcon:'trash',danger:true})) {
            await App.db.deleteAnnotation(book.id, a.id);
            Utils.toast('Item excluído.', 'trash');
            this.render();
@@ -6978,8 +7144,11 @@ async convertPdf(book){
     const cols=book.collections.join(', ');
     document.getElementById('organize-body').innerHTML=`
       <div class="form-grid">
-        <div class="form-group full"><label class="form-label">Livro</label>
-          <div class="annotation-card"><strong>${Utils.esc(book.title)}</strong><div class="item-meta" style="margin-top:4px">${Utils.esc(book.author||'')}</div></div>
+        <div class="form-group"><label class="form-label" for="org-title">Nome do livro</label>
+          <input class="field" id="org-title" placeholder="Nome do livro" value="${Utils.esc(book.title||'')}">
+        </div>
+        <div class="form-group"><label class="form-label" for="org-author">Autor</label>
+          <input class="field" id="org-author" placeholder="Nome do autor" value="${Utils.esc(book.author||'')}">
         </div>
         <div class="form-group"><label class="form-label">Status</label>
           <select class="field" id="org-status">
@@ -7013,6 +7182,17 @@ async convertPdf(book){
   async saveOrganizer(){
     const book=this.allBooks.find(b=>b.id===this.selectedBookId);
     if(!book)return;
+    const titleField=document.getElementById('org-title');
+    const authorField=document.getElementById('org-author');
+    const newTitle=titleField?.value.trim()||'';
+    const newAuthor=authorField?.value.trim()||'';
+    if(!newTitle){
+      await AppModal.alert({title:'Nome do livro obrigatório',subtitle:'Organizar livro',message:'Informe um nome para o livro antes de salvar.',confirmText:'Entendi'});
+      titleField?.focus();
+      return;
+    }
+    book.title=newTitle;
+    book.author=newAuthor||'Autor Desconhecido';
     book.status=document.getElementById('org-status').value;
     book.favorite=document.getElementById('org-fav').checked;
     book.series=document.getElementById('org-series').value.trim();
@@ -7133,9 +7313,78 @@ async convertPdf(book){
 }
 
 /* ============================================================
+   APP MODAL — substitui confirmações nativas do navegador
+   ============================================================ */
+const AppModal={
+  el:null,body:null,title:null,subtitle:null,footer:null,confirmBtn:null,cancelBtn:null,closeBtn:null,icon:null,resolve:null,cleanup:null,
+  init(){
+    this.el=document.getElementById('app-modal');
+    this.body=document.getElementById('app-modal-body');
+    this.title=document.getElementById('app-modal-title');
+    this.subtitle=document.getElementById('app-modal-subtitle');
+    this.footer=document.getElementById('app-modal-footer');
+    this.confirmBtn=document.getElementById('app-modal-confirm');
+    this.cancelBtn=document.getElementById('app-modal-cancel');
+    this.closeBtn=document.getElementById('app-modal-close');
+    this.icon=document.getElementById('app-modal-icon');
+    const cancel=()=>this.close(false);
+    this.cancelBtn?.addEventListener('click',cancel);
+    this.closeBtn?.addEventListener('click',cancel);
+    this.el?.addEventListener('click',e=>{if(e.target===this.el)cancel()});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.el?.classList.contains('show'))cancel()});
+  },
+  alert({title='Aviso',subtitle='',message='',confirmText='Entendi',icon='circle-alert'}={}){
+    if(!this.el)this.init();
+    this.close(false);
+    this.title.textContent=title;
+    this.subtitle.textContent=subtitle;
+    this.body.innerHTML=`<p>${Utils.esc(message).replace(/\n/g,'<br>')}</p>`;
+    this.confirmBtn.className='soft-btn primary';
+    this.confirmBtn.innerHTML=`<i data-lucide="${icon}"></i>${Utils.esc(confirmText)}`;
+    this.cancelBtn.style.display='none';
+    this.icon.innerHTML=`<i data-lucide="${icon}"></i>`;
+    this.el.classList.add('show');document.body.classList.add('modal-open');
+    lucide.createIcons({root:this.el});
+    return new Promise(resolve=>{
+      const c=this.confirmBtn;
+      const finish=()=>{c.removeEventListener('click',finish);this.el.classList.remove('show');document.body.classList.remove('modal-open');this.cancelBtn.style.display='';resolve(true)};
+      c.addEventListener('click',finish,{once:true});
+    });
+  },
+  confirm({title='Confirmação',subtitle='',message='',confirmText='Confirmar',confirmIcon='check',danger=false}={}){
+    if(!this.el)this.init();
+    this.close(false);
+    this.title.textContent=title;this.subtitle.textContent=subtitle;
+    this.body.innerHTML=`<p>${Utils.esc(message).replace(/\n/g,'<br>')}</p>`;
+    this.confirmBtn.className=`soft-btn ${danger?'danger':'primary'}`;
+    this.confirmBtn.innerHTML=`<i data-lucide="${confirmIcon}"></i>${Utils.esc(confirmText)}`;
+    this.cancelBtn.style.display='';
+    this.cancelBtn.textContent='Cancelar';this.cancelBtn.className='soft-btn';
+    this.icon.innerHTML=`<i data-lucide="${danger?'triangle-alert':'circle-alert'}"></i>`;
+    this.el.classList.add('show');document.body.classList.add('modal-open');
+    lucide.createIcons({root:this.el});
+    return new Promise(resolve=>{
+      const c=this.confirmBtn,x=this.cancelBtn;
+      const cleanup=()=>{c.removeEventListener('click',onC);x.removeEventListener('click',onX);this.cleanup=null};
+      const onC=()=>{cleanup();this.resolve=null;this.el.classList.remove('show');document.body.classList.remove('modal-open');resolve(true)};
+      const onX=()=>{cleanup();this.resolve=null;this.el.classList.remove('show');document.body.classList.remove('modal-open');resolve(false)};
+      this.resolve=resolve;this.cleanup=cleanup;
+      c.addEventListener('click',onC,{once:true});x.addEventListener('click',onX,{once:true});
+    });
+  },
+  close(result=false){
+    if(this.cleanup){this.cleanup();this.cleanup=null}
+    this.el?.classList.remove('show');document.body.classList.remove('modal-open');
+    const r=this.resolve;this.resolve=null;
+    if(r)r(result);
+  }
+};
+
+/* ============================================================
    APP
    ============================================================ */
 ConversionDialog.init();
+AppModal.init();
 
 const App={
   state:{settings:{...AppDefaults.settings}},
@@ -7354,7 +7603,7 @@ const App={
 
         c.querySelector('.delete-btn').onclick = async (e) => {
             e.stopPropagation();
-            if(confirm(`Excluir esta ${title.toLowerCase().slice(0,-1)}?`)) {
+            if(await AppModal.confirm({title:`Excluir ${title.toLowerCase().slice(0,-1)}?`,message:'Este registro será removido permanentemente da biblioteca.',confirmText:'Excluir',confirmIcon:'trash',danger:true})) {
                 await this.db.deleteAnnotation(book.id, a.id);
                 Utils.toast('Item excluído.', 'trash');
                 this.reader.applyAnnotationsToRenderedPage(a.pageIndex);
@@ -7407,7 +7656,7 @@ const App={
 
         c.querySelector('.delete-btn').onclick = async (e) => {
             e.stopPropagation();
-            if(confirm('Excluir este marcador?')) {
+            if(await AppModal.confirm({title:'Excluir marcador?',message:'O marcador será removido permanentemente.',confirmText:'Excluir marcador',confirmIcon:'trash',danger:true})) {
                 await this.db.deleteBookmark(book.id, m.id);
                 Utils.toast('Marcador excluído.', 'trash');
                 this.reloadAnnotations();
