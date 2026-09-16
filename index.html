@@ -107,11 +107,13 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   flex:1;min-width:0;padding-left:14px;letter-spacing:-.2px;
 }
 .brand-mark {
-  width: 34px; height: 34px; border-radius: 8px; 
+  width: 34px; height: 34px; border-radius: 9px;
   display: grid; place-items: center; flex-shrink: 0; overflow: hidden;
-  background: transparent;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.08);
+  transition: background-color .2s ease, box-shadow .2s ease;
 }
-.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; padding: 3px; display:block; }
 .bar-brand span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ============================================================
@@ -305,8 +307,11 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:18px 12px;
 }
-.book-card{position:relative;cursor:pointer;min-width:0}
-.book-card.dragging{opacity:.4}
+.book-card{position:relative;cursor:pointer;min-width:0;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.book-card.dragging{opacity:.4;transform:scale(.985);z-index:10}
+.book-card.touch-dragging{cursor:grabbing;transition:transform .12s ease,opacity .12s ease}
+.book-card.touch-dragging .book-cover{box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.book-card img{ -webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none; user-select:none }
 .book-cover{
   aspect-ratio:2/3;border-radius:14px;overflow:hidden;
   background:var(--surface-hover);border:1px solid var(--border);
@@ -356,6 +361,10 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 .book-delete{color:#9b2236}
 .book-menu svg,.book-delete svg{width:15px;height:15px}
 .book-menu:hover,.book-delete:hover{background:#fff}
+@media (max-width:999px){
+  .book-menu-wrap{opacity:1!important}
+  .book-card{ -webkit-tap-highlight-color:transparent; }
+}
 
 .book-info{padding:9px 2px 0}
 .book-title{font-size:13px;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -416,8 +425,21 @@ body.reader-open .search-bar{display:none!important}
 }
 
 .slider-book{
-  position:relative; width:100%; height:100%; overflow:hidden; display:block; touch-action: pan-y;
+  position:relative; width:100%; height:100%; overflow:hidden; display:block; touch-action:pan-y;
 }
+.slider-book.reading-horizontal{overflow:hidden;touch-action:pan-y}
+.slider-book.reading-vertical{
+  overflow-y:auto;overflow-x:hidden;background:var(--reader-bg, var(--theme-reader-bg));
+  scroll-snap-type:y proximity;perspective:none;touch-action:pan-y pinch-zoom;
+  -webkit-overflow-scrolling:touch;
+}
+.slider-book.reading-vertical .page{
+  position:relative;inset:auto;visibility:visible;transform:none;opacity:1;z-index:auto;
+  pointer-events:auto;width:100%;height:auto;min-height:100%;margin:0;box-shadow:none;
+  scroll-snap-align:start;transition:none;overflow:visible;
+}
+.slider-book.reading-vertical .page.active{transform:none;box-shadow:none}
+.slider-book.reading-vertical .page.next,.slider-book.reading-vertical .page.prev{transform:none}
 .page{
   position:absolute; inset:0; z-index:1; visibility:hidden;
   transition:transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -643,6 +665,7 @@ body.reader-open .search-bar{display:none!important}
 }
 
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:12px}
+.seg.two,.reading-mode-seg{grid-template-columns:repeat(3,1fr)}
 .seg button{min-height:38px;border-radius:9px;font-size:11.5px;font-weight:700;color:var(--muted);transition:.15s}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
 
@@ -1079,7 +1102,7 @@ body.reader-open .search-bar{display:none!important}
         </div>
         <div class="reader-title" id="reader-title">Carregando...</div>
         <div class="reader-actions">
-          <button class="reader-icon" id="btn-reader-layout" aria-label="Modo de leitura do PDF" title="Modo do PDF" hidden><i data-lucide="columns-2"></i></button>
+          <button class="reader-icon" id="btn-reader-layout" aria-label="Modo de leitura" title="Modo de leitura"><i data-lucide="arrow-left-right"></i></button>
           <button class="reader-icon" id="btn-reader-tts" aria-label="Ouvir leitura" title="Ouvir leitura"><i data-lucide="headphones"></i></button>
           <button class="reader-icon" id="btn-reader-toc" aria-label="Sumário"><i data-lucide="list"></i></button>
         </div>
@@ -1188,6 +1211,15 @@ body.reader-open .search-bar{display:none!important}
         <button data-orientation="portrait">Retrato</button>
         <button data-orientation="landscape">Paisagem</button>
       </div>
+    </div>
+    <div class="setting-section">
+      <h4>Modo de leitura</h4>
+      <div class="seg reading-mode-seg" id="reading-mode-grid">
+        <button data-reading-mode="auto" class="active">Automático</button>
+        <button data-reading-mode="horizontal">Horizontal</button>
+        <button data-reading-mode="vertical">Vertical</button>
+      </div>
+      <div class="drag-tip">Automático usa rolagem horizontal para EPUB, MOBI e TXT; vertical para PDF e DOCX. Você pode alterar quando quiser.</div>
     </div>
     <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
       <button class="soft-btn" id="btn-restore-settings"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
@@ -4197,7 +4229,7 @@ class DBManager{
 const AppDefaults={settings:{
   theme:'light',fontFamily:"'Merriweather',serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
-  pdfReadingMode:'lateral',pdfZoom:1,ttsRate:1,ttsVoiceURI:''
+  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:''
 }};
 
 /* ============================================================
@@ -5327,6 +5359,7 @@ class ReaderEngine{
     this.readerStage=document.getElementById('reader-stage');
     this.ui=document.getElementById('reader-ui');
     this.navigating=false;this.uiTimer=null;
+    this.readingMode=this.state.settings.readingMode||'auto';
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
     this.annotationPressTimer=null;this.activeAnnotationId=null;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
@@ -5349,7 +5382,7 @@ class ReaderEngine{
     document.getElementById('btn-reader-annotations').onclick=()=>this.showAnnotations();
     document.getElementById('btn-reader-settings').onclick=()=>App.openPanel('panel-settings');
     document.getElementById('btn-reader-toc').onclick=()=>this.openToc();
-    document.getElementById('btn-reader-layout').onclick=()=>this.togglePdfReadingMode();
+    document.getElementById('btn-reader-layout').onclick=()=>this.toggleReadingMode();
     document.getElementById('sel-highlight').onclick=()=>this.saveSelection('highlight');
     document.getElementById('sel-quote').onclick=()=>this.saveSelection('quote');
     document.getElementById('sel-note').onclick=()=>this.openNoteForSelection();
@@ -5429,7 +5462,6 @@ class ReaderEngine{
       document.getElementById('reader-title').textContent=book.title||'Livro';
       this.pdfMode=this.state.settings.pdfReadingMode||'lateral';
       this.pdfZoom=Utils.clamp(Number(this.state.settings.pdfZoom)||1,.75,3);
-      document.getElementById('btn-reader-layout').hidden=book.format!=='pdf';
       App.switchView('reader');
       this.hideUI();
       let start=book.progress?.globalPage??null;
@@ -5688,8 +5720,13 @@ class ReaderEngine{
     this.destroySliderOnly();
     this.createFreshSliderContainer();
     const isPdf=this.currentBook.format==='pdf';
-    const pdfVertical=isPdf&&this.pdfMode==='vertical';
+    const verticalReading=this.isVerticalReading();
+    this.readingMode=verticalReading?'vertical':'horizontal';
+    const pdfVertical=isPdf&&verticalReading;
+    this.container.classList.toggle('reading-vertical',verticalReading);
+    this.container.classList.toggle('reading-horizontal',!verticalReading);
     this.container.classList.toggle('pdf-vertical',pdfVertical);
+    this.updateReadingModeControl();
     
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
@@ -5707,8 +5744,12 @@ class ReaderEngine{
     this.sliderBook = this.container;
     if(isPdf){
       const badge=document.createElement('div');badge.className='pdf-zoom-badge';badge.id='pdf-zoom-badge';badge.textContent=`${Math.round(this.pdfZoom*100)}%`;this.container.appendChild(badge);
-      this.updatePdfControls();this.setupPdfPinch();
-      if(pdfVertical)this.setupPdfContinuousScroll();
+      this.setupPdfPinch();
+    }
+    if(verticalReading)this.setupContinuousReadingScroll();
+
+    if(isPdf){
+      this.updatePdfControls();
     }
     
     const slider = document.getElementById('reader-page-slider');
@@ -5739,7 +5780,7 @@ class ReaderEngine{
         isDragging = false;
         const selection=window.getSelection();
         if(selection&&!selection.isCollapsed&&String(selection).trim())return;
-        if(pdfVertical){
+        if(verticalReading){
             if(Math.hypot(startX-currentX,startY-currentY)<10){this.ui.classList.contains('visible')?this.hideUI():this.showUI();}
             return;
         }
@@ -5766,7 +5807,7 @@ class ReaderEngine{
         if(e.target.closest('#annotation-pop')) return;
         const sel = window.getSelection();
         if(sel && !sel.isCollapsed && String(sel).trim()) return;
-        if(!pdfVertical&&e.pointerType === 'mouse') {
+        if(!verticalReading&&e.pointerType === 'mouse') {
             const w = window.innerWidth;
             if(e.clientX < w * 0.25) this.flip(-1);
             else if(e.clientX > w * 0.75) this.flip(1);
@@ -5779,13 +5820,15 @@ class ReaderEngine{
   
   turnToPage(index,options={}){
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
-       if(this.isPdfVertical()){
+       if(this.isVerticalReading()){
          this.currentPageIndex=index;
          this.container.querySelectorAll('.page').forEach((p,i)=>p.classList.toggle('active',i===index));
          const page=this.container.querySelector(`.page[data-page="${index}"]`);
          if(page&&!options.fromScroll)page.scrollIntoView({block:'start',behavior:options.instant?'auto':'smooth'});
          this.updateProgressText(index);this.persistProgressDebounced(index);this.applyAnnotationsToRenderedPage(index);
-         this.renderPdfPageIfNeeded(index);this.renderPdfPageIfNeeded(index+1);this.renderPdfPageIfNeeded(index-1);
+         if(this.currentBook.format==='pdf'){
+           this.renderPdfPageIfNeeded(index);this.renderPdfPageIfNeeded(index+1);this.renderPdfPageIfNeeded(index-1);
+         }
          return;
        }
        
@@ -5824,41 +5867,67 @@ class ReaderEngine{
       wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>`;
     }
   }
-  isPdfVertical(){return this.currentBook?.format==='pdf'&&this.pdfMode==='vertical'}
-  updatePdfControls(){
+  defaultReadingMode(format){
+    return ['pdf','docx'].includes(String(format||'').toLowerCase())?'vertical':'horizontal';
+  }
+  resolveReadingMode(format=this.currentBook?.format){
+    const pref=this.state.settings.readingMode||'auto';
+    if(pref==='vertical'||pref==='horizontal')return pref;
+    if(String(format||'').toLowerCase()==='pdf'&&this.state.settings.pdfReadingMode){
+      return this.state.settings.pdfReadingMode==='vertical'?'vertical':'horizontal';
+    }
+    return this.defaultReadingMode(format);
+  }
+  isVerticalReading(){return this.readingMode==='vertical'||this.resolveReadingMode()==='vertical'}
+  isPdfVertical(){return this.currentBook?.format==='pdf'&&this.isVerticalReading()}
+  updateReadingModeControl(){
     const btn=document.getElementById('btn-reader-layout');
     if(!btn)return;
-    const pdf=this.currentBook?.format==='pdf';btn.hidden=!pdf;
-    if(!pdf)return;
-    const vertical=this.pdfMode==='vertical';
-    btn.innerHTML=`<i data-lucide="${vertical?'columns-2':'rows-3'}"></i>`;
-    btn.title=vertical?'Mudar para páginas laterais':'Mudar para rolagem vertical';
-    btn.setAttribute('aria-label',btn.title);lucide.createIcons({root:btn});
+    const vertical=this.isVerticalReading();
+    btn.innerHTML=`<i data-lucide="${vertical?'arrow-up-down':'arrow-left-right'}"></i>`;
+    btn.title=vertical?'Mudar para leitura horizontal':'Mudar para rolagem vertical';
+    btn.setAttribute('aria-label',btn.title);
+    btn.classList.toggle('active',vertical);
+    lucide.createIcons({root:btn});
   }
-  async togglePdfReadingMode(){
-    if(this.currentBook?.format!=='pdf')return;
+  updatePdfControls(){this.updateReadingModeControl()}
+  async reloadReadingMode(){
+    if(!this.currentBook||!this.sliderBook)return;
     const index=this.currentPageIndex;
-    this.pdfMode=this.pdfMode==='vertical'?'lateral':'vertical';
-    await App.updateSetting('pdfReadingMode',this.pdfMode);
+    this.readingMode=this.resolveReadingMode(this.currentBook.format);
+    this.pdfMode=this.readingMode;
     await this.initSliderBook(index);
-    Utils.toast(this.pdfMode==='vertical'?'Rolagem vertical ativada.':'Páginas laterais ativadas.','file-text');
   }
-  setupPdfContinuousScroll(){
+  async toggleReadingMode(){
+    if(!this.currentBook||!this.sliderBook)return;
+    const next=this.isVerticalReading()?'horizontal':'vertical';
+    this.readingMode=next;
+    await App.updateSetting('readingMode',next);
+    if(this.currentBook.format==='pdf')await App.updateSetting('pdfReadingMode',next);
+    await this.reloadReadingMode();
+    Utils.toast(next==='vertical'?'Rolagem vertical ativada.':'Leitura horizontal ativada.','file-text');
+  }
+  async togglePdfReadingMode(){return this.toggleReadingMode()}
+  setupContinuousReadingScroll(){
     let raf=null;
     this.container.addEventListener('scroll',()=>{
       if(raf)return;
       raf=requestAnimationFrame(()=>{
-        raf=null;const middle=this.container.getBoundingClientRect().top+this.container.clientHeight*.42;
+        raf=null;
+        const middle=this.container.getBoundingClientRect().top+this.container.clientHeight*.42;
         let nearest=null,distance=Infinity;
-        this.container.querySelectorAll('.page.pdf-page').forEach(page=>{
+        this.container.querySelectorAll('.page').forEach(page=>{
           const rect=page.getBoundingClientRect(),d=Math.abs(rect.top-middle);
           if(d<distance){distance=d;nearest=Number(page.dataset.page)}
-          if(rect.bottom>0&&rect.top<window.innerHeight)this.renderPdfPageIfNeeded(Number(page.dataset.page));
+          if(this.currentBook?.format==='pdf'&&rect.bottom>0&&rect.top<window.innerHeight){
+            this.renderPdfPageIfNeeded(Number(page.dataset.page));
+          }
         });
         if(nearest!==null&&nearest!==this.currentPageIndex)this.turnToPage(nearest,{fromScroll:true,instant:true});
       });
     },{passive:true});
   }
+  setupPdfContinuousScroll(){return this.setupContinuousReadingScroll()}
   setupPdfPinch(){
     let startDistance=0,startZoom=this.pdfZoom,preview=this.pdfZoom,pinching=false;
     const distance=touches=>Math.hypot(touches[0].clientX-touches[1].clientX,touches[0].clientY-touches[1].clientY);
@@ -6793,6 +6862,57 @@ class LibraryManager{
       if(!this.dragged||this.dragged.id===target.id)return;
       await this.reorder(this.dragged,target);
     });
+
+    /* Mobile: toque comum abre o livro; toque longo inicia a movimentação.
+       Isso evita o menu nativo de imagem e torna o gesto de reorganização
+       descobrível sem sacrificar a rolagem normal da biblioteca. */
+    let pressTimer=null, touchDragging=false, touchTarget=null, startTX=0, startTY=0, suppressClick=false;
+    const clearPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null}};
+    const clearTargets=()=>document.querySelectorAll('.book-card.drop-target').forEach(x=>x.classList.remove('drop-target'));
+    const finishTouchDrag=async(e)=>{
+      clearPress();
+      if(!touchDragging)return;
+      e.preventDefault();
+      const target=touchTarget;
+      touchDragging=false;touchTarget=null;
+      el.classList.remove('touch-dragging','dragging');
+      clearTargets();
+      try{el.releasePointerCapture?.(e.pointerId)}catch{}
+      suppressClick=true;setTimeout(()=>{suppressClick=false},420);
+      if(target&&target.dataset.id&&target.dataset.id!==book.id){
+        const targetBook=this.allBooks.find(x=>x.id===target.dataset.id);
+        if(targetBook)await this.reorder(book,targetBook);
+      }
+    };
+    el.addEventListener('pointerdown',e=>{
+      if(e.pointerType!=='touch')return;
+      if(e.target.closest('.book-menu-wrap'))return;
+      startTX=e.clientX;startTY=e.clientY;
+      clearPress();
+      pressTimer=setTimeout(()=>{
+        pressTimer=null;touchDragging=true;touchTarget=el;
+        el.classList.add('touch-dragging','dragging');
+        try{el.setPointerCapture?.(e.pointerId)}catch{}
+        if(navigator.vibrate)navigator.vibrate(22);
+      },430);
+    },{passive:true});
+    el.addEventListener('pointermove',e=>{
+      if(e.pointerType!=='touch')return;
+      const dx=Math.abs(e.clientX-startTX),dy=Math.abs(e.clientY-startTY);
+      if(!touchDragging){
+        if(dx>10||dy>10)clearPress();
+        return;
+      }
+      e.preventDefault();
+      const under=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.book-card');
+      clearTargets();
+      if(under&&under!==el){under.classList.add('drop-target');touchTarget=under}
+    },{passive:false});
+    el.addEventListener('pointerup',finishTouchDrag,{passive:false});
+    el.addEventListener('pointercancel',e=>{clearPress();finishTouchDrag(e)},{passive:false});
+    el.addEventListener('contextmenu',e=>{if(e.pointerType==='touch'||window.matchMedia('(pointer:coarse)').matches)e.preventDefault()});
+    el.addEventListener('dragstart',e=>{if(e.pointerType==='touch')e.preventDefault()});
+    el.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopPropagation()}},true);
     return el;
   }
 
@@ -7459,6 +7579,25 @@ const App={
   applySettings(){
     const s=this.state.settings;
     document.body.dataset.theme=s.theme;
+
+    const themeLogos={light:'logo-claro.png',sepia:'logo-sepia.png',dark:'logo-escuro.png',ocean:'logo-oceano.png'};
+    const logoSrc=themeLogos[s.theme]||'logo.png';
+    document.querySelectorAll('.brand-mark img').forEach(img=>{
+      if(img.dataset.logoBound!=='1'){
+        img.dataset.logoBound='1';
+        img.addEventListener('error',()=>{
+          if(!img.dataset.logoFallback){img.dataset.logoFallback='1';img.src='logo.png';}
+        });
+      }
+      img.dataset.activeLogo=logoSrc;
+      img.dataset.logoFallback='';
+      if(!img.src.endsWith('/'+logoSrc)&&!img.src.endsWith(logoSrc))img.src=logoSrc;
+    });
+    const themeColorMeta=document.querySelector('meta[name="theme-color"]');
+    if(themeColorMeta){
+      const colorMap={light:'#5f202c',sepia:'#9a551f',dark:'#e3c4ca',ocean:'#38bdf8'};
+      themeColorMeta.content=colorMap[s.theme]||'#5f202c';
+    }
     
     const bodyStyle = document.body.style;
     if(s.readerBg) bodyStyle.setProperty('--reader-bg',s.readerBg);
@@ -7479,6 +7618,7 @@ const App={
     document.querySelectorAll('.theme-option').forEach(b=>b.classList.toggle('active',b.dataset.themeValue===s.theme));
     document.querySelectorAll('#font-grid button').forEach(b=>b.classList.toggle('active',b.dataset.font===s.fontFamily));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.classList.toggle('active',b.dataset.orientation===s.orientation));
+    document.querySelectorAll('#reading-mode-grid button').forEach(b=>b.classList.toggle('active',b.dataset.readingMode=== (s.readingMode||'auto')));
     
     ['font-size','line-height','margin','brightness'].forEach(k=>{
       const el=document.getElementById(`set-${k}`),val=document.getElementById(`val-${k}`);
@@ -7508,6 +7648,13 @@ const App={
     });
     document.querySelectorAll('#font-grid button').forEach(b=>b.onclick=()=>this.updateSetting('fontFamily',b.dataset.font));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.onclick=()=>this.updateSetting('orientation',b.dataset.orientation));
+    document.querySelectorAll('#reading-mode-grid button').forEach(b=>b.onclick=async()=>{
+      await this.updateSetting('readingMode',b.dataset.readingMode);
+      if(this.reader&&document.getElementById('view-reader').classList.contains('active')){
+        await this.reader.reloadReadingMode();
+        Utils.toast(b.dataset.readingMode==='auto'?'Modo automático aplicado.':`Leitura ${b.dataset.readingMode==='vertical'?'vertical':'horizontal'} aplicada.`,'book-open');
+      }
+    });
     
     const bindings=[['set-font-size','fontSize'],['set-line-height','lineHeight'],['set-margin','margin'],['set-brightness','brightness']];
     bindings.forEach(([id,key])=>{
