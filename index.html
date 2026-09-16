@@ -308,8 +308,23 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   gap:18px 12px;
 }
 .book-card{position:relative;cursor:pointer;min-width:0;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.book-card.dragging{opacity:.4;transform:scale(.985);z-index:10}
-.book-card.touch-dragging{cursor:grabbing;transition:none;z-index:30}.book-card.touch-dragging .book-cover{box-shadow:0 18px 42px rgba(0,0,0,.24)}.book-drag-ghost{position:fixed;z-index:1000;pointer-events:none;width:var(--ghost-w,140px);opacity:.72;transform:translate3d(-50%,-50%,0) scale(1.025) rotate(1deg);filter:drop-shadow(0 16px 24px rgba(0,0,0,.28));will-change:left,top}.book-drag-ghost .book-cover{box-shadow:none!important}
+.book-card.dnd-moving{transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+.book-card.dnd-source{opacity:.24;filter:saturate(.35)}
+.book-card.dnd-source .book-cover{box-shadow:none;transform:none}
+body.dnd-active{cursor:grabbing}
+body.dnd-active .book-card{cursor:grabbing}
+body.dnd-active .book-grid{touch-action:none}
+.book-drag-ghost{position:fixed;left:0;top:0;z-index:1000;pointer-events:none;width:var(--ghost-w,140px);
+  opacity:.94;transform-origin:50% 50%;will-change:transform;
+  filter:drop-shadow(0 18px 26px rgba(0,0,0,.30))}
+.book-drag-ghost .book-cover{box-shadow:0 10px 26px rgba(0,0,0,.2)!important;transform:none}
+.book-drag-ghost .book-menu-wrap{display:none}
+.shelf-reorder-hint{
+  display:flex;align-items:center;gap:8px;margin:2px 0 12px;padding:9px 12px;border-radius:12px;
+  background:var(--surface-2);border:1px dashed var(--border);color:var(--muted);
+  font:600 11.5px var(--ui-font);line-height:1.45;
+}
+.shelf-reorder-hint svg{width:15px;height:15px;flex:none;stroke-width:2.2}
 .book-card img{ -webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none; user-select:none }
 .book-cover{
   aspect-ratio:2/3;border-radius:14px;overflow:hidden;
@@ -444,6 +459,39 @@ body.reader-open .search-bar{display:none!important}
   transition:transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
   background:var(--reader-bg, var(--theme-reader-bg)); color:var(--reader-text, var(--theme-reader-text));
   overflow-y:auto; overflow-x:hidden; pointer-events:none;
+}
+
+/* ============================================================
+   MOTOR DE VIRADA "FOLHA REAL"
+   A folha é dobrada pela bissetriz perpendicular entre o canto
+   segurado e o dedo: a mesma geometria de um papel real.
+   Tudo é feito com transform (GPU), sem repintar o texto.
+   ============================================================ */
+.slider-book.pt-curl .page,
+.slider-book.pt-none .page{transition:none}
+.slider-book.curl-running .page{transition:none!important}
+.page.page-cut{animation:pageCut .22s ease-out}
+@keyframes pageCut{from{opacity:.25}to{opacity:1}}
+.page.curl-under{visibility:visible!important;transform:translateX(0)!important;z-index:2!important;transition:none!important;pointer-events:none!important;box-shadow:none!important}
+.page.curl-source{visibility:hidden!important}
+
+.curl-layer{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden;--curl-lift:0}
+.curl-frame{position:absolute;left:0;top:0;overflow:hidden;transform-origin:0 0;will-change:transform;backface-visibility:hidden}
+.curl-inner{position:absolute;left:0;top:0;overflow:hidden;transform-origin:0 0;will-change:transform}
+.curl-sheet{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden}
+.curl-sheet .page{position:absolute;inset:0;visibility:visible!important;transform:none!important;
+  transition:none!important;box-shadow:none!important;pointer-events:none!important;overflow:hidden!important;z-index:1}
+.curl-back{background:var(--reader-bg, var(--theme-reader-bg));box-shadow:inset 0 0 30px rgba(0,0,0,.13)}
+.curl-back .page{opacity:.085;filter:grayscale(1)}
+.curl-mirror{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0;will-change:transform;
+  filter:drop-shadow(-1px 5px 11px rgba(0,0,0,.28))}
+.curl-band{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;opacity:var(--curl-lift)}
+.curl-band-back{background:linear-gradient(to right,rgba(0,0,0,.30),rgba(0,0,0,.14) 22%,rgba(0,0,0,.04) 52%,rgba(0,0,0,0) 100%)}
+.curl-band-under{background:linear-gradient(to right,rgba(0,0,0,.34),rgba(0,0,0,.13) 30%,rgba(0,0,0,0) 100%)}
+.curl-edge{position:absolute;left:0;top:0;transform-origin:0 0;width:1.5px;background:rgba(255,255,255,.5);opacity:var(--curl-lift)}
+[data-theme="dark"] .curl-edge,[data-theme="ocean"] .curl-edge{background:rgba(255,255,255,.22)}
+@media (prefers-reduced-motion:reduce){
+  .curl-mirror{filter:none}
 }
 .page.active{
   visibility:visible; transform:translateX(0); z-index:3; pointer-events:auto;
@@ -1219,6 +1267,15 @@ body.reader-open .search-bar{display:none!important}
       </div>
       <div class="drag-tip">Automático usa rolagem horizontal para EPUB, MOBI e TXT; vertical para PDF e DOCX. Você pode alterar quando quiser.</div>
     </div>
+    <div class="setting-section">
+      <h4>Virada de página</h4>
+      <div class="seg" id="page-turn-grid">
+        <button data-page-turn="curl" class="active">Folha real</button>
+        <button data-page-turn="slide">Deslizar</button>
+        <button data-page-turn="none">Sem animação</button>
+      </div>
+      <div class="drag-tip">Na leitura horizontal, arraste a página a partir da borda para dobrá-la com o dedo. Solte no meio do caminho para desistir da virada.</div>
+    </div>
     <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
       <button class="soft-btn" id="btn-restore-settings"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
     </div>
@@ -1306,6 +1363,7 @@ body.reader-open .search-bar{display:none!important}
   </div>
   <div class="panel-body">
     <div id="sort-options" class="sort-options"></div>
+    <div class="drag-tip">Ao arrastar um livro para outra posição, a estante muda sozinha para Minha Ordem e mantém a sequência que você montou.</div>
   </div>
 </section>
 
@@ -4227,7 +4285,7 @@ class DBManager{
 const AppDefaults={settings:{
   theme:'light',fontFamily:"'Merriweather',serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
-  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:''
+  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl'
 }};
 
 /* ============================================================
@@ -5347,6 +5405,261 @@ class TextToSpeechController{
   }
 }
 
+/* ============================================================
+   MOTOR DE VIRADA DE PÁGINA — FOLHA REAL
+   ------------------------------------------------------------
+   A folha dobra exatamente como papel: o canto segurado é levado
+   até o dedo e o vinco nasce na bissetriz perpendicular entre os
+   dois pontos. Por isso a dobra fica reta quando o gesto é
+   horizontal e inclina sozinha quando o gesto é diagonal.
+
+   Três camadas compõem a cena, todas recortadas por semiplanos
+   feitos com wrappers girados + overflow (nada de clip-path), de
+   modo que cada quadro só atualiza "transform" e a animação roda
+   na GPU sem repintar o texto:
+     1. sombra projetada sobre a página revelada;
+     2. parte da folha que continua deitada;
+     3. aba dobrada (verso do papel) espelhada pelo vinco.
+
+   As páginas reais não são tocadas: o motor trabalha com cópias
+   temporárias, então grifos, notas, seleção de texto, fontes e
+   temas continuam funcionando exatamente como antes.
+   ============================================================ */
+class PageCurlEngine{
+  constructor(reader){
+    this.reader=reader;
+    this.layer=null;this.parts=null;
+    this.active=false;this.dragging=false;this.animating=false;
+    this.raf=0;this.dir=0;this.leafIndex=-1;this.underIndex=-1;
+    this.W=0;this.H=0;this.K=0;this.anchorY=0;
+    this.cornerX=0;this.cornerY=0;this.t=0;
+  }
+  get container(){return this.reader.container}
+  mode(){return App.state.settings.pageTurn||'curl'}
+  available(){
+    const r=this.reader;
+    if(this.mode()!=='curl')return false;
+    if(!r.container||!r.container.isConnected)return false;
+    if(r.isVerticalReading())return false;
+    if(!Array.isArray(r.pagesData)||r.pagesData.length<2)return false;
+    return true;
+  }
+  pageEl(i){return this.container?this.container.querySelector(`.page[data-page="${i}"]`):null}
+  measure(){
+    const rect=this.container.getBoundingClientRect();
+    this.W=Math.max(1,Math.round(rect.width));
+    this.H=Math.max(1,Math.round(rect.height));
+    this.top=rect.top;
+    this.K=Math.ceil(Math.hypot(this.W,this.H)*2.4);
+  }
+  /* Cópia visual da página, inclusive os pixels já desenhados de PDF. */
+  clonePage(el){
+    const clone=el.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.classList.remove('active','prev','next','curl-under','curl-source','page-cut');
+    clone.setAttribute('aria-hidden','true');
+    clone.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+    const src=el.querySelectorAll('canvas'),dst=clone.querySelectorAll('canvas');
+    dst.forEach((canvas,i)=>{
+      const from=src[i];
+      if(!from||!from.width||!from.height)return;
+      try{
+        canvas.width=from.width;canvas.height=from.height;
+        canvas.getContext('2d').drawImage(from,0,0);
+      }catch(err){}
+    });
+    return clone;
+  }
+  build(dir,anchorY){
+    const r=this.reader;
+    const cur=r.currentPageIndex;
+    const leafIndex=dir>0?cur:cur-1;
+    const underIndex=dir>0?cur+1:cur;
+    if(leafIndex<0||underIndex<0)return false;
+    if(leafIndex>=r.pagesData.length||underIndex>=r.pagesData.length)return false;
+    const leafEl=this.pageEl(leafIndex),underEl=this.pageEl(underIndex);
+    if(!leafEl||!underEl)return false;
+    this.measure();
+    if(this.W<80||this.H<80)return false;
+    try{r.renderPdfPageIfNeeded(underIndex)}catch(err){}
+
+    const mk=(cls,parent)=>{const d=document.createElement('div');d.className=cls;parent.appendChild(d);return d};
+    const layer=document.createElement('div');
+    layer.className='curl-layer';
+
+    const underFrame=mk('curl-frame',layer);
+    const underInner=mk('curl-inner',underFrame);
+    const underSheet=mk('curl-sheet',underInner);
+    const underBand=mk('curl-band curl-band-under',underSheet);
+
+    const flatFrame=mk('curl-frame',layer);
+    const flatInner=mk('curl-inner',flatFrame);
+    const flatSheet=mk('curl-sheet',flatInner);
+
+    const mirror=mk('curl-mirror',layer);
+    const flapFrame=mk('curl-frame',mirror);
+    const flapInner=mk('curl-inner',flapFrame);
+    const flapSheet=mk('curl-sheet curl-back',flapInner);
+    const flapBand=mk('curl-band curl-band-back',flapSheet);
+    const flapEdge=mk('curl-edge',flapSheet);
+
+    [underFrame,flatFrame,flapFrame].forEach(f=>{f.style.width=`${this.K}px`;f.style.height=`${this.K}px`});
+    [underInner,flatInner,flapInner].forEach(f=>{f.style.width=`${this.W}px`;f.style.height=`${this.H}px`});
+    [underBand,flapBand].forEach(b=>{b.style.width='160px';b.style.height=`${this.K}px`});
+    flapEdge.style.height=`${this.K}px`;
+
+    const front=this.clonePage(leafEl);
+    flatSheet.appendChild(front);
+    const back=this.clonePage(leafEl);
+    flapSheet.insertBefore(back,flapBand);
+
+    leafEl.classList.add('curl-source');
+    underEl.classList.add('curl-under');
+    this.container.appendChild(layer);
+    try{front.scrollTop=leafEl.scrollTop;back.scrollTop=leafEl.scrollTop}catch(err){}
+
+    this.layer=layer;
+    this.parts={underFrame,underInner,underBand,flatFrame,flatInner,flapFrame,flapInner,flapBand,flapEdge,mirror};
+    this.dir=dir;this.leafIndex=leafIndex;this.underIndex=underIndex;
+    this.anchorY=anchorY===null||anchorY===undefined
+      ? this.H*0.5
+      : Utils.clamp(anchorY-this.top,this.H*0.05,this.H*0.95);
+    this.cornerY=this.anchorY;
+    this.active=true;
+    this.container.classList.add('curl-running');
+    this.setTurn(dir>0?0:1);
+    return true;
+  }
+  setTurn(t){
+    this.t=Utils.clamp(t,0,1);
+    this.cornerX=this.W-2*this.W*this.t;
+    this.apply();
+  }
+  apply(){
+    if(!this.parts||!this.layer)return;
+    const W=this.W,K=this.K,P=this.parts;
+    const ax=W,ay=this.anchorY;
+    let dx=this.cornerX-ax,dy=this.cornerY-ay;
+    if(dx>-0.75)dx=-0.75;
+    /* papel rígido: o vinco não passa de ~62°, senão a dobra "explode" */
+    const lim=Math.abs(dx)*1.88;
+    if(dy>lim)dy=lim;else if(dy<-lim)dy=-lim;
+    const len=Math.hypot(dx,dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const mx=ax+dx/2,my=ay+dy/2;
+    const phi=Math.atan2(ny,nx);
+    const backAng=phi+Math.PI;
+    const place=(frame,inner,ang)=>{
+      frame.style.transform=`translate(${mx}px,${my}px) rotate(${ang}rad) translate(0px,${-K/2}px)`;
+      inner.style.transform=`translate(0px,${K/2}px) rotate(${-ang}rad) translate(${-mx}px,${-my}px)`;
+    };
+    place(P.flatFrame,P.flatInner,phi);
+    place(P.underFrame,P.underInner,backAng);
+    place(P.flapFrame,P.flapInner,backAng);
+    const bandT=`translate(${mx}px,${my}px) rotate(${backAng}rad) translate(0px,${-K/2}px)`;
+    P.underBand.style.transform=bandT;
+    P.flapBand.style.transform=bandT;
+    P.flapEdge.style.transform=bandT;
+    const a=1-2*nx*nx,b=-2*nx*ny,c=b,d=1-2*ny*ny;
+    const e=mx-(a*mx+c*my),f=my-(b*mx+d*my);
+    P.mirror.style.transform=`matrix(${a},${b},${c},${d},${e},${f})`;
+    /* A sombra nasce junto com o vinco e se apaga quando a folha
+       termina de sair: no fim da virada não há papel para sombrear. */
+    const lift=Math.min(1,this.t*5)*Math.min(1,(1-this.t)*4);
+    this.layer.style.setProperty('--curl-lift',lift.toFixed(3));
+  }
+  /* --- gesto do usuário ------------------------------------ */
+  start(dir,anchorClientY){
+    if(this.active||!this.available())return false;
+    const r=this.reader;
+    const next=r.currentPageIndex+dir;
+    if(next<0||next>=r.pagesData.length)return false;
+    if(!this.build(dir,anchorClientY))return false;
+    this.dragging=true;
+    r.navigating=true;
+    return true;
+  }
+  dragBy(dx,dy){
+    if(!this.active||!this.dragging)return;
+    const base=this.dir>0?this.W:-this.W;
+    this.cornerY=this.anchorY+dy;
+    const x=base+dx*2;
+    this.cornerX=x;
+    this.setTurn((this.W-x)/(2*this.W));
+  }
+  progress(){return this.dir>0?this.t:1-this.t}
+  release(vx){
+    if(!this.active)return;
+    this.dragging=false;
+    const speed=Number.isFinite(vx)?vx:0;
+    const forward=this.dir>0;
+    const fling=forward?speed<-0.32:speed>0.32;
+    const flingBack=forward?speed>0.4:speed<-0.4;
+    const commit=!flingBack&&(this.progress()>0.32||fling);
+    const target=forward?(commit?1:0):(commit?0:1);
+    this.animateTo(target,Math.abs(speed),commit);
+  }
+  /* --- virada automática (toque nas bordas, teclado) -------- */
+  animate(dir){
+    if(this.active||!this.available())return false;
+    const r=this.reader;
+    const next=r.currentPageIndex+dir;
+    if(next<0||next>=r.pagesData.length)return false;
+    if(!this.build(dir,null))return false;
+    r.navigating=true;
+    this.cornerY=this.anchorY-Math.min(30,this.H*0.06);
+    this.animateTo(dir>0?1:0,0,true);
+    return true;
+  }
+  animateTo(target,speed,commit){
+    if(!this.active)return;
+    const from=this.t,delta=target-from;
+    if(Math.abs(delta)<0.0005){this.finish(commit);return}
+    const distance=Math.abs(delta)*2*this.W;
+    const v=Utils.clamp(speed||0,0,3.5);
+    const duration=v>0.25
+      ? Utils.clamp(distance/(v*1.25),190,620)
+      : Utils.clamp(distance/1.55,280,620);
+    const y0=this.cornerY,y1=commit?this.cornerY:this.anchorY;
+    const started=performance.now();
+    this.animating=true;
+    const step=now=>{
+      if(!this.active)return;
+      const k=Utils.clamp((now-started)/duration,0,1);
+      const eased=1-Math.pow(1-k,3);
+      this.cornerY=y0+(y1-y0)*eased;
+      this.setTurn(from+delta*eased);
+      if(k<1){this.raf=requestAnimationFrame(step);return}
+      this.raf=0;this.animating=false;
+      this.finish(commit);
+    };
+    this.raf=requestAnimationFrame(step);
+  }
+  finish(commit){
+    const r=this.reader;
+    const dir=this.dir,leafIndex=this.leafIndex,underIndex=this.underIndex;
+    if(commit){
+      const index=dir>0?underIndex:leafIndex;
+      r.turnToPage(index,{fromCurl:true});
+    }
+    this.teardown();
+  }
+  cancel(){this.teardown()}
+  teardown(){
+    if(this.raf){cancelAnimationFrame(this.raf);this.raf=0}
+    if(this.container){
+      const leaf=this.pageEl(this.leafIndex),under=this.pageEl(this.underIndex);
+      if(leaf)leaf.classList.remove('curl-source');
+      if(under)under.classList.remove('curl-under');
+      this.container.classList.remove('curl-running');
+    }
+    if(this.layer&&this.layer.isConnected)this.layer.remove();
+    this.layer=null;this.parts=null;
+    this.active=false;this.dragging=false;this.animating=false;
+    this.reader.navigating=false;
+  }
+}
+
 class ReaderEngine{
   constructor(db,state){
     this.db=db;this.state=state;
@@ -5356,7 +5669,7 @@ class ReaderEngine{
     this.pagesData=[];this.pageMeta=[];this.pdfDoc=null;this.container=null;
     this.readerStage=document.getElementById('reader-stage');
     this.ui=document.getElementById('reader-ui');
-    this.navigating=false;this.uiTimer=null;
+    this.navigating=false;this.uiTimer=null;this.curl=null;
     this.readingMode=this.state.settings.readingMode||'auto';
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
     this.annotationPressTimer=null;this.activeAnnotationId=null;
@@ -5755,68 +6068,108 @@ class ReaderEngine{
     if(slider) slider.max = totalMax;
     document.getElementById('scrubber-total').textContent = this.pagesData.length;
 
-    let startX = 0, currentX = 0, startY = 0, currentY = 0, isDragging = false;
-    this.container.addEventListener('touchstart', e => {
-        if(isPdf&&e.touches.length>1)return;
-        if(e.target.closest('.reader-ui')) return;
-        startX = e.touches[0].clientX;
-        currentX = startX;
-        startY = e.touches[0].clientY;
-        currentY = startY;
-        isDragging = true;
-    }, {passive: true});
-    
-    this.container.addEventListener('touchmove', e => {
-        if(isPdf&&e.touches.length>1)return;
-        if(!isDragging) return;
-        currentX = e.touches[0].clientX;
-        currentY = e.touches[0].clientY;
-    }, {passive: true});
-    
-    this.container.addEventListener('touchend', e => {
-        if(!isDragging) return;
-        isDragging = false;
-        const selection=window.getSelection();
-        if(selection&&!selection.isCollapsed&&String(selection).trim())return;
-        if(verticalReading){
-            if(Math.hypot(startX-currentX,startY-currentY)<10){this.ui.classList.contains('visible')?this.hideUI():this.showUI();}
-            return;
-        }
-        const delta = startX - currentX;
-        if (Math.abs(delta) > 50) {
-            if(delta > 0) this.flip(1);
-            else this.flip(-1);
-        } else if(Math.abs(delta) < 10) {
-            const w = window.innerWidth;
-            if(startX < w * 0.25) this.flip(-1);
-            else if(startX > w * 0.75) this.flip(1);
-            else { this.ui.classList.contains('visible') ? this.hideUI() : this.showUI(); }
-        }
-    });
-    
-    this.container.addEventListener('click', e => {
-        if(e.target.closest('.reader-ui')) return;
-        const annotationTarget=e.target.closest('[data-annotation-id]');
-        if(annotationTarget){
-            e.stopPropagation();
-            this.openAnnotationPopover(annotationTarget.dataset.annotationId,annotationTarget.getBoundingClientRect());
-            return;
-        }
-        if(e.target.closest('#annotation-pop')) return;
-        const sel = window.getSelection();
-        if(sel && !sel.isCollapsed && String(sel).trim()) return;
-        if(!verticalReading&&e.pointerType === 'mouse') {
-            const w = window.innerWidth;
-            if(e.clientX < w * 0.25) this.flip(-1);
-            else if(e.clientX > w * 0.75) this.flip(1);
-            else { this.ui.classList.contains('visible') ? this.hideUI() : this.showUI(); }
-        }
-    });
+    this.curl=new PageCurlEngine(this);
+    this.applyPageTurnMode();
+    this.setupPageGestures(isPdf,verticalReading);
 
     this.turnToPage(startIndex,{instant:true});
   }
+
+  applyPageTurnMode(){
+    const c=this.container;
+    if(!c)return;
+    const mode=App.state.settings.pageTurn||'curl';
+    c.classList.toggle('pt-curl',mode==='curl');
+    c.classList.toggle('pt-none',mode==='none');
+    if(mode!=='curl'&&this.curl&&this.curl.active)this.curl.cancel();
+  }
+  toggleUI(){this.ui.classList.contains('visible')?this.hideUI():this.showUI()}
+  /* Um único gesto cuida de tudo: dobrar a folha, tocar nas bordas
+     para virar e tocar no meio para mostrar os controles. */
+  setupPageGestures(isPdf,verticalReading){
+    const c=this.container;
+    let pid=null,mode='idle',sx=0,sy=0,st=0,lx=0,ly=0,lt=0,vx=0;
+    const blocked=t=>!!(t&&t.closest&&(t.closest('.reader-ui')||t.closest('#annotation-pop')||t.closest('.selection-toolbar')||t.closest('#selection-toolbar')));
+    const hasSelection=()=>{const s=window.getSelection();return !!(s&&!s.isCollapsed&&String(s).trim())};
+    const reset=()=>{pid=null;mode='idle';vx=0};
+
+    c.addEventListener('pointerdown',e=>{
+      if(mode!=='idle')return;
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      if(blocked(e.target))return;
+      if(this.curl&&this.curl.animating)return;
+      pid=e.pointerId;sx=lx=e.clientX;sy=ly=e.clientY;st=lt=performance.now();vx=0;mode='pending';
+    },{passive:true});
+
+    c.addEventListener('pointermove',e=>{
+      if(pid===null||e.pointerId!==pid)return;
+      const now=performance.now(),dt=Math.max(1,now-lt);
+      vx=0.72*((e.clientX-lx)/dt)+0.28*vx;
+      lx=e.clientX;ly=e.clientY;lt=now;
+      const dx=e.clientX-sx,dy=e.clientY-sy;
+      if(mode==='curl'){this.curl.dragBy(dx,dy);return}
+      if(mode!=='pending'||verticalReading)return;
+      if(isPdf&&e.isPrimary===false){mode='blocked';return}
+      /* Pegar a folha pelo canto e puxar na diagonal é natural; só o
+         gesto quase vertical é descartado (pode ser seleção de texto). */
+      if(Math.abs(dx)<16||Math.abs(dx)<Math.abs(dy)*0.6)return;
+      if(now-st>520||hasSelection()){mode='blocked';return}
+      if(isPdf&&this.pdfZoom>1.02){mode='blocked';return}
+      const dir=dx<0?1:-1;
+      if(this.curl&&this.curl.start(dir,sy)){
+        mode='curl';
+        try{c.setPointerCapture(e.pointerId)}catch(err){}
+        this.curl.dragBy(dx,dy);
+      }else{
+        mode='swipe';
+      }
+    },{passive:true});
+
+    /* Enquanto a folha está na mão, nada mais rola ou dá zoom. */
+    c.addEventListener('touchmove',e=>{if(mode==='curl')e.preventDefault()},{passive:false});
+
+    const finish=e=>{
+      if(pid===null||(e&&e.pointerId!==undefined&&e.pointerId!==pid))return;
+      const dx=lx-sx,dy=ly-sy,elapsed=performance.now()-st;
+      const wasCurl=mode==='curl',wasSwipe=mode==='swipe',wasPending=mode==='pending';
+      reset();
+      if(wasCurl){this.curl.release(vx);return}
+      if(hasSelection())return;
+      if(verticalReading){
+        if(Math.hypot(dx,dy)<10&&elapsed<600)this.toggleUI();
+        return;
+      }
+      if(wasSwipe&&Math.abs(dx)>50){this.flip(dx<0?1:-1);return}
+      if(!wasPending)return;
+      if(Math.hypot(dx,dy)>=12||elapsed>=600)return;
+      if(e&&e.target&&e.target.closest&&e.target.closest('[data-annotation-id]'))return;
+      const rect=c.getBoundingClientRect();
+      const w=rect.width||window.innerWidth;
+      const x=(e?e.clientX:lx)-rect.left;
+      if(x<w*0.25)this.flip(-1);
+      else if(x>w*0.75)this.flip(1);
+      else this.toggleUI();
+    };
+    c.addEventListener('pointerup',finish,{passive:true});
+    c.addEventListener('pointercancel',e=>{
+      if(pid===null||e.pointerId!==pid)return;
+      const wasCurl=mode==='curl';
+      reset();
+      if(wasCurl)this.curl.release(vx);
+    },{passive:true});
+
+    c.addEventListener('click',e=>{
+      if(e.target.closest('.reader-ui'))return;
+      const annotationTarget=e.target.closest('[data-annotation-id]');
+      if(annotationTarget){
+        e.stopPropagation();
+        this.openAnnotationPopover(annotationTarget.dataset.annotationId,annotationTarget.getBoundingClientRect());
+      }
+    });
+  }
   
   turnToPage(index,options={}){
+    if(this.curl&&this.curl.active&&!options.fromCurl)this.curl.cancel();
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
        if(this.isVerticalReading()){
          this.currentPageIndex=index;
@@ -5840,6 +6193,17 @@ class ReaderEngine{
        });
        this.container.dataset.started='1';
        this.hideAnnotationPopover();
+       /* Sem a transição de slide, um corte seco incomoda: um respiro
+          curto de opacidade deixa o salto de página legível. */
+       if(!options.fromCurl&&!options.instant&&this.container.classList.contains('pt-curl')){
+         const target=pages[index];
+         if(target){
+           target.classList.remove('page-cut');
+           void target.offsetWidth;
+           target.classList.add('page-cut');
+           setTimeout(()=>target.classList.remove('page-cut'),300);
+         }
+       }
        
        this.updateProgressText(index);
        this.persistProgressDebounced(index);
@@ -5987,6 +6351,7 @@ class ReaderEngine{
     const index = this.currentPageIndex + dir;
     if(index >= this.pagesData.length){Utils.toast('Você chegou ao fim do livro.','check-circle');return;}
     if(index < 0){Utils.toast('Este é o início do livro.','info');return;}
+    if(this.curl&&this.curl.animate(dir))return;
     this.turnToPage(index);
   }
   async persistProgress(i){
@@ -6292,6 +6657,8 @@ class ReaderEngine{
     App.library.render();
   }
   destroySliderOnly(){
+    if(this.curl){this.curl.cancel();this.curl=null}
+    this.navigating=false;
     if(this.container&&this.container.isConnected)this.container.remove();
     this.container=null;
     this.sliderBook=null;
@@ -6514,10 +6881,260 @@ const ConversionDialog = {
 /* ============================================================
    LIBRARY MANAGER
    ============================================================ */
+/* ============================================================
+   REORDENAÇÃO DA ESTANTE
+   ------------------------------------------------------------
+   Um único controlador cuida do gesto inteiro, em vez de cada
+   capa cuidar de si. Isso resolve três problemas de uma vez:
+
+   • o alvo é calculado pela posição real do dedo sobre a grade,
+     então arrastar para a direita, para a esquerda ou na
+     diagonal funciona igual;
+   • enquanto o livro está na mão, o touchmove é bloqueado, então
+     a estante não rola junto e rouba a troca de posição;
+   • quando o dedo chega perto da borda, a estante rola sozinha,
+     no ritmo da aproximação, para alcançar as fileiras de cima
+     e de baixo sem soltar o livro.
+
+   A reordenação acontece ao vivo (as capas abrem espaço com
+   animação FLIP) e só é gravada quando o dedo solta.
+   ============================================================ */
+class ShelfSorter{
+  constructor(library){
+    this.library=library;
+    this.card=null;this.grid=null;this.ghost=null;this.scroller=null;
+    this.pointerId=null;this.pressTimer=null;
+    this.dragging=false;this.suppressClick=false;
+    this.startX=0;this.startY=0;this.offsetX=0;this.offsetY=0;
+    this.lastPoint=null;this.scrollRaf=0;this.scrollSpeed=0;
+    this.onMove=this.onMove.bind(this);
+    this.onUp=this.onUp.bind(this);
+    this.onCancel=this.onCancel.bind(this);
+    this.blockTouch=this.blockTouch.bind(this);
+  }
+  attach(el){
+    el.draggable=false;
+    el.addEventListener('pointerdown',e=>this.onDown(e,el),{passive:true});
+    el.addEventListener('contextmenu',e=>{
+      if(this.dragging||window.matchMedia('(pointer:coarse)').matches)e.preventDefault();
+    });
+  }
+  onDown(e,el){
+    if(this.dragging||this.pointerId!==null)return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    if(e.target.closest&&e.target.closest('.book-menu-wrap'))return;
+    this.card=el;this.pointerId=e.pointerId;
+    this.startX=e.clientX;this.startY=e.clientY;
+    const rect=el.getBoundingClientRect();
+    this.offsetX=e.clientX-rect.left;this.offsetY=e.clientY-rect.top;
+    window.addEventListener('pointermove',this.onMove,{passive:false});
+    window.addEventListener('pointerup',this.onUp,{passive:true});
+    window.addEventListener('pointercancel',this.onCancel,{passive:true});
+    window.addEventListener('touchmove',this.blockTouch,{passive:false});
+    if(e.pointerType!=='mouse'){
+      this.pressTimer=setTimeout(()=>this.begin(this.startX,this.startY),320);
+    }
+  }
+  blockTouch(e){if(this.dragging)e.preventDefault()}
+  clearPress(){if(this.pressTimer){clearTimeout(this.pressTimer);this.pressTimer=null}}
+  onMove(e){
+    if(this.pointerId===null||e.pointerId!==this.pointerId)return;
+    const dx=e.clientX-this.startX,dy=e.clientY-this.startY;
+    if(!this.dragging){
+      /* Antes de pegar o livro o dedo ainda pertence à rolagem. */
+      if(e.pointerType==='mouse'){
+        if(Math.hypot(dx,dy)>6)this.begin(e.clientX,e.clientY);
+      }else if(Math.hypot(dx,dy)>12){
+        this.release(false);
+      }
+      return;
+    }
+    e.preventDefault();
+    this.lastPoint={x:e.clientX,y:e.clientY};
+    this.moveGhost(e.clientX,e.clientY);
+    this.updateTarget(e.clientX,e.clientY);
+    this.updateAutoScroll(e.clientY);
+  }
+  begin(x,y){
+    this.clearPress();
+    if(!this.card||!this.card.isConnected)return this.release(false);
+    const grid=this.card.closest('.book-grid');
+    if(!grid)return this.release(false);
+    this.grid=grid;
+    this.scroller=this.card.closest('.view')||document.getElementById('view-home');
+    const rect=this.card.getBoundingClientRect();
+    /* As células têm tamanho fixo: medir agora permite descobrir a
+       posição de destino pela célula sob o dedo, sem depender dos
+       retângulos das capas — que ficam deslocados enquanto a animação
+       de abertura de espaço acontece. */
+    this.baseW=rect.width;this.baseH=rect.height;
+    this.metrics=new Map();
+    const ghost=this.card.cloneNode(true);
+    ghost.className='book-drag-ghost';
+    ghost.setAttribute('aria-hidden','true');
+    ghost.style.setProperty('--ghost-w',`${rect.width}px`);
+    ghost.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+    document.body.appendChild(ghost);
+    this.ghost=ghost;
+    this.dragging=true;
+    this.autoScrollArmed=false;
+    this.lastPoint={x,y};
+    this.moveGhost(x,y);
+    this.card.classList.add('dnd-source');
+    document.body.classList.add('dnd-active');
+    if(navigator.vibrate&&window.matchMedia('(pointer:coarse)').matches)navigator.vibrate(16);
+  }
+  moveGhost(x,y){
+    if(!this.ghost)return;
+    this.ghost.style.transform=`translate3d(${Math.round(x-this.offsetX)}px,${Math.round(y-this.offsetY)}px,0) scale(1.05) rotate(1.4deg)`;
+  }
+  cards(){return Array.from(this.grid.querySelectorAll('.book-card'))}
+  allGrids(){
+    const root=document.getElementById('library-content');
+    return root?Array.from(root.querySelectorAll('.book-grid')):[this.grid];
+  }
+  metricsFor(grid){
+    let m=this.metrics.get(grid);
+    if(m)return m;
+    const cs=getComputedStyle(grid);
+    const columns=Math.max(1,String(cs.gridTemplateColumns||'').trim().split(/\s+/).filter(Boolean).length);
+    const sample=grid.querySelector('.book-card');
+    const r=sample?sample.getBoundingClientRect():null;
+    m={
+      columns,
+      w:Math.max(1,((r&&r.width)||this.baseW)+(parseFloat(cs.columnGap)||0)),
+      h:Math.max(1,((r&&r.height)||this.baseH)+(parseFloat(cs.rowGap)||0))
+    };
+    this.metrics.set(grid,m);
+    return m;
+  }
+  /* Com a estante agrupada existe uma grade por autor: o livro precisa
+     poder atravessar prateleiras, senão grupos de um livro só ficariam
+     impossíveis de reordenar. */
+  gridUnder(y){
+    const grids=this.allGrids();
+    if(!grids.length)return null;
+    for(const g of grids){
+      const r=g.getBoundingClientRect();
+      if(y>=r.top-10&&y<=r.bottom+10)return g;
+    }
+    let best=grids[0],dist=Infinity;
+    for(const g of grids){
+      const r=g.getBoundingClientRect();
+      const d=y<r.top?r.top-y:y-r.bottom;
+      if(d<dist){dist=d;best=g}
+    }
+    return best;
+  }
+  updateTarget(x,y){
+    if(!this.card)return;
+    const grid=this.gridUnder(y);
+    if(!grid)return;
+    const m=this.metricsFor(grid);
+    const g=grid.getBoundingClientRect();
+    const col=Utils.clamp(Math.floor((x-g.left)/m.w),0,m.columns-1);
+    const row=Math.max(0,Math.floor((y-g.top)/m.h));
+    const cell=row*m.columns+col;
+    const list=Array.from(grid.querySelectorAll('.book-card'));
+    if(grid===this.card.parentElement){
+      if(list.length<2)return;
+      const cur=list.indexOf(this.card);
+      if(cur<0)return;
+      const want=Utils.clamp(cell,0,list.length-1);
+      if(want===cur)return;
+      const ref=want>cur?list[want].nextElementSibling:list[want];
+      if(ref===this.card)return;
+      this.applyReorder(()=>grid.insertBefore(this.card,ref));
+    }else{
+      const want=Utils.clamp(cell,0,list.length);
+      this.applyReorder(()=>grid.insertBefore(this.card,list[want]||null));
+    }
+    this.grid=this.card.parentElement||grid;
+  }
+  /* FLIP: mede antes, move, e anima a diferença. */
+  applyReorder(mutate){
+    const root=document.getElementById('library-content');
+    const list=Array.from((root||this.grid).querySelectorAll('.book-card'));
+    const before=new Map();
+    list.forEach(el=>before.set(el,el.getBoundingClientRect()));
+    mutate();
+    list.forEach(el=>{
+      if(el===this.card)return;
+      const from=before.get(el),to=el.getBoundingClientRect();
+      const dx=from.left-to.left,dy=from.top-to.top;
+      if(!dx&&!dy)return;
+      el.classList.remove('dnd-moving');
+      el.style.transform=`translate(${dx}px,${dy}px)`;
+      requestAnimationFrame(()=>{
+        el.classList.add('dnd-moving');
+        el.style.transform='';
+      });
+    });
+  }
+  updateAutoScroll(y){
+    const sc=this.scroller;
+    if(!sc){this.scrollSpeed=0;return}
+    const r=sc.getBoundingClientRect();
+    const edge=Math.min(80,r.height*0.12);
+    let factor=0;
+    if(y<r.top+edge)factor=-(1-Math.max(0,y-r.top)/edge);
+    else if(y>r.bottom-edge)factor=1-Math.max(0,r.bottom-y)/edge;
+    /* Quem pega um livro que já estava perto da borda não quer que a
+       estante saia correndo: a rolagem só é liberada depois que o dedo
+       passa pelo meio da tela ao menos uma vez. */
+    if(!factor)this.autoScrollArmed=true;
+    this.scrollSpeed=this.autoScrollArmed?Utils.clamp(factor,-1,1)*13:0;
+    if(this.scrollSpeed&&!this.scrollRaf)this.scrollStep();
+  }
+  scrollStep(){
+    this.scrollRaf=requestAnimationFrame(()=>{
+      this.scrollRaf=0;
+      if(!this.dragging||!this.scrollSpeed||!this.scroller)return;
+      const before=this.scroller.scrollTop;
+      this.scroller.scrollTop=before+this.scrollSpeed;
+      if(this.scroller.scrollTop!==before&&this.lastPoint){
+        this.updateTarget(this.lastPoint.x,this.lastPoint.y);
+      }
+      this.scrollStep();
+    });
+  }
+  onUp(e){
+    if(this.pointerId!==null&&e.pointerId!==this.pointerId)return;
+    this.release(true);
+  }
+  onCancel(e){
+    if(this.pointerId!==null&&e.pointerId!==this.pointerId)return;
+    this.release(false);
+  }
+  release(commit){
+    this.clearPress();
+    window.removeEventListener('pointermove',this.onMove,{passive:false});
+    window.removeEventListener('pointerup',this.onUp,{passive:true});
+    window.removeEventListener('pointercancel',this.onCancel,{passive:true});
+    window.removeEventListener('touchmove',this.blockTouch,{passive:false});
+    if(this.scrollRaf){cancelAnimationFrame(this.scrollRaf);this.scrollRaf=0}
+    this.scrollSpeed=0;
+    const wasDragging=this.dragging;
+    if(this.ghost){this.ghost.remove();this.ghost=null}
+    if(this.card)this.card.classList.remove('dnd-source');
+    document.body.classList.remove('dnd-active');
+    document.querySelectorAll('.book-card.dnd-moving').forEach(el=>{
+      el.classList.remove('dnd-moving');el.style.transform='';
+    });
+    this.dragging=false;this.pointerId=null;this.card=null;this.grid=null;
+    this.lastPoint=null;this.scroller=null;
+    if(wasDragging){
+      this.suppressClick=true;
+      setTimeout(()=>{this.suppressClick=false},280);
+      if(commit)this.library.commitManualOrder();
+    }
+  }
+}
+
 class LibraryManager{
   constructor(db){
     this.db=db;this.allBooks=[];this.currentFilter='all';this.search='';
-    this.selectedBookId=null;this.dragged=null;
+    this.selectedBookId=null;this.dragged=null;this.sorter=new ShelfSorter(this);
     this.setupImport();this.setupSearch();this.setupNav();this.setupSort();this.setupGlobalActions();
   }
   async render(){
@@ -6689,6 +7306,13 @@ class LibraryManager{
       lucide.createIcons({root:content});
       return;
     }
+    if(b.length>1&&(App.state.settings.sort||'custom')!=='custom'){
+      const hint=document.createElement('div');
+      hint.className='shelf-reorder-hint';
+      hint.id='shelf-reorder-hint';
+      hint.innerHTML=`<i data-lucide="arrow-down-up"></i><span>Arraste um livro para reposicioná-lo: a estante passa para Minha Ordem e guarda a sequência.</span>`;
+      content.appendChild(hint);
+    }
     const grouped=new Map();
     b.forEach(book=>{
       const key=App.state.settings.sort==='author'?(book.author||'Autor desconhecido'):'Sua estante';
@@ -6843,75 +7467,13 @@ class LibraryManager{
     if(shareBtn)shareBtn.onclick=async e=>{e.stopPropagation();await this.shareBook(book)};
     el.querySelector('.book-delete').onclick=async e=>{e.stopPropagation();await this.deleteBook(book)};
     el.onclick=e=>{
+      if(this.sorter.suppressClick)return;
       if(e.target.closest('.book-menu-wrap'))return;
       App.reader.openBook(book);
     };
-    el.addEventListener('dragstart',e=>{
-      this.dragged=book;el.classList.add('dragging');
-      e.dataTransfer.effectAllowed='move';
-      e.dataTransfer.setData('text/plain',book.id);
-    });
-    el.addEventListener('dragend',()=>el.classList.remove('dragging'));
-    el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drop-target')});
-    el.addEventListener('dragleave',()=>el.classList.remove('drop-target'));
-    el.addEventListener('drop',async e=>{
-      e.preventDefault();el.classList.remove('drop-target');
-      const target=book;
-      if(!this.dragged||this.dragged.id===target.id)return;
-      await this.reorder(this.dragged,target);
-    });
-
-    /* Mobile: toque comum abre o livro; toque longo inicia a movimentação.
-       A capa inteira participa do gesto. O ghost acompanha o dedo e o alvo
-       é calculado pela posição real do ponteiro, permitindo qualquer direção. */
-    let pressTimer=null, touchDragging=false, touchTarget=null, startTX=0, startTY=0;
-    let ghost=null, activePointerId=null, suppressClick=false;
-    const clearPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null}};
-    const clearTargets=()=>document.querySelectorAll('.book-card.drop-target').forEach(x=>x.classList.remove('drop-target'));
-    const removeGhost=()=>{if(ghost){ghost.remove();ghost=null}};
-    const targetAt=(x,y)=>{
-      const node=document.elementFromPoint(x,y);
-      const card=node?.closest?.('.book-card');
-      return card && card.isConnected ? card : null;
-    };
-    const moveGhost=(x,y)=>{if(ghost){ghost.style.left=`${x}px`;ghost.style.top=`${y}px`}};
-    const beginTouchDrag=(x,y,pointerId)=>{
-      clearPress();touchDragging=true;touchTarget=el;activePointerId=pointerId;
-      el.classList.add('touch-dragging','dragging');el.style.touchAction='none';
-      try{el.setPointerCapture?.(pointerId)}catch{}
-      ghost=el.cloneNode(true);ghost.className='book-drag-ghost';
-      ghost.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
-      ghost.style.setProperty('--ghost-w',`${Math.min(180,Math.max(112,el.getBoundingClientRect().width))}px`);
-      document.body.appendChild(ghost);moveGhost(x,y);
-      if(navigator.vibrate)navigator.vibrate(22);
-    };
-    const finishTouchDrag=async e=>{
-      clearPress();if(!touchDragging)return;
-      e?.preventDefault?.();
-      const target=touchTarget;const targetBook=target&&target.dataset.id&&target.dataset.id!==book.id?this.allBooks.find(x=>x.id===target.dataset.id):null;
-      touchDragging=false;touchTarget=null;activePointerId=null;
-      el.classList.remove('touch-dragging','dragging');el.style.touchAction='pan-y';clearTargets();removeGhost();
-      try{el.releasePointerCapture?.(e?.pointerId)}catch{}
-      suppressClick=true;setTimeout(()=>{suppressClick=false},targetBook?150:420);
-      if(targetBook)await this.reorder(book,targetBook);
-    };
-    el.addEventListener('pointerdown',e=>{
-      if(e.pointerType!=='touch'||e.target.closest('.book-menu-wrap'))return;
-      activePointerId=e.pointerId;startTX=e.clientX;startTY=e.clientY;clearPress();
-      pressTimer=setTimeout(()=>beginTouchDrag(startTX,startTY,e.pointerId),430);
-    },{passive:true});
-    el.addEventListener('pointermove',e=>{
-      if(e.pointerType!=='touch'||activePointerId!==e.pointerId)return;
-      if(!touchDragging){if(Math.hypot(e.clientX-startTX,e.clientY-startTY)>12)clearPress();return}
-      e.preventDefault();moveGhost(e.clientX,e.clientY);
-      const under=targetAt(e.clientX,e.clientY);clearTargets();
-      if(under&&under!==el){under.classList.add('drop-target');touchTarget=under}else touchTarget=el;
-    },{passive:false});
-    el.addEventListener('pointerup',finishTouchDrag,{passive:false});
-    el.addEventListener('pointercancel',e=>{clearPress();if(touchDragging)finishTouchDrag(e)},{passive:false});
-    el.addEventListener('contextmenu',e=>{if(e.pointerType==='touch'||window.matchMedia('(pointer:coarse)').matches)e.preventDefault()});
-    el.addEventListener('dragstart',e=>{if(e.pointerType==='touch')e.preventDefault()});
-    el.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopPropagation()}},true);
+    /* Segure para pegar o livro (ou arraste com o mouse) e solte
+       sobre a posição desejada — em qualquer direção. */
+    this.sorter.attach(el);
     return el;
   }
 
@@ -7129,14 +7691,56 @@ downloadConvertedEpub(result,outputName){
   return {saved:true,outputName,message:`EPUB baixado como ${outputName}.`};
 }
 
+  /* Grava a ordem que está na tela. Se a estante estava agrupada,
+     mover um livro é um pedido claro de ordem própria: o modo passa
+     para Minha Ordem sozinho, sem perder a sequência que o usuário
+     acabou de ver. */
+  async commitManualOrder(){
+    const ids=Array.from(document.querySelectorAll('#library-content .book-card'))
+      .map(el=>el.dataset.id).filter(Boolean);
+    if(!ids.length)return;
+    const byId=new Map(this.allBooks.map(b=>[b.id,b]));
+    const visible=new Set(ids);
+    const previous=this.sortedBooks([...this.allBooks]);
+    let cursor=0;
+    const merged=previous.map(b=>visible.has(b.id)?(byId.get(ids[cursor++])||b):b);
+    const changed=[];
+    merged.forEach((b,index)=>{
+      if(b.order!==index||!b.manualOrder){b.order=index;b.manualOrder=true;changed.push(b)}
+    });
+    try{
+      for(const b of changed)await this.db.updateBook(b);
+    }catch(e){
+      console.error(e);
+      Utils.toast('Não foi possível salvar a nova ordem.','alert-triangle');
+      await this.render();
+      return;
+    }
+    const wasCustom=(App.state.settings.sort||'custom')==='custom';
+    App.state.settings.sort='custom';
+    App.state.settings.groupAuthors=false;
+    await App.persistSettings();
+    if(wasCustom){
+      if(changed.length)Utils.toast('Nova ordem salva.','check');
+      this.updateShelfHint();
+    }else{
+      Utils.toast('Agrupamento alterado para Minha Ordem.','arrow-down-up');
+      await this.render();
+    }
+  }
+  updateShelfHint(){
+    const sub=document.getElementById('section-subtitle');
+    if(sub&&!this.search)sub.textContent='Ordem manual da sua estante.';
+    const hint=document.getElementById('shelf-reorder-hint');
+    if(hint)hint.remove();
+  }
   async reorder(a,b){
     const ordered=this.sortedBooks([...this.allBooks]).filter(x=>x.id!==a.id);
-    const idx=ordered.findIndex(x=>x.id===b.id);
+    const idx=Math.max(0,ordered.findIndex(x=>x.id===b.id));
     ordered.splice(idx,0,a);
-    for(let i=0;i<ordered.length;i++){
-      ordered[i].order=i;ordered[i].manualOrder=true;
-      await this.db.updateBook(ordered[i]);
-    }
+    ordered.forEach((x,i)=>{x.order=i;x.manualOrder=true});
+    for(const x of ordered)await this.db.updateBook(x);
+    App.state.settings.sort='custom';
     App.state.settings.groupAuthors=false;
     await App.persistSettings();
     Utils.toast('Ordem personalizada salva.','move');
@@ -7618,6 +8222,9 @@ const App={
     document.querySelectorAll('#font-grid button').forEach(b=>b.classList.toggle('active',b.dataset.font===s.fontFamily));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.classList.toggle('active',b.dataset.orientation===s.orientation));
     document.querySelectorAll('#reading-mode-grid button').forEach(b=>b.classList.toggle('active',b.dataset.readingMode=== (s.readingMode||'auto')));
+    const turn=s.pageTurn||'curl';
+    document.querySelectorAll('#page-turn-grid button').forEach(b=>b.classList.toggle('active',b.dataset.pageTurn===turn));
+    if(this.reader&&this.reader.container)this.reader.applyPageTurnMode();
     
     ['font-size','line-height','margin','brightness'].forEach(k=>{
       const el=document.getElementById(`set-${k}`),val=document.getElementById(`val-${k}`);
@@ -7655,6 +8262,12 @@ const App={
       }
     });
     
+    document.querySelectorAll('#page-turn-grid button').forEach(b=>b.onclick=async()=>{
+      await this.updateSetting('pageTurn',b.dataset.pageTurn);
+      const label={curl:'Virada em folha real ativada.',slide:'Virada deslizante ativada.',none:'Virada sem animação ativada.'}[b.dataset.pageTurn];
+      Utils.toast(label,'book-open');
+    });
+
     const bindings=[['set-font-size','fontSize'],['set-line-height','lineHeight'],['set-margin','margin'],['set-brightness','brightness']];
     bindings.forEach(([id,key])=>{
       const el=document.getElementById(id);
