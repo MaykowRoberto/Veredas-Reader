@@ -628,8 +628,12 @@ body.reader-open .search-bar{display:none!important}
 .slider-book.comic-vertical .comic-slot{height:auto;align-items:flex-start}
 .slider-book.comic-vertical .comic-img{width:100%;height:auto;max-height:none}
 /* Espaço reservado para a página que ainda não carregou, para a
-   rolagem não pular quando a imagem chega. */
+   rolagem não pular quando a imagem chega. Enquanto o aplicativo não
+   conhece a proporção das páginas, vale este chute; assim que a
+   primeira imagem carrega, a reserva passa a ser a altura exata e o
+   chute sai de cena. */
 .slider-book.comic-vertical .comic-loading{min-height:72vh}
+.slider-book.comic-vertical .comic-page-wrap[data-reserved="1"] .comic-loading{min-height:0}
 
 .comic-loading{
   display:flex;align-items:center;justify-content:center;

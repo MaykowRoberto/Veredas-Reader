@@ -428,8 +428,10 @@ const BookFormats={
   /* Quadrinhos: um pacote de imagens em sequência. Abrem num leitor
      próprio (ComicEngine), não na paginação de texto. */
   COMIC:['cbz','cbr','cb7','cbt'],
-  /* extensões alternativas que apontam para o mesmo formato */
-  ALIASES:{markdown:'md',mkd:'md',mdown:'md',mdtext:'md',text:'txt'},
+  /* Extensões alternativas que apontam para o mesmo formato.
+     `.prc` é o nome antigo do contêiner do Mobipocket: é um MOBI com
+     outro sobrenome, e muita gente tem a biblioteca inteira assim. */
+  ALIASES:{markdown:'md',mkd:'md',mdown:'md',mdtext:'md',text:'txt',prc:'mobi'},
   INFO:{
     epub:{label:'EPUB',icon:'book-open',scroll:'horizontal',mime:'application/epub+zip',share:false},
     mobi:{label:'MOBI',icon:'book',scroll:'horizontal',mime:'application/x-mobipocket-ebook',share:false},
@@ -489,7 +491,7 @@ const BookFormats={
   },
   /* Lista para o atributo accept e para o seletor avançado. */
   acceptList(){
-    return ['.epub','.pdf','.txt','.md','.markdown','.docx','.mobi',
+    return ['.epub','.pdf','.txt','.md','.markdown','.docx','.mobi','.prc',
       '.cbz','.cbr','.cb7','.cbt','.mp3','.m4b','.mp4'];
   }
 };
@@ -4780,7 +4782,7 @@ class ReaderEngine{
     this.annotationPressTimer=null;this.activeAnnotationId=null;
     /* Quadrinhos: arquivo aberto, agrupamento de páginas e estado do zoom. */
     this.comic=null;this.comicViews=[];this.comicRtl=false;
-    this.comicFit='page';this.comicSpread=true;
+    this.comicFit='page';this.comicSpread=true;this.comicRatio=null;
     this.comicZoom={scale:1,x:0,y:0};
     this.rtl=false;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
@@ -5172,7 +5174,10 @@ class ReaderEngine{
         img.alt=`Página ${p+1}`;
         img.decoding='async';
         img.draggable=false;
-        img.addEventListener('load',()=>slot.classList.add('ready'),{once:true});
+        img.addEventListener('load',()=>{
+          slot.classList.add('ready');
+          this.learnComicRatio(img);
+        },{once:true});
         img.addEventListener('error',()=>{
           slot.classList.add('ready');
           slot.innerHTML='<div class="comic-error">Esta página não pôde ser exibida.</div>';
@@ -5188,12 +5193,40 @@ class ReaderEngine{
     }
     this.trimComicMemory();
   }
+  /* Na rolagem contínua, uma página ainda não carregada precisa ocupar
+     desde já o espaço que vai ocupar depois. Sem isso o documento
+     encolhe e cresce a cada imagem que chega, e a rolagem parece
+     "escorregar" debaixo do dedo. Como as páginas de um quadrinho têm
+     quase sempre o mesmo tamanho, a primeira que carrega já ensina a
+     proporção de todas as outras. */
+  learnComicRatio(img){
+    if(!img||!img.naturalWidth||!img.naturalHeight)return;
+    const proporcao=img.naturalHeight/img.naturalWidth;
+    if(!Number.isFinite(proporcao)||proporcao<=0)return;
+    if(this.comicRatio&&Math.abs(this.comicRatio-proporcao)<0.02)return;
+    if(!this.comicRatio)this.comicRatio=proporcao;
+    this.reserveComicHeights();
+  }
+  reserveComicHeights(){
+    if(!this.comic||!this.container||!this.comicRatio)return;
+    if(!this.isVerticalReading())return;
+    const largura=this.container.clientWidth||window.innerWidth;
+    const altura=Math.round(largura*this.comicRatio);
+    if(!altura)return;
+    this.container.querySelectorAll('.comic-page-wrap').forEach(wrap=>{
+      if(wrap.dataset.rendered==='1')return;
+      wrap.style.minHeight=`${altura}px`;
+      /* A marca desliga a altura de chute do espaçador: um filho mais
+         alto que o pai não deixaria a reserva valer. */
+      wrap.dataset.reserved='1';
+    });
+  }
   /* Mantém na memória só as páginas por perto: um quadrinho de 200
      páginas não cabe inteiro na memória de um celular. */
   trimComicMemory(){
     if(!this.comic||!this.container)return;
     const atual=this.currentPageIndex;
-    const janela=this.isVerticalReading()?3:2;
+    const janela=this.isVerticalReading()?4:2;
     const manter=new Set();
     for(let v=atual-janela;v<=atual+janela;v++){
       const view=this.comicViews[v];
@@ -5351,6 +5384,11 @@ class ReaderEngine{
     this.container.classList.toggle('comic-vertical',isComic&&verticalReading);
     this.container.classList.toggle('comic-rtl',this.rtl);
     this.container.classList.toggle('fit-width',isComic&&(verticalReading||this.comicFit==='width'));
+    /* Palco novo, zoom novo. Sem isto, um zoom aplicado antes de girar o
+       aparelho (ou de trocar o modo de leitura) continuava "valendo" num
+       palco que nem existe mais: todo arraste de um dedo era tratado como
+       "passear pela página ampliada" e a rolagem parava de funcionar. */
+    this.comicZoom={scale:1,x:0,y:0};
     this.updateReadingModeControl();
     this.updateComicControls();
 
@@ -5374,13 +5412,19 @@ class ReaderEngine{
       this.setupPdfPinch();
       this.updatePdfControls();
     }
-    if(isComic){
+    if(isComic&&!verticalReading){
+      /* O zoom é do modo página a página. Na rolagem contínua a página já
+         ocupa a largura toda e um dedo na tela só pode significar rolar. */
       const badge=document.createElement('div');
       badge.className='pdf-zoom-badge';badge.id='comic-zoom-badge';badge.textContent='100%';
       this.container.appendChild(badge);
       this.setupComicZoom();
     }
-    if(verticalReading)this.setupContinuousReadingScroll();
+    if(verticalReading){
+      this.setupContinuousReadingScroll();
+      /* A proporção aprendida antes vale para o palco recém-montado. */
+      if(isComic)this.reserveComicHeights();
+    }
 
     const slider = document.getElementById('reader-page-slider');
     const totalMax = Math.max(0, this.pagesData.length - 1);
@@ -5854,6 +5898,9 @@ class ReaderEngine{
         return;
       }
       if(arrastando&&e.touches.length===1){
+        /* Confere o zoom AGORA, não o que valia quando o dedo encostou:
+           um estado velho não pode sequestrar a rolagem da página. */
+        if(this.comicZoom.scale<=1.02){arrastando=false;return}
         e.preventDefault();
         this.comicZoom.x=px+(e.touches[0].clientX-ax);
         this.comicZoom.y=py+(e.touches[0].clientY-ay);
@@ -6316,7 +6363,7 @@ class ReaderEngine{
     this.pdfDoc=null;
     /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
     if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
-    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;
+    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;
     this.updateComicControls();
     this.currentExtractor=null;
     this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
@@ -7744,7 +7791,7 @@ downloadConvertedEpub(result,outputName){
             description:'Livros, quadrinhos, documentos, audiolivros e vídeos',
             accept:{
               'application/epub+zip':['.epub'],
-              'application/x-mobipocket-ebook':['.mobi'],
+              'application/x-mobipocket-ebook':['.mobi','.prc'],
               'application/pdf':['.pdf'],
               'text/plain':['.txt'],
               'text/markdown':['.md','.markdown'],
