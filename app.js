@@ -4,8 +4,29 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log("Service Worker registrado com sucesso."))
-      .catch(err => console.error("Falha ao registrar Service Worker:", err));
+      .then(registro => {
+        /* Procura uma versão nova a cada abertura. Sem isto, um
+           aparelho pode ficar semanas com a cópia antiga. */
+        registro.update().catch(() => {});
+        registro.addEventListener('updatefound', () => {
+          const novo = registro.installing;
+          if (!novo) return;
+          novo.addEventListener('statechange', () => {
+            if (novo.state === 'installed' && navigator.serviceWorker.controller) {
+              novo.postMessage('atualizar-agora');
+            }
+          });
+        });
+      })
+      .catch(err => console.warn("Service Worker não registrado:", err));
+  });
+  let recarregando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    /* Versão nova assumiu: recarrega uma única vez para que a
+       página inteira passe a rodar o código novo. */
+    if (recarregando) return;
+    recarregando = true;
+    window.location.reload();
   });
 }
 
@@ -4782,7 +4803,7 @@ class ReaderEngine{
     this.annotationPressTimer=null;this.activeAnnotationId=null;
     /* Quadrinhos: arquivo aberto, agrupamento de páginas e estado do zoom. */
     this.comic=null;this.comicViews=[];this.comicRtl=false;
-    this.comicFit='page';this.comicSpread=true;this.comicRatio=null;
+    this.comicFit='page';this.comicSpread=true;this.comicRatio=null;this.comicWideZoom=1;
     this.comicZoom={scale:1,x:0,y:0};
     this.rtl=false;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
@@ -5210,7 +5231,7 @@ class ReaderEngine{
   reserveComicHeights(){
     if(!this.comic||!this.container||!this.comicRatio)return;
     if(!this.isVerticalReading())return;
-    const largura=this.container.clientWidth||window.innerWidth;
+    const largura=(this.container.clientWidth||window.innerWidth)*(this.comicWideZoom||1);
     const altura=Math.round(largura*this.comicRatio);
     if(!altura)return;
     this.container.querySelectorAll('.comic-page-wrap').forEach(wrap=>{
@@ -5389,6 +5410,7 @@ class ReaderEngine{
        palco que nem existe mais: todo arraste de um dedo era tratado como
        "passear pela página ampliada" e a rolagem parava de funcionar. */
     this.comicZoom={scale:1,x:0,y:0};
+    this.comicWideZoom=1;
     this.updateReadingModeControl();
     this.updateComicControls();
 
@@ -5412,13 +5434,20 @@ class ReaderEngine{
       this.setupPdfPinch();
       this.updatePdfControls();
     }
-    if(isComic&&!verticalReading){
-      /* O zoom é do modo página a página. Na rolagem contínua a página já
-         ocupa a largura toda e um dedo na tela só pode significar rolar. */
+    if(isComic){
       const badge=document.createElement('div');
       badge.className='pdf-zoom-badge';badge.id='comic-zoom-badge';badge.textContent='100%';
       this.container.appendChild(badge);
-      this.setupComicZoom();
+      /* Dois zooms, um para cada modo de leitura: página a página
+         amplia com `transform`; rolagem contínua amplia alargando a
+         página, para não precisar interceptar gesto nenhum. */
+      if(verticalReading){
+        this.comicWideZoom=1;
+        this.container.style.setProperty('--comic-zoom','1');
+        this.setupComicWideZoom();
+      }else{
+        this.setupComicZoom();
+      }
     }
     if(verticalReading){
       this.setupContinuousReadingScroll();
@@ -5492,6 +5521,21 @@ class ReaderEngine{
     const zoomed=()=>isComic?this.comicZoom.scale>1.02:(isPdf&&this.pdfZoom>1.02);
     const reset=()=>{pid=null;mode='idle';vx=0;engine=null};
     const cancelTap=()=>{if(tapTimer){clearTimeout(tapTimer);tapTimer=null}};
+
+    /* ----------------------------------------------------------
+       ROLAGEM CONTÍNUA: saímos da frente, de propósito.
+       Aqui quem rola é o navegador, e no celular a rolagem é
+       decidida pelo compositor no instante em que o dedo encosta.
+       Qualquer ouvinte de ponteiro ou de toque nosso no meio do
+       caminho é candidato a atrapalhar — e era isso que prendia a
+       página. Então registramos só o clique (mostrar controles,
+       abrir uma marcação, ampliar com dois toques) e mais nada:
+       um clique nunca nasce de um gesto que rolou a tela.
+       ---------------------------------------------------------- */
+    if(verticalReading){
+      this.setupVerticalTaps(c,isComic);
+      return;
+    }
 
     c.addEventListener('pointerdown',e=>{
       if(mode!=='idle')return;
@@ -5615,6 +5659,98 @@ class ReaderEngine{
     });
   }
   
+  /* Toques na leitura em rolagem contínua, sem tocar no gesto de rolar. */
+  setupVerticalTaps(c,isComic){
+    let ultimo=0,ux=0,uy=0,timer=null;
+    const limpar=()=>{if(timer){clearTimeout(timer);timer=null}};
+    c.addEventListener('click',e=>{
+      if(e.target.closest('.reader-ui'))return;
+      const marcacao=e.target.closest('[data-annotation-id]');
+      if(marcacao){
+        e.stopPropagation();
+        this.openAnnotationPopover(marcacao.dataset.annotationId,marcacao.getBoundingClientRect());
+        return;
+      }
+      const sel=window.getSelection();
+      if(sel&&!sel.isCollapsed&&String(sel).trim())return;
+      if(!isComic){this.toggleUI();return}
+      const agora=performance.now();
+      if(agora-ultimo<320&&Math.hypot(e.clientX-ux,e.clientY-uy)<44){
+        limpar();ultimo=0;
+        this.comicWideToggleZoom(e.clientX,e.clientY);
+        return;
+      }
+      ultimo=agora;ux=e.clientX;uy=e.clientY;
+      limpar();
+      timer=setTimeout(()=>{timer=null;this.toggleUI()},260);
+    });
+  }
+  /* ============================================================
+     ZOOM NA ROLAGEM CONTÍNUA
+     ------------------------------------------------------------
+     Aqui o zoom NÃO é `transform`: a página simplesmente fica mais
+     larga que a tela, e quem passeia por ela é a própria rolagem
+     do navegador — nos dois sentidos. É como todo leitor de
+     webtoon faz, e tem uma vantagem decisiva no celular: nenhum
+     gesto precisa ser interceptado, então a rolagem continua
+     sendo do navegador do começo ao fim.
+     ============================================================ */
+  comicWideToggleZoom(clientX,clientY){
+    const atual=this.comicWideZoom||1;
+    this.setComicWideZoom(atual>1.02?1:2,clientX,clientY);
+    if(navigator.vibrate)navigator.vibrate(8);
+  }
+  setComicWideZoom(valor,clientX,clientY){
+    const c=this.container;
+    if(!c||!this.comic)return;
+    const antes=this.comicWideZoom||1;
+    const z=Utils.clamp(Number(valor)||1,1,4);
+    if(Math.abs(z-antes)<0.005)return;
+    const rect=c.getBoundingClientRect();
+    const ax=clientX==null?rect.width/2:Utils.clamp(clientX-rect.left,0,rect.width);
+    const ay=clientY==null?rect.height/2:Utils.clamp(clientY-rect.top,0,rect.height);
+    /* O ponto que estava sob o dedo continua sob o dedo. */
+    const px=(c.scrollLeft+ax)/antes;
+    const py=(c.scrollTop+ay)/antes;
+    this.comicWideZoom=z;
+    c.style.setProperty('--comic-zoom',String(z));
+    c.classList.toggle('comic-wide',z>1.02);
+    this.reserveComicHeights();
+    c.scrollLeft=px*z-ax;
+    c.scrollTop=py*z-ay;
+    const badge=document.getElementById('comic-zoom-badge');
+    if(badge){
+      badge.textContent=`${Math.round(z*100)}%`;
+      badge.classList.toggle('show',z>1.02);
+    }
+  }
+  /* Pinça sem preventDefault: com `touch-action` proibindo o zoom
+     nativo, os dois dedos já chegam até aqui, e o ouvinte pode ser
+     passivo — ou seja, incapaz de travar a rolagem. */
+  setupComicWideZoom(){
+    const c=this.container;
+    if(!c)return;
+    let pincando=false,d0=1,z0=1,ax=0,ay=0;
+    const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+    c.addEventListener('touchstart',e=>{
+      if(e.touches.length!==2)return;
+      pincando=true;d0=dist(e.touches)||1;z0=this.comicWideZoom||1;
+      ax=(e.touches[0].clientX+e.touches[1].clientX)/2;
+      ay=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    },{passive:true});
+    c.addEventListener('touchmove',e=>{
+      if(!pincando||e.touches.length!==2)return;
+      this.setComicWideZoom(z0*(dist(e.touches)/d0),ax,ay);
+    },{passive:true});
+    const fim=()=>{pincando=false};
+    c.addEventListener('touchend',fim,{passive:true});
+    c.addEventListener('touchcancel',fim,{passive:true});
+    c.addEventListener('wheel',e=>{
+      if(!e.ctrlKey)return;
+      e.preventDefault();
+      this.setComicWideZoom((this.comicWideZoom||1)*(e.deltaY<0?1.12:1/1.12),e.clientX,e.clientY);
+    },{passive:false});
+  }
   turnToPage(index,options={}){
     if(this.curl&&this.curl.active&&!options.fromCurl)this.curl.cancel();
     if(this.slide&&this.slide.active&&!options.fromCurl)this.slide.cancel();
@@ -6363,7 +6499,7 @@ class ReaderEngine{
     this.pdfDoc=null;
     /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
     if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
-    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;
+    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;this.comicWideZoom=1;
     this.updateComicControls();
     this.currentExtractor=null;
     this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
@@ -8378,6 +8514,11 @@ const FileFingerprint={
    (pagina aberta via file://, arquivo ausente), o aplicativo mostra
    a versao embutida para que o usuario nunca fique sem informacao.
    ============================================================ */
+/* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
+   aparelho, se o que está rodando ali é mesmo a versão mais nova —
+   aparece embaixo do título em "Sobre o aplicativo". */
+const BUILD='2026-09-19 · 5';
+
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
   sources:{
@@ -8564,7 +8705,8 @@ const Docs={
     if(!this.el)return;
     this.lastFocus=document.activeElement;
     document.getElementById('doc-title').textContent=src.title;
-    document.getElementById('doc-subtitle').textContent=src.subtitle;
+    document.getElementById('doc-subtitle').textContent=
+      key==='sobre'?`${src.subtitle} · versão ${BUILD}`:src.subtitle;
     document.getElementById('doc-icon').innerHTML=`<i data-lucide="${src.icon}"></i>`;
     const body=document.getElementById('doc-body');
     body.innerHTML='<div class="doc-loading"><div class="spinner"></div><span>Carregando documento…</span></div>';

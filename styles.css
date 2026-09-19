@@ -593,7 +593,7 @@ body.reader-open .search-bar{display:none!important}
   background:#101014;overflow:hidden;overscroll-behavior:contain;
   touch-action:pan-y;
 }
-.slider-book.comic-book.fit-width .page.comic-page{overflow-y:auto}
+.slider-book.comic-book.fit-width:not(.comic-vertical) .page.comic-page{overflow-y:auto}
 .slider-book.comic-book.comic-zoomed .page.comic-page{overflow:hidden;touch-action:none}
 
 .comic-page-wrap{
@@ -619,14 +619,49 @@ body.reader-open .search-bar{display:none!important}
 .slider-book.comic-book.fit-width .comic-slot{height:auto;align-items:flex-start}
 .slider-book.comic-book.fit-width .comic-img{width:100%;height:auto;max-height:none}
 
-/* Rolagem contínua (estilo webtoon): as páginas emendam uma na outra. */
-.slider-book.comic-vertical{background:#101014;scroll-snap-type:none}
+/* ============================================================
+   Rolagem contínua (estilo webtoon)
+   ------------------------------------------------------------
+   Aqui a regra é uma só: nada entre o dedo e o rolo do palco.
+
+   No celular o navegador decide, no instante em que o dedo
+   encosta, QUEM vai rolar. Se a página em que o dedo encostou
+   for ela mesma uma caixa de rolagem — e era o que acontecia,
+   porque o ajuste "largura da tela" punha `overflow-y:auto` em
+   cada página — o gesto passa a pertencer a essa caixa. Como ela
+   não tem para onde rolar e ainda por cima carregava
+   `overscroll-behavior: contain`, o movimento morria ali: a
+   página ficava "travada".
+
+   Por isso, na rolagem contínua, cada página volta a ser um
+   pedaço comum do documento (`overflow: visible`, sem
+   `overscroll-behavior`, sem `touch-action` próprio) e quem rola
+   é só o palco.
+
+   O zoom também muda de técnica: em vez de `transform`, a página
+   fica mais larga que a tela (--comic-zoom) e quem passeia por
+   ela é a rolagem horizontal do próprio navegador. Assim ampliar
+   não custa nenhum ouvinte de toque.
+   ============================================================ */
+.slider-book.comic-vertical{
+  background:#101014;scroll-snap-type:none;
+  overflow-y:auto;overflow-x:auto;
+  touch-action:pan-x pan-y;overscroll-behavior:contain;
+}
 .slider-book.comic-vertical .page.comic-page{
-  min-height:0;height:auto;overflow:visible;margin:0;box-shadow:none;background:#101014;
+  position:relative;inset:auto;
+  width:calc(100% * var(--comic-zoom,1));
+  min-height:0;height:auto;margin:0;box-shadow:none;background:#101014;
+  overflow:visible!important;
+  overscroll-behavior:auto!important;
+  touch-action:auto!important;
+  scroll-snap-align:none;
 }
 .slider-book.comic-vertical .comic-page-wrap{height:auto;min-height:0;align-items:flex-start}
 .slider-book.comic-vertical .comic-slot{height:auto;align-items:flex-start}
 .slider-book.comic-vertical .comic-img{width:100%;height:auto;max-height:none}
+/* Com a página ampliada, a barra de zoom fica presa à tela. */
+.slider-book.comic-vertical .pdf-zoom-badge{position:fixed}
 /* Espaço reservado para a página que ainda não carregou, para a
    rolagem não pular quando a imagem chega. Enquanto o aplicativo não
    conhece a proporção das páginas, vale este chute; assim que a
