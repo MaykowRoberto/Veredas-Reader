@@ -36,8 +36,9 @@
     <button class="bar-btn primary" id="btn-import" aria-label="Importar livro">
       <i data-lucide="plus"></i>
     </button>
-    <!-- input file: livros (epub, pdf, txt, md, docx, mobi), audiolivros (mp3, m4b) e vídeo (mp4) -->
-    <input type="file" id="file-input" accept=".epub,.pdf,.txt,.md,.markdown,.docx,.mobi,.mp3,.m4b,.mp4,text/markdown,audio/mpeg,audio/mp4,audio/x-m4b,video/mp4" multiple hidden>
+    <!-- input file: livros (epub, pdf, txt, md, docx, mobi), quadrinhos (cbz, cbr, cb7, cbt),
+         audiolivros (mp3, m4b) e vídeo (mp4) -->
+    <input type="file" id="file-input" accept=".epub,.pdf,.txt,.md,.markdown,.docx,.mobi,.cbz,.cbr,.cb7,.cbt,.mp3,.m4b,.mp4,text/markdown,application/vnd.comicbook+zip,application/vnd.comicbook-rar,audio/mpeg,audio/mp4,audio/x-m4b,video/mp4" multiple hidden>
     <!-- entrada usada para vasculhar uma pasta inteira do dispositivo -->
     <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
   </header>
@@ -109,6 +110,8 @@
                 <button class="nav-item nav-sub-item" data-doc="lic-jszip"><i data-lucide="file-code-2"></i>JSZip<span class="lic-tag">MIT</span></button>
                 <button class="nav-item nav-sub-item" data-doc="lic-pdfjs"><i data-lucide="file-code-2"></i>PDF.js<span class="lic-tag">Apache 2.0</span></button>
                 <button class="nav-item nav-sub-item" data-doc="lic-mammoth"><i data-lucide="file-code-2"></i>Mammoth.js<span class="lic-tag">BSD-2-Clause</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-libarchivejs"><i data-lucide="file-code-2"></i>libarchive.js<span class="lic-tag">MIT</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-libarchive"><i data-lucide="file-code-2"></i>libarchive<span class="lic-tag">BSD-2-Clause</span></button>
               </div>
               <button class="nav-item nav-sub-item" data-doc="privacidade"><i data-lucide="shield-check"></i>Política de privacidade</button>
               <button class="nav-item nav-sub-item" data-doc="termos"><i data-lucide="file-text"></i>Termos de uso</button>
@@ -368,6 +371,32 @@
       </div>
       <div class="drag-tip" id="reading-mode-tip">Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. Mudando durante a leitura, o ajuste fica guardado só naquele livro.</div>
     </div>
+    <!-- Só aparece quando há um quadrinho aberto -->
+    <div class="setting-section" id="comic-settings" hidden>
+      <h4>Quadrinhos</h4>
+      <div class="form-group">
+        <label class="form-label">Como a página aparece</label>
+        <div class="seg" id="comic-fit-grid">
+          <button data-comic-fit="page" class="active">Página inteira</button>
+          <button data-comic-fit="width">Largura da tela</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sentido da leitura</label>
+        <div class="seg" id="comic-direction-grid">
+          <button data-comic-dir="ltr" class="active">Normal →</button>
+          <button data-comic-dir="rtl">← Mangá</button>
+        </div>
+      </div>
+      <label class="toggle-row">
+        <span class="toggle-label"><strong>Revista aberta na horizontal</strong><small>Com o aparelho deitado, mostra duas páginas lado a lado — a capa fica sozinha, como numa revista de verdade.</small></span>
+        <span class="toggle"><input type="checkbox" id="comic-spread-toggle" checked><span></span></span>
+      </label>
+      <div class="drag-tip">Normal vira da esquerda para a direita. Mangá inverte tudo: o deslize, o toque nas bordas e a ordem das duas páginas na revista aberta.</div>
+      <div class="drag-tip" id="comic-settings-tip">Gire o aparelho para a horizontal para ver duas páginas lado a lado.</div>
+      <div class="drag-tip">Dois toques ampliam no ponto tocado; com zoom, arraste para passear pela página. Pinçar com dois dedos também funciona. O botão de rolagem, no topo, alterna entre página a página e rolagem contínua (estilo webtoon).</div>
+    </div>
+
     <div class="setting-section">
       <h4>Virada de página</h4>
       <div class="seg" id="page-turn-grid">
@@ -626,7 +655,7 @@
       <div class="conversion-dialog-icon" id="scan-icon"><i data-lucide="folder-search"></i></div>
       <div style="min-width:0;flex:1">
         <h3 id="scan-title">Buscar livros no dispositivo</h3>
-        <p id="scan-subtitle">Encontre arquivos EPUB, MOBI e M4B já salvos no aparelho.</p>
+        <p id="scan-subtitle">Encontre arquivos EPUB, MOBI, CBZ, CBR e M4B já salvos no aparelho.</p>
       </div>
       <button class="icon-btn" id="scan-close" aria-label="Fechar"><i data-lucide="x"></i></button>
     </div>

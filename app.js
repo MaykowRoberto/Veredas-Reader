@@ -300,6 +300,20 @@ class DBManager{
       tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
     });
   }
+  /* Quadrinho: o pacote de imagens é grande demais para virar um
+     ArrayBuffer na memória a cada abertura, então ele é guardado como
+     Blob (o navegador cuida de mantê-lo em disco) — livro e arquivo
+     na MESMA transação, como no audiolivro. */
+  async saveComicBook(meta,blob){
+    return new Promise((resolve,reject)=>{
+      const tx=this.db.transaction(['books','files'],'readwrite');
+      tx.objectStore('books').put(Utils.normalizeBook(meta));
+      tx.objectStore('files').put({id:meta.id,kind:'comic',blob});
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+    });
+  }
   /* Leitura + alteração + gravação numa transação só. Quem só quer mexer em
      alguns campos usa isto em vez de regravar o livro inteiro: assim o player
      (progresso) e a estante (título, status, ordem) nunca se sobrescrevem. */
@@ -397,6 +411,7 @@ const AppDefaults={settings:{
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
   readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
+  comicFit:'page',comicSpread:true,comicRtl:false,
   consent:null,scanInvited:false,scrollPerBook:false
 }};
 
@@ -409,7 +424,10 @@ const AppDefaults={settings:{
    uma linha aqui.
    ============================================================ */
 const BookFormats={
-  TEXT:['epub','pdf','txt','md','docx','mobi'],
+  TEXT:['epub','pdf','txt','md','docx','mobi','cbz','cbr','cb7','cbt'],
+  /* Quadrinhos: um pacote de imagens em sequência. Abrem num leitor
+     próprio (ComicEngine), não na paginação de texto. */
+  COMIC:['cbz','cbr','cb7','cbt'],
   /* extensões alternativas que apontam para o mesmo formato */
   ALIASES:{markdown:'md',mkd:'md',mdown:'md',mdtext:'md',text:'txt'},
   INFO:{
@@ -419,12 +437,16 @@ const BookFormats={
     md:{label:'MD',icon:'file-code-2',scroll:'horizontal',mime:'text/markdown',share:true},
     pdf:{label:'PDF',icon:'file-type-2',scroll:'vertical',mime:'application/pdf',share:true},
     docx:{label:'DOCX',icon:'file-text',scroll:'vertical',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',share:true},
+    cbz:{label:'CBZ',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook+zip',share:false,comic:true},
+    cbr:{label:'CBR',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook-rar',share:false,comic:true},
+    cb7:{label:'CB7',icon:'book-image',scroll:'horizontal',mime:'application/x-cb7',share:false,comic:true},
+    cbt:{label:'CBT',icon:'book-image',scroll:'horizontal',mime:'application/x-cbt',share:false,comic:true},
     mp3:{label:'MP3',icon:'headphones',scroll:null,mime:'audio/mpeg',share:false},
     m4b:{label:'M4B',icon:'headphones',scroll:null,mime:'audio/mp4',share:false},
     mp4:{label:'MP4',icon:'film',scroll:null,mime:'video/mp4',share:false}
   },
   /* ordem em que os grupos aparecem quando a estante é agrupada por tipo */
-  GROUP_ORDER:['epub','mobi','pdf','docx','txt','md','mp3','m4b','mp4'],
+  GROUP_ORDER:['epub','mobi','pdf','docx','txt','md','cbz','cbr','cb7','cbt','mp3','m4b','mp4'],
   ext(name){
     const raw=(String(name||'').split('.').pop()||'').toLowerCase();
     return BookFormats.ALIASES[raw]||raw;
@@ -436,6 +458,11 @@ const BookFormats={
     return BookFormats.ALIASES[v]||v;
   },
   isText:f=>BookFormats.TEXT.includes(BookFormats.normalize(f)),
+  /* Quadrinho? Aceita tanto a extensão quanto o próprio livro. */
+  isComic:f=>{
+    const n=BookFormats.normalize(f&&f.format!==undefined?f.format:f);
+    return BookFormats.COMIC.includes(n);
+  },
   isSupported:f=>{
     const n=BookFormats.normalize(f);
     return BookFormats.TEXT.includes(n)||Object.prototype.hasOwnProperty.call(AUDIO_FORMATS,n);
@@ -452,7 +479,8 @@ const BookFormats={
   groupName(f){
     const n=BookFormats.normalize(f);
     const names={epub:'EPUB',mobi:'MOBI',pdf:'PDF',docx:'Word (DOCX)',txt:'Texto (TXT)',
-      md:'Markdown (MD)',mp3:'Audiolivro (MP3)',m4b:'Audiolivro (M4B)',mp4:'Vídeo (MP4)'};
+      md:'Markdown (MD)',cbz:'Quadrinho (CBZ)',cbr:'Quadrinho (CBR)',cb7:'Quadrinho (CB7)',
+      cbt:'Quadrinho (CBT)',mp3:'Audiolivro (MP3)',m4b:'Audiolivro (M4B)',mp4:'Vídeo (MP4)'};
     return names[n]||(n?n.toUpperCase():'Outros');
   },
   groupRank(f){
@@ -461,7 +489,8 @@ const BookFormats={
   },
   /* Lista para o atributo accept e para o seletor avançado. */
   acceptList(){
-    return ['.epub','.pdf','.txt','.md','.markdown','.docx','.mobi','.mp3','.m4b','.mp4'];
+    return ['.epub','.pdf','.txt','.md','.markdown','.docx','.mobi',
+      '.cbz','.cbr','.cb7','.cbt','.mp3','.m4b','.mp4'];
   }
 };
 
@@ -1442,6 +1471,426 @@ class MDParser{
     onProgress('Convertendo o Markdown',.6);
     await Utils.yieldToUI();
     return DocUtils.stripLinks(MDParser.toHtml(text));
+  }
+}
+
+/* ============================================================
+   QUADRINHOS — CBZ / CBR / CB7 / CBT
+   ------------------------------------------------------------
+   Um quadrinho digital é só um pacote de imagens em ordem. O que
+   muda de um formato para o outro é o TIPO de pacote:
+
+     CBZ -> ZIP   (JSZip, que o aplicativo já usa para o EPUB)
+     CBR -> RAR   (libarchive compilado para WebAssembly)
+     CB7 -> 7-Zip (idem)
+     CBT -> TAR   (idem)
+
+   Por isso a extensão nunca é levada ao pé da letra: o formato é
+   descoberto pelos primeiros bytes do arquivo. Um "livro.cbr" que
+   na verdade é um ZIP — coisa comuníssima — abre normalmente.
+
+   Estratégias de memória, que é o que importa no celular:
+   - ZIP: as páginas ficam compactadas e cada uma é descompactada
+     só quando aparece na tela (acesso aleatório é barato).
+   - RAR/7z/TAR: descompactar página avulsa é caro (o formato é
+     sequencial), então a extração acontece UMA vez, com barra de
+     progresso, e as páginas ficam guardadas como Blob — que o
+     navegador mantém fora da memória do JavaScript.
+   ============================================================ */
+const ComicSupport={
+  IMAGE_EXT:['jpg','jpeg','jpe','jfif','png','gif','webp','bmp','avif','apng'],
+  /* Arquivos que todo empacotador insere e que não são páginas. */
+  isJunk(path){
+    const p=String(path||'').replace(/\\/g,'/');
+    const base=p.split('/').pop()||'';
+    if(!base||base.startsWith('.'))return true;
+    if(/(^|\/)__MACOSX\//i.test(p))return true;
+    if(/^thumbs\.db$/i.test(base)||/^desktop\.ini$/i.test(base))return true;
+    return false;
+  },
+  ext(path){
+    const base=String(path||'').split('/').pop()||'';
+    return (base.split('.').pop()||'').toLowerCase();
+  },
+  isImage(path){
+    if(ComicSupport.isJunk(path))return false;
+    return ComicSupport.IMAGE_EXT.includes(ComicSupport.ext(path));
+  },
+  mime(path){
+    const map={jpg:'image/jpeg',jpeg:'image/jpeg',jpe:'image/jpeg',jfif:'image/jpeg',
+      png:'image/png',apng:'image/apng',gif:'image/gif',webp:'image/webp',
+      bmp:'image/bmp',avif:'image/avif'};
+    return map[ComicSupport.ext(path)]||'image/jpeg';
+  },
+  /* "pag2.jpg" antes de "pag10.jpg": números comparados como números.
+     É o que faz a ordem das páginas bater com a do quadrinho. */
+  naturalCompare(a,b){
+    const ra=String(a).toLowerCase().match(/(\d+|\D+)/g)||[];
+    const rb=String(b).toLowerCase().match(/(\d+|\D+)/g)||[];
+    const n=Math.max(ra.length,rb.length);
+    for(let i=0;i<n;i++){
+      const pa=ra[i],pb=rb[i];
+      if(pa===undefined)return -1;
+      if(pb===undefined)return 1;
+      const na=/^\d/.test(pa),nb=/^\d/.test(pb);
+      if(na&&nb){
+        const d=parseInt(pa,10)-parseInt(pb,10);
+        if(d)return d;
+      }else{
+        const d=pa.localeCompare(pb,'pt');
+        if(d)return d;
+      }
+    }
+    return 0;
+  },
+  /* Assinatura do pacote, lida nos primeiros bytes. */
+  sniff(head){
+    const b=head instanceof Uint8Array?head:new Uint8Array(head||[]);
+    if(b.length<8)return null;
+    if(b[0]===0x50&&b[1]===0x4B&&(b[2]===3||b[2]===5||b[2]===7))return 'zip';
+    /* Rar!\x1a\x07\x00 (v4) e Rar!\x1a\x07\x01\x00 (v5) */
+    if(b[0]===0x52&&b[1]===0x61&&b[2]===0x72&&b[3]===0x21&&b[4]===0x1A&&b[5]===0x07)return 'rar';
+    /* 7z: 37 7A BC AF 27 1C */
+    if(b[0]===0x37&&b[1]===0x7A&&b[2]===0xBC&&b[3]===0xAF&&b[4]===0x27&&b[5]===0x1C)return '7z';
+    return null;
+  },
+  async sniffBlob(blob){
+    try{
+      const head=new Uint8Array(await blob.slice(0,Math.min(512,blob.size)).arrayBuffer());
+      const kind=ComicSupport.sniff(head);
+      if(kind)return kind;
+      /* TAR guarda "ustar" no deslocamento 257. */
+      if(blob.size>270){
+        const tar=new Uint8Array(await blob.slice(257,262).arrayBuffer());
+        if(String.fromCharCode(...tar)==='ustar')return 'tar';
+      }
+    }catch(e){console.warn(e)}
+    return null;
+  },
+  /* Metadados do padrão ComicInfo.xml (ComicRack), presente na maior
+     parte dos quadrinhos digitais. */
+  parseComicInfo(xmlText){
+    try{
+      const doc=new DOMParser().parseFromString(String(xmlText),'text/xml');
+      if(!doc||doc.querySelector('parsererror'))return null;
+      const pick=name=>{
+        const el=Array.from(doc.getElementsByTagName('*')).find(n=>n.localName===name);
+        const v=el?String(el.textContent||'').trim():'';
+        return v||'';
+      };
+      const manga=pick('Manga');
+      const authors=['Writer','Penciller','Artist','Author','Creator']
+        .map(pick).filter(Boolean);
+      return{
+        title:pick('Title'),
+        series:pick('Series'),
+        number:pick('Number'),
+        volume:pick('Volume'),
+        author:authors.length?authors[0].split(/\s*,\s*/)[0]:'',
+        summary:pick('Summary'),
+        pageCount:Number(pick('PageCount'))||0,
+        rtl:/right\s*to\s*left|yesandrighttoleft/i.test(manga)
+      };
+    }catch(e){return null}
+  },
+  /* Título montado a partir do ComicInfo: "Série #12 — Título". */
+  buildTitle(info,fallback){
+    if(!info)return fallback;
+    const partes=[];
+    if(info.series)partes.push(info.series);
+    if(info.number)partes.push(`#${info.number}`);
+    const cabeca=partes.join(' ');
+    if(cabeca&&info.title&&info.title!==info.series)return `${cabeca} — ${info.title}`;
+    return cabeca||info.title||fallback;
+  }
+};
+
+/* Carregador sob demanda do libarchive: o WebAssembly (1 MB) só é
+   baixado quando o leitor realmente abre um CBR/CB7/CBT. Quem lê
+   apenas CBZ nunca paga esse custo. */
+const LibArchiveLoader={
+  _promise:null,
+  base(){
+    /* app.js mora na raiz do aplicativo; o vendor fica ao lado dele. */
+    try{
+      const script=document.querySelector('script[src*="app.js"]');
+      const src=script?script.src:window.location.href;
+      return new URL('vendor/libarchive/',src).href;
+    }catch(e){return 'vendor/libarchive/'}
+  },
+  load(){
+    if(window.VeredasLibArchive)return Promise.resolve(window.VeredasLibArchive);
+    if(this._promise)return this._promise;
+    this._promise=new Promise((resolve,reject)=>{
+      if(typeof WebAssembly!=='object'){
+        reject(new ParseError('Este navegador não consegue abrir arquivos CBR.',
+          'Converta o quadrinho para CBZ (ZIP) e importe novamente.'));
+        return;
+      }
+      /* Script CLÁSSICO, de propósito: com o aplicativo aberto direto
+         do disco (file://), o navegador recusa módulos ES, Workers e
+         qualquer fetch de arquivo vizinho. Uma tag <script> comum é o
+         único caminho que funciona tanto em file:// quanto num
+         servidor — e o WebAssembly já vem embutido no próprio arquivo,
+         então não há mais nada para buscar depois. */
+      const tag=document.createElement('script');
+      tag.src=this.base()+'libarchive-embutido.js';
+      tag.async=true;
+      tag.onload=()=>{
+        if(window.VeredasLibArchive&&window.VeredasLibArchive.disponivel()){
+          resolve(window.VeredasLibArchive);
+        }else{
+          reject(new ParseError('Este navegador não consegue abrir arquivos CBR.',
+            'Converta o quadrinho para CBZ (ZIP) e importe novamente.'));
+        }
+      };
+      tag.onerror=()=>reject(new ParseError('O leitor de CBR não foi encontrado.',
+        'A pasta vendor/libarchive precisa estar junto do index.html, com o arquivo libarchive-embutido.js dentro.'));
+      document.head.appendChild(tag);
+    }).catch(err=>{
+      this._promise=null;
+      throw err;
+    });
+    return this._promise;
+  }
+};
+
+class ComicArchive{
+  constructor(){
+    this.pages=[];        /* [{name,path,size}] na ordem de leitura */
+    this.info=null;       /* ComicInfo.xml, quando existe */
+    this.kind='zip';
+    this._zip=null;       /* JSZip, quando o pacote é ZIP */
+    this._blobs=null;     /* páginas já extraídas (RAR/7z/TAR) */
+    this._urls=new Map(); /* cache de object URLs em uso */
+    this._order=[];
+    this._closed=false;
+  }
+  get length(){return this.pages.length}
+
+  /* --------------------------------------------------------
+     Abertura
+     `source` pode ser Blob/File (caminho normal) ou ArrayBuffer
+     (livros antigos, gravados antes desta versão).
+     -------------------------------------------------------- */
+  static async open(source,opts={}){
+    const onStatus=opts.onStatus||(()=>{});
+    const signal=opts.signal||null;
+    const blob=source instanceof Blob?source:new Blob([source]);
+    const archive=new ComicArchive();
+    const nome=opts.name||'quadrinho';
+    let kind=await ComicSupport.sniffBlob(blob);
+    if(!kind){
+      /* Sem assinatura conhecida: confia na extensão como último recurso. */
+      const ext=BookFormats.normalize(nome);
+      kind=ext==='cbr'?'rar':ext==='cb7'?'7z':ext==='cbt'?'tar':'zip';
+    }
+    archive.kind=kind;
+    if(kind==='zip')await archive._openZip(blob,{onStatus,signal});
+    else await archive._openLibArchive(blob,{onStatus,signal,coverOnly:opts.coverOnly});
+    if(!archive.pages.length){
+      throw new ParseError('Não encontramos páginas dentro deste quadrinho.',
+        'O arquivo precisa conter imagens (JPG, PNG, WEBP ou GIF).');
+    }
+    return archive;
+  }
+
+  async _openZip(blob,{onStatus}){
+    onStatus('Lendo o índice do quadrinho...');
+    let zip;
+    try{
+      zip=await JSZip.loadAsync(blob);
+    }catch(e){
+      throw new ParseError('Não foi possível ler este quadrinho.',
+        'O arquivo pode estar incompleto, protegido por senha ou corrompido.');
+    }
+    this._zip=zip;
+    const entries=[];
+    zip.forEach((path,file)=>{
+      if(file.dir)return;
+      if(/comicinfo\.xml$/i.test(path)&&!ComicSupport.isJunk(path)){
+        entries.push({path,info:true,file});
+        return;
+      }
+      if(!ComicSupport.isImage(path))return;
+      entries.push({path,file,size:file._data?file._data.uncompressedSize:0});
+    });
+    const infoEntry=entries.find(e=>e.info);
+    if(infoEntry){
+      try{this.info=ComicSupport.parseComicInfo(await infoEntry.file.async('text'))}
+      catch(e){console.warn(e)}
+    }
+    this.pages=entries.filter(e=>!e.info)
+      .sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path))
+      .map(e=>({name:e.path.split('/').pop(),path:e.path,size:e.size||0}));
+  }
+
+  async _openLibArchive(blob,{onStatus,signal,coverOnly}){
+    const abortou=()=>{
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+    };
+    onStatus('Preparando o leitor de CBR...');
+    const LA=await LibArchiveLoader.load();
+    abortou();
+    onStatus('Lendo o arquivo...');
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    abortou();
+    let leitor;
+    try{
+      leitor=await LA.abrir(bytes);
+    }catch(e){
+      console.error(e);
+      throw new ParseError('Não foi possível abrir este quadrinho.',
+        'O arquivo pode ser grande demais para a memória deste aparelho. Dividir o quadrinho em partes menores costuma resolver.');
+    }
+    try{
+      onStatus('Lendo o índice do quadrinho...');
+      await Utils.yieldToUI();
+      let entradas=[];
+      try{entradas=leitor.listar()}catch(e){console.warn(e)}
+      const arquivos=entradas.filter(e=>e&&e.path&&!e.dir);
+      if(!arquivos.length){
+        /* Nem um arquivo sequer: ou o pacote está cifrado, ou não foi
+           reconhecido (RAR muito antigo, truncado, ou dividido em
+           partes .r00/.r01). */
+        const cifrado=leitor.temSenha();
+        throw new ParseError(
+          cifrado?'Este quadrinho está protegido por senha.'
+                 :'Não foi possível ler este arquivo de quadrinho.',
+          cifrado?'Remova a senha do arquivo e importe de novo.'
+                 :'Ele pode estar incompleto, dividido em várias partes ou em uma variação de RAR que o aplicativo não reconhece. Converter para CBZ resolve.');
+      }
+
+      const infoEntrada=arquivos.find(e=>/comicinfo\.xml$/i.test(e.path));
+      const imagens=arquivos.filter(e=>ComicSupport.isImage(e.path))
+        .sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path));
+      this.pages=imagens.map(e=>({name:e.path.split('/').pop(),path:e.path,size:e.size||0}));
+
+      /* Na importação basta a capa; na leitura, tudo. Formatos
+         sequenciais como RAR cobram caro por página avulsa, então a
+         extração acontece numa passagem só — e devolve o controle ao
+         navegador entre as páginas, para a tela não congelar. */
+      const querer=new Set();
+      if(infoEntrada)querer.add(infoEntrada.path);
+      if(coverOnly){if(imagens.length)querer.add(imagens[0].path)}
+      else imagens.forEach(e=>querer.add(e.path));
+
+      const total=imagens.length;
+      onStatus(coverOnly?'Lendo a capa...':`Descompactando ${total} página(s)...`);
+      await Utils.yieldToUI();
+      let ultimo=0;
+      const extraidos=await leitor.extrair(querer,{
+        mime:caminho=>ComicSupport.mime(caminho),
+        tick:()=>{abortou();return Utils.yieldToUI()},
+        onProgress:(feitas)=>{
+          if(coverOnly)return;
+          const agora=Date.now();
+          if(agora-ultimo<120&&feitas<total)return;
+          ultimo=agora;
+          onStatus(`Descompactando as páginas (${Math.min(feitas,total)} de ${total})...`);
+        }
+      });
+      abortou();
+
+      if(infoEntrada&&extraidos.has(infoEntrada.path)){
+        try{this.info=ComicSupport.parseComicInfo(await extraidos.get(infoEntrada.path).text())}
+        catch(e){console.warn(e)}
+      }
+
+      this._blobs=new Map();
+      if(coverOnly){
+        const capa=imagens.length?extraidos.get(imagens[0].path):null;
+        if(capa)this._blobs.set(0,capa);
+        return;
+      }
+      /* Páginas que não voltaram da extração saem da lista para não
+         virarem buracos silenciosos no meio da leitura. */
+      const validas=[];
+      imagens.forEach(e=>{
+        const b=extraidos.get(e.path);
+        if(!b)return;
+        this._blobs.set(validas.length,b);
+        validas.push({name:e.path.split('/').pop(),path:e.path,size:e.size||0});
+      });
+      this.pages=validas;
+    }finally{
+      try{leitor.fechar()}catch(e){}
+    }
+  }
+
+  /* Blob da página `i` — o formato decide de onde ele vem. */
+  async pageBlob(i){
+    if(this._closed)throw new Error('Quadrinho fechado.');
+    const page=this.pages[i];
+    if(!page)return null;
+    if(this._blobs){
+      const b=this._blobs.get(i);
+      if(!b)throw new ParseError('Esta página não pôde ser descompactada.','');
+      return b;
+    }
+    const entry=this._zip&&this._zip.file(page.path);
+    if(!entry)throw new ParseError('Esta página não está mais dentro do arquivo.','');
+    const u8=await entry.async('uint8array');
+    return new Blob([u8],{type:ComicSupport.mime(page.path)});
+  }
+
+  /* Endereço temporário da imagem. O leitor devolve o que não usa
+     mais com `release`, para a memória não crescer sem parar. */
+  async pageUrl(i){
+    const existente=this._urls.get(i);
+    if(existente)return existente;
+    const blob=await this.pageBlob(i);
+    if(!blob)return null;
+    if(this._closed)return null;
+    const url=URL.createObjectURL(blob);
+    this._urls.set(i,url);
+    return url;
+  }
+  release(keep){
+    const manter=keep instanceof Set?keep:new Set(keep||[]);
+    for(const [i,url] of Array.from(this._urls.entries())){
+      if(manter.has(i))continue;
+      try{URL.revokeObjectURL(url)}catch(e){}
+      this._urls.delete(i);
+    }
+  }
+  close(){
+    this._closed=true;
+    this.release([]);
+    this._zip=null;
+    this._blobs=null;
+    this.pages=[];
+  }
+
+  /* Capa reduzida, no mesmo formato usado pelos outros livros. */
+  async coverDataURL(maxW=320,maxH=480,quality=.78){
+    if(!this.pages.length)return null;
+    const blob=await this.pageBlob(0);
+    if(!blob)return null;
+    return ComicArchive.shrinkToDataURL(blob,maxW,maxH,quality);
+  }
+  static shrinkToDataURL(blob,maxW,maxH,quality){
+    return new Promise(resolve=>{
+      const url=URL.createObjectURL(blob);
+      const img=new Image();
+      const limpar=()=>{try{URL.revokeObjectURL(url)}catch(e){}};
+      img.onload=()=>{
+        try{
+          const escala=Math.min(1,maxW/(img.naturalWidth||maxW),maxH/(img.naturalHeight||maxH));
+          const w=Math.max(1,Math.round((img.naturalWidth||maxW)*escala));
+          const h=Math.max(1,Math.round((img.naturalHeight||maxH)*escala));
+          const canvas=document.createElement('canvas');
+          canvas.width=w;canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.fillStyle='#ffffff';ctx.fillRect(0,0,w,h);
+          ctx.drawImage(img,0,0,w,h);
+          resolve(canvas.toDataURL('image/jpeg',quality));
+        }catch(e){resolve(null)}
+        finally{limpar()}
+      };
+      img.onerror=()=>{limpar();resolve(null)};
+      img.src=url;
+    });
   }
 }
 
@@ -3972,12 +4421,15 @@ class PageCurlEngine{
     this.cornerX=0;this.cornerY=0;this.t=0;
   }
   get container(){return this.reader.container}
-  mode(){return App.state.settings.pageTurn||'curl'}
+  mode(){return this.reader.effectiveTurnMode()}
   available(){
     const r=this.reader;
     if(this.mode()!=='curl')return false;
     if(!r.container||!r.container.isConnected)return false;
     if(r.isVerticalReading())return false;
+    /* A folha real dobra a partir da borda direita: no sentido mangá
+       o deslize é quem assume. */
+    if(r.rtl)return false;
     if(!Array.isArray(r.pagesData)||r.pagesData.length<2)return false;
     return true;
   }
@@ -4197,6 +4649,121 @@ class PageCurlEngine{
   }
 }
 
+/* ============================================================
+   MOTOR DE VIRADA — DESLIZAR
+   ------------------------------------------------------------
+   A folha acompanha o dedo em tempo real: a página que sai e a
+   que entra andam juntas, como duas fotos numa galeria. Soltar
+   no meio do caminho desiste da virada.
+
+   Antes, "Deslizar" só reagia quando o dedo era levantado, o que
+   dava a sensação de que o gesto não tinha funcionado. Agora o
+   movimento é contínuo, e o mesmo motor serve para a leitura da
+   direita para a esquerda (mangá), bastando inverter o sinal.
+   ============================================================ */
+class PageSlideEngine{
+  constructor(reader){
+    this.reader=reader;
+    this.active=false;this.dragging=false;this.animating=false;
+    this.raf=0;this.dir=0;this.t=0;this.sign=1;this.W=1;
+    this.outEl=null;this.inEl=null;this.targetIndex=-1;
+  }
+  get container(){return this.reader.container}
+  available(){
+    const r=this.reader;
+    if(!r.container||!r.container.isConnected)return false;
+    if(r.isVerticalReading())return false;
+    if(!Array.isArray(r.pagesData)||r.pagesData.length<2)return false;
+    return true;
+  }
+  pageEl(i){return this.container?this.container.querySelector(`.page[data-page="${i}"]`):null}
+  start(dir){
+    if(this.active||!this.available())return false;
+    const r=this.reader;
+    const alvo=r.currentPageIndex+dir;
+    if(alvo<0||alvo>=r.pagesData.length)return false;
+    const sai=this.pageEl(r.currentPageIndex),entra=this.pageEl(alvo);
+    if(!sai||!entra)return false;
+    const rect=this.container.getBoundingClientRect();
+    this.W=Math.max(1,rect.width);
+    this.sign=r.rtl?-1:1;
+    this.dir=dir;this.t=0;this.targetIndex=alvo;
+    this.outEl=sai;this.inEl=entra;
+    this.active=true;this.dragging=true;
+    r.navigating=true;
+    this.container.classList.add('slide-running');
+    entra.classList.add('slide-incoming');
+    try{r.renderLazyPage(alvo)}catch(e){}
+    this.apply();
+    return true;
+  }
+  apply(){
+    const d=this.dir*this.sign,W=this.W,t=this.t;
+    if(this.outEl)this.outEl.style.transform=`translate3d(${-d*t*W}px,0,0)`;
+    if(this.inEl)this.inEl.style.transform=`translate3d(${d*W*(1-t)}px,0,0)`;
+  }
+  setTurn(t){this.t=Utils.clamp(t,0,1);this.apply()}
+  dragBy(dx){
+    if(!this.active||!this.dragging)return;
+    const d=this.dir*this.sign;
+    this.setTurn((-d*dx)/this.W);
+  }
+  progress(){return this.t}
+  release(vx){
+    if(!this.active)return;
+    this.dragging=false;
+    const d=this.dir*this.sign;
+    const v=Number.isFinite(vx)?vx:0;
+    const adiante=-d*v;                       /* >0: o dedo estava a favor da virada */
+    const commit=adiante<-0.38?false:(this.t>0.26||adiante>0.3);
+    this.animateTo(commit?1:0,Math.abs(v),commit);
+  }
+  animate(dir){
+    if(this.active||!this.available())return false;
+    if(!this.start(dir))return false;
+    this.dragging=false;
+    this.animateTo(1,0,true);
+    return true;
+  }
+  animateTo(target,speed,commit){
+    if(!this.active)return;
+    const de=this.t,delta=target-de;
+    if(Math.abs(delta)<0.0008){this.finish(commit);return}
+    const distancia=Math.abs(delta)*this.W;
+    const v=Utils.clamp(speed||0,0,4);
+    const duracao=v>0.25
+      ? Utils.clamp(distancia/(v*1.15),150,460)
+      : Utils.clamp(distancia/1.9,190,460);
+    const inicio=performance.now();
+    this.animating=true;
+    const passo=agora=>{
+      if(!this.active)return;
+      const k=Utils.clamp((agora-inicio)/duracao,0,1);
+      const suave=1-Math.pow(1-k,3);
+      this.setTurn(de+delta*suave);
+      if(k<1){this.raf=requestAnimationFrame(passo);return}
+      this.raf=0;this.animating=false;
+      this.finish(commit);
+    };
+    this.raf=requestAnimationFrame(passo);
+  }
+  finish(commit){
+    const alvo=this.targetIndex;
+    this.teardown();
+    if(commit&&alvo>=0)this.reader.turnToPage(alvo,{fromCurl:true});
+  }
+  cancel(){this.teardown()}
+  teardown(){
+    if(this.raf){cancelAnimationFrame(this.raf);this.raf=0}
+    if(this.outEl)this.outEl.style.transform='';
+    if(this.inEl){this.inEl.style.transform='';this.inEl.classList.remove('slide-incoming')}
+    if(this.container)this.container.classList.remove('slide-running');
+    this.outEl=null;this.inEl=null;this.targetIndex=-1;
+    this.active=false;this.dragging=false;this.animating=false;
+    this.reader.navigating=false;
+  }
+}
+
 class ReaderEngine{
   constructor(db,state){
     this.db=db;this.state=state;
@@ -4211,6 +4778,11 @@ class ReaderEngine{
     this.readingMode='horizontal';
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
     this.annotationPressTimer=null;this.activeAnnotationId=null;
+    /* Quadrinhos: arquivo aberto, agrupamento de páginas e estado do zoom. */
+    this.comic=null;this.comicViews=[];this.comicRtl=false;
+    this.comicFit='page';this.comicSpread=true;
+    this.comicZoom={scale:1,x:0,y:0};
+    this.rtl=false;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
     this.persistProgressDebounced=Utils.debounce(i=>this.persistProgress(i),900);
     this.bind();
@@ -4267,8 +4839,12 @@ class ReaderEngine{
     this.readerStage.addEventListener('pointerdown',e=>this.startAnnotationPress(e));
     ['pointerup','pointercancel','pointerleave'].forEach(type=>this.readerStage.addEventListener(type,()=>this.cancelAnnotationPress()));
     window.addEventListener('resize',Utils.debounce(()=>{
-      if(this.currentBook&&document.getElementById('view-reader').classList.contains('active'))this.triggerRePagination();
-    },350));
+      if(!this.currentBook||!document.getElementById('view-reader').classList.contains('active'))return;
+      /* Quadrinho não precisa repaginar: o arquivo continua aberto e só
+         o arranjo das páginas na tela muda (retrato x paisagem). */
+      if(this.comic)this.refreshComicLayout();
+      else this.triggerRePagination();
+    },320));
   }
   scheduleSelectionCapture(){
     cancelAnimationFrame(this.selectionFrame);
@@ -4296,14 +4872,17 @@ class ReaderEngine{
     this.currentBook=Utils.normalizeBook(book);
     /* cada livro entra com o SEU sentido de rolagem */
     this.readingMode=this.resolveReadingMode(this.currentBook.format,this.currentBook);
+    const ehQuadrinho=BookFormats.isComic(this.currentBook.format);
     const ctrl=new AbortController();
     this.openController=ctrl;
+    /* Descompactar um quadrinho grande leva mais tempo do que montar
+       as páginas de um livro de texto: o limite acompanha o formato. */
     const watchdog=setTimeout(()=>{
       if(!ctrl.signal.aborted){
         this.openTimedOut=true;
         ctrl.abort();
       }
-    },ReaderEngine.OPEN_TIMEOUT);
+    },ehQuadrinho?ReaderEngine.OPEN_TIMEOUT_COMIC:ReaderEngine.OPEN_TIMEOUT);
     this.openTimedOut=false;
     Utils.showLoader('Abrindo livro','Preparando sua leitura...',{
       progress:true,
@@ -4311,8 +4890,13 @@ class ReaderEngine{
     });
     this.openCancelled=false;
     try{
+      const isComic=ehQuadrinho;
       const file=await this.db.getFile(book.id);
-      if(!file||!file.buffer)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
+      /* Quadrinhos entram como Blob; os demais, como ArrayBuffer. Livros
+         importados em versões antigas podem estar no outro formato, então
+         os dois caminhos são aceitos. */
+      const fonte=isComic?(file&&(file.blob||file.buffer)):(file&&file.buffer);
+      if(!fonte)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
       this.destroy();
       document.getElementById('reader-title').textContent=book.title||'Livro';
       this.pdfMode=this.readingMode;
@@ -4323,7 +4907,9 @@ class ReaderEngine{
       const w=this.pageWidth(),h=window.innerHeight;
       
       const signal=ctrl.signal;
-      if(book.format==='pdf'){
+      if(isComic){
+        start=await this.openComic(fonte,book,start,signal);
+      }else if(book.format==='pdf'){
         start=await this.openPdf(file.buffer,book,start);
       }else if(book.format==='docx'){
         start=await this.openDocx(file.buffer,book,w,h,start,signal);
@@ -4357,6 +4943,10 @@ class ReaderEngine{
         globalPage:start,readPages:start+1,totalPages:this.pagesData.length,
         percentage:Math.round(((start+1)/Math.max(1,this.pagesData.length))*100)
       };
+      if(this.comic){
+        this.currentBook.progress.comicPage=(this.comicViews[start]||[start])[0];
+        this.currentBook.progress.totalComicPages=this.comic.length;
+      }
       this.currentBook.totalPages=this.pagesData.length;
       if(changedLegacy)await this.db.updateBook(this.currentBook);
       
@@ -4455,6 +5045,171 @@ class ReaderEngine{
     this.pageMeta=this.pagesData.map((_,i)=>({globalPage:i,chapter:i,localPage:0,title:`Página ${i+1}`}));
     if(start===null)start=book.progress?.pageIndex??0;
     return start;
+  }
+
+  /* ============================================================
+     QUADRINHOS
+     ------------------------------------------------------------
+     O arquivo fica aberto durante toda a leitura e as páginas são
+     lidas conforme aparecem. O que vai para a tela é uma "vista":
+     uma página sozinha ou, no modo revista aberta, duas lado a lado.
+     ============================================================ */
+  async openComic(source,book,start,signal){
+    Utils.setLoaderProgress(8,'Abrindo o quadrinho...');
+    const arquivo=await ComicArchive.open(source,{
+      name:book.sourceFileName||`${book.title||'quadrinho'}.${book.format}`,
+      signal,
+      onStatus:texto=>Utils.setLoaderText(null,texto)
+    });
+    if(signal&&signal.aborted){arquivo.close();throw new DOMException('Cancelado','AbortError')}
+    this.comic=arquivo;
+    const s=this.state.settings;
+    /* Sentido de leitura: o livro manda; depois o ComicInfo.xml do
+       próprio arquivo; por último, o padrão do aplicativo. */
+    this.comicRtl=book.comicRtl!=null?!!book.comicRtl:!!(arquivo.info&&arquivo.info.rtl);
+    this.comicFit=book.comicFit||s.comicFit||'page';
+    this.comicSpread=book.comicSpread!=null?!!book.comicSpread:(s.comicSpread!==false);
+    this.comicZoom={scale:1,x:0,y:0};
+    Utils.setLoaderProgress(92,`${arquivo.length} página(s) prontas`);
+    this.buildComicViews();
+    if(start===null){
+      const guardada=book.progress?.comicPage;
+      start=Number.isFinite(guardada)?this.viewOfComicPage(guardada):(book.progress?.pageIndex??0);
+    }
+    return start;
+  }
+  /* Páginas por vista: 1 no retrato, 2 no paisagem (com a capa sozinha,
+     como numa revista de verdade). */
+  comicSpreadActive(){
+    if(!this.comic||!this.comicSpread)return false;
+    if(this.isVerticalReading())return false;
+    if(this.comic.length<3)return false;
+    return window.innerWidth>window.innerHeight*1.05;
+  }
+  buildComicViews(){
+    const total=this.comic?this.comic.length:0;
+    const views=[];
+    if(this.comicSpreadActive()){
+      if(total>0)views.push([0]);
+      for(let i=1;i<total;i+=2){
+        views.push(i+1<total?[i,i+1]:[i]);
+      }
+    }else{
+      for(let i=0;i<total;i++)views.push([i]);
+    }
+    this.comicViews=views;
+    this.pagesData=views.map((v,i)=>this.comicViewHtml(v,i));
+    this.chapterTitles=views.map(v=>v.length>1?`Páginas ${v[0]+1}–${v[1]+1}`:`Página ${v[0]+1}`);
+    this.chapterStarts=views.map((_,i)=>i);
+    this.totalChapters=views.length;
+    this.pageMeta=views.map((v,i)=>({globalPage:i,chapter:i,localPage:0,
+      title:this.chapterTitles[i],comicPages:v.slice()}));
+  }
+  comicSlotsHtml(pages){
+    return (pages||[]).map(p=>
+      `<div class="comic-slot" data-comic-page="${p}"><div class="comic-loading"><div class="spinner"></div></div></div>`
+    ).join('');
+  }
+  comicViewHtml(pages,index){
+    return `<div class="comic-page-wrap${pages.length>1?' is-spread':''}" data-comic-view="${index}">`+
+      `${this.comicSlotsHtml(pages)}</div>`;
+  }
+  viewOfComicPage(page){
+    const alvo=Number(page)||0;
+    const i=this.comicViews.findIndex(v=>v.includes(alvo));
+    return i>=0?i:Utils.clamp(alvo,0,Math.max(0,this.comicViews.length-1));
+  }
+  currentComicPage(){
+    const v=this.comicViews[this.currentPageIndex];
+    return v?v[0]:0;
+  }
+  /* Girar o aparelho, ligar/desligar a revista aberta ou trocar o
+     ajuste da imagem: nada disso reabre o arquivo. */
+  async refreshComicLayout(){
+    if(!this.comic||!this.sliderBook)return;
+    const pagina=this.currentComicPage();
+    this.buildComicViews();
+    const slider=document.getElementById('reader-page-slider');
+    if(slider)slider.max=Math.max(0,this.pagesData.length-1);
+    const total=document.getElementById('scrubber-total');
+    if(total)total.textContent=this.pagesData.length;
+    await this.initSliderBook(this.viewOfComicPage(pagina));
+  }
+  async setComicOption(chave,valor){
+    if(!this.currentBook||!this.comic)return;
+    const campos={comicFit:'comicFit',comicSpread:'comicSpread',comicRtl:'comicRtl'};
+    if(!campos[chave])return;
+    this.currentBook[chave]=valor;
+    if(chave==='comicFit')this.comicFit=valor;
+    if(chave==='comicSpread')this.comicSpread=!!valor;
+    if(chave==='comicRtl')this.comicRtl=!!valor;
+    try{
+      await this.db.patchBook(this.currentBook.id,b=>{b[chave]=valor});
+    }catch(e){console.warn('Preferência do quadrinho não foi salva.',e)}
+    const lista=App.library&&App.library.allBooks;
+    if(lista){
+      const i=lista.findIndex(b=>b.id===this.currentBook.id);
+      if(i>=0)lista[i][chave]=valor;
+    }
+    /* A preferência também vira o padrão dos próximos quadrinhos. */
+    try{await App.updateSetting(chave,valor)}catch(e){}
+    await this.refreshComicLayout();
+  }
+  async renderComicPageIfNeeded(viewIndex){
+    if(!this.comic||!this.container)return;
+    if(viewIndex<0||viewIndex>=this.comicViews.length)return;
+    const wrap=this.container.querySelector(`.comic-page-wrap[data-comic-view="${viewIndex}"]`);
+    if(!wrap||wrap.dataset.rendered==='1')return;
+    wrap.dataset.rendered='1';
+    const slots=Array.from(wrap.querySelectorAll('.comic-slot'));
+    for(const slot of slots){
+      const p=Number(slot.dataset.comicPage);
+      try{
+        const url=await this.comic.pageUrl(p);
+        if(!url||!slot.isConnected)continue;
+        const img=document.createElement('img');
+        img.className='comic-img';
+        img.alt=`Página ${p+1}`;
+        img.decoding='async';
+        img.draggable=false;
+        img.addEventListener('load',()=>slot.classList.add('ready'),{once:true});
+        img.addEventListener('error',()=>{
+          slot.classList.add('ready');
+          slot.innerHTML='<div class="comic-error">Esta página não pôde ser exibida.</div>';
+        },{once:true});
+        img.src=url;
+        slot.innerHTML='';
+        slot.appendChild(img);
+      }catch(err){
+        console.warn(err);
+        slot.classList.add('ready');
+        slot.innerHTML=`<div class="comic-error">${Utils.esc(err&&err.message?err.message:'Página indisponível.')}</div>`;
+      }
+    }
+    this.trimComicMemory();
+  }
+  /* Mantém na memória só as páginas por perto: um quadrinho de 200
+     páginas não cabe inteiro na memória de um celular. */
+  trimComicMemory(){
+    if(!this.comic||!this.container)return;
+    const atual=this.currentPageIndex;
+    const janela=this.isVerticalReading()?3:2;
+    const manter=new Set();
+    for(let v=atual-janela;v<=atual+janela;v++){
+      const view=this.comicViews[v];
+      if(view)view.forEach(p=>manter.add(p));
+    }
+    const vertical=this.isVerticalReading();
+    this.container.querySelectorAll('.comic-page-wrap[data-rendered="1"]').forEach(wrap=>{
+      const v=Number(wrap.dataset.comicView);
+      if(Math.abs(v-atual)<=janela)return;
+      /* Na rolagem contínua, a página descarregada guarda a altura que
+         tinha: sem isso a barra de rolagem saltaria a cada limpeza. */
+      if(vertical&&wrap.offsetHeight>0)wrap.style.minHeight=`${wrap.offsetHeight}px`;
+      wrap.dataset.rendered='';
+      wrap.innerHTML=this.comicSlotsHtml(this.comicViews[v]||[]);
+    });
+    this.comic.release(manter);
   }
   async openDocument(buffer,book,w,h,start,signal,format){
     const sig=this.pagSignature(book,w,h);
@@ -4582,131 +5337,228 @@ class ReaderEngine{
     this.destroySliderOnly();
     this.createFreshSliderContainer();
     const isPdf=this.currentBook.format==='pdf';
+    const isComic=!!this.comic;
     const verticalReading=this.isVerticalReading();
     this.readingMode=verticalReading?'vertical':'horizontal';
     const pdfVertical=isPdf&&verticalReading;
+    /* Sentido do gesto: só o quadrinho em modo mangá lê da direita
+       para a esquerda. */
+    this.rtl=isComic&&this.comicRtl&&!verticalReading;
     this.container.classList.toggle('reading-vertical',verticalReading);
     this.container.classList.toggle('reading-horizontal',!verticalReading);
     this.container.classList.toggle('pdf-vertical',pdfVertical);
+    this.container.classList.toggle('comic-book',isComic);
+    this.container.classList.toggle('comic-vertical',isComic&&verticalReading);
+    this.container.classList.toggle('comic-rtl',this.rtl);
+    this.container.classList.toggle('fit-width',isComic&&(verticalReading||this.comicFit==='width'));
     this.updateReadingModeControl();
-    
+    this.updateComicControls();
+
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
       d.className='page';d.dataset.page=i;
-      
+
       if(isPdf)d.classList.add('pdf-page');
-      
-      d.innerHTML = isPdf
-        ? html 
+      if(isComic)d.classList.add('comic-page');
+
+      d.innerHTML = (isPdf||isComic)
+        ? html
         : `<div class="page-content"><div class="page-text" style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">Página ${i+1} de ${this.pagesData.length}</div></div>`;
-      
+
       this.container.appendChild(d);
     });
-    
+
     this.sliderBook = this.container;
     if(isPdf){
       const badge=document.createElement('div');badge.className='pdf-zoom-badge';badge.id='pdf-zoom-badge';badge.textContent=`${Math.round(this.pdfZoom*100)}%`;this.container.appendChild(badge);
       this.setupPdfPinch();
+      this.updatePdfControls();
+    }
+    if(isComic){
+      const badge=document.createElement('div');
+      badge.className='pdf-zoom-badge';badge.id='comic-zoom-badge';badge.textContent='100%';
+      this.container.appendChild(badge);
+      this.setupComicZoom();
     }
     if(verticalReading)this.setupContinuousReadingScroll();
 
-    if(isPdf){
-      this.updatePdfControls();
-    }
-    
     const slider = document.getElementById('reader-page-slider');
     const totalMax = Math.max(0, this.pagesData.length - 1);
     if(slider) slider.max = totalMax;
     document.getElementById('scrubber-total').textContent = this.pagesData.length;
 
     this.curl=new PageCurlEngine(this);
+    this.slide=new PageSlideEngine(this);
     this.applyPageTurnMode();
     this.setupPageGestures(isPdf,verticalReading);
 
     this.turnToPage(startIndex,{instant:true});
   }
 
+  /* Modo de virada que vale AGORA. A escolha do usuário continua
+     valendo, mas a rolagem vertical não vira página e a folha real
+     não sabe dobrar ao contrário (mangá), então nesses casos o
+     aplicativo cai no comportamento mais próximo. */
+  effectiveTurnMode(){
+    const escolhido=App.state.settings.pageTurn||'curl';
+    if(this.isVerticalReading())return 'none';
+    if(escolhido==='curl'&&this.rtl)return 'slide';
+    return escolhido;
+  }
+  turnEngine(){
+    const mode=this.effectiveTurnMode();
+    if(mode==='curl'){
+      if(this.curl&&this.curl.available())return this.curl;
+      return this.slide&&this.slide.available()?this.slide:null;
+    }
+    if(mode==='slide')return this.slide&&this.slide.available()?this.slide:null;
+    return null;
+  }
+  /* Deslizar para a esquerda avança; no sentido mangá, é o contrário. */
+  dirFromDx(dx){
+    const avanca=dx<0?1:-1;
+    return this.rtl?-avanca:avanca;
+  }
   applyPageTurnMode(){
     const c=this.container;
     if(!c)return;
-    const mode=App.state.settings.pageTurn||'curl';
+    const mode=this.effectiveTurnMode();
     c.classList.toggle('pt-curl',mode==='curl');
+    c.classList.toggle('pt-slide',mode==='slide');
     c.classList.toggle('pt-none',mode==='none');
     if(mode!=='curl'&&this.curl&&this.curl.active)this.curl.cancel();
+    if(mode!=='slide'&&this.slide&&this.slide.active)this.slide.cancel();
   }
   toggleUI(){this.ui.classList.contains('visible')?this.hideUI():this.showUI()}
-  /* Um único gesto cuida de tudo: dobrar a folha, tocar nas bordas
-     para virar e tocar no meio para mostrar os controles. */
+  /* Um único gesto cuida de tudo: arrastar a folha, tocar nas bordas
+     para virar e tocar no meio para mostrar os controles.
+
+     O que mudou (e por quê): antes o gesto era descartado se o dedo
+     demorasse mais de meio segundo entre encostar na tela e andar os
+     primeiros pixels — o que transformava todo deslize calmo em
+     "nada aconteceu". Agora quem decide é o movimento, não o relógio:
+     assim que o dedo anda para o lado, a página vai junto. */
   setupPageGestures(isPdf,verticalReading){
     const c=this.container;
-    let pid=null,mode='idle',sx=0,sy=0,st=0,lx=0,ly=0,lt=0,vx=0;
+    const isComic=!!this.comic;
+    let pid=null,mode='idle',sx=0,sy=0,st=0,lx=0,ly=0,lt=0,vx=0,engine=null;
+    let tapTimer=null,lastTapAt=0,lastTapX=0,lastTapY=0;
     const blocked=t=>!!(t&&t.closest&&(t.closest('.reader-ui')||t.closest('#annotation-pop')||t.closest('.selection-toolbar')||t.closest('#selection-toolbar')));
     const hasSelection=()=>{const s=window.getSelection();return !!(s&&!s.isCollapsed&&String(s).trim())};
-    const reset=()=>{pid=null;mode='idle';vx=0};
+    const zoomed=()=>isComic?this.comicZoom.scale>1.02:(isPdf&&this.pdfZoom>1.02);
+    const reset=()=>{pid=null;mode='idle';vx=0;engine=null};
+    const cancelTap=()=>{if(tapTimer){clearTimeout(tapTimer);tapTimer=null}};
 
     c.addEventListener('pointerdown',e=>{
       if(mode!=='idle')return;
       if(e.pointerType==='mouse'&&e.button!==0)return;
       if(blocked(e.target))return;
       if(this.curl&&this.curl.animating)return;
+      if(this.slide&&this.slide.animating)return;
       pid=e.pointerId;sx=lx=e.clientX;sy=ly=e.clientY;st=lt=performance.now();vx=0;mode='pending';
     },{passive:true});
 
     c.addEventListener('pointermove',e=>{
       if(pid===null||e.pointerId!==pid)return;
-      const now=performance.now(),dt=Math.max(1,now-lt);
-      vx=0.72*((e.clientX-lx)/dt)+0.28*vx;
-      lx=e.clientX;ly=e.clientY;lt=now;
+      const agora=performance.now(),dt=Math.max(1,agora-lt);
+      vx=0.7*((e.clientX-lx)/dt)+0.3*vx;
+      lx=e.clientX;ly=e.clientY;lt=agora;
       const dx=e.clientX-sx,dy=e.clientY-sy;
-      if(mode==='curl'){this.curl.dragBy(dx,dy);return}
+      if(mode==='drag'){engine.dragBy(dx,dy);return}
       if(mode!=='pending'||verticalReading)return;
-      if(isPdf&&e.isPrimary===false){mode='blocked';return}
-      /* Pegar a folha pelo canto e puxar na diagonal é natural; só o
-         gesto quase vertical é descartado (pode ser seleção de texto). */
-      if(Math.abs(dx)<16||Math.abs(dx)<Math.abs(dy)*0.6)return;
-      if(now-st>520||hasSelection()){mode='blocked';return}
-      if(isPdf&&this.pdfZoom>1.02){mode='blocked';return}
-      const dir=dx<0?1:-1;
-      if(this.curl&&this.curl.start(dir,sy)){
-        mode='curl';
+      /* Dois dedos na tela é pinça, não virada de página. */
+      if(e.isPrimary===false){mode='blocked';return}
+      if(zoomed()){mode='blocked';return}
+      /* Movimento claramente vertical: é rolagem dentro da página. */
+      if(Math.abs(dy)>14&&Math.abs(dy)>Math.abs(dx)*1.3){mode='blocked';return}
+      /* Limiar curto: a folha começa a andar quase junto com o dedo. */
+      if(Math.abs(dx)<10)return;
+      if(hasSelection()){mode='blocked';return}
+      this.cancelAnnotationPress();
+      const dir=this.dirFromDx(dx);
+      const alvo=this.currentPageIndex+dir;
+      if(alvo<0||alvo>=this.pagesData.length){mode='edge';return}
+      const motor=this.turnEngine();
+      if(motor&&motor.start(dir,sy)){
+        engine=motor;mode='drag';
         try{c.setPointerCapture(e.pointerId)}catch(err){}
-        this.curl.dragBy(dx,dy);
+        engine.dragBy(dx,dy);
       }else{
+        /* "Sem animação": mesmo sem motor, o gesto passa a ser nosso —
+           capturar o ponteiro impede que o arraste vire seleção de texto
+           e engula a virada no fim do movimento. */
         mode='swipe';
+        try{c.setPointerCapture(e.pointerId)}catch(err){}
       }
     },{passive:true});
 
     /* Enquanto a folha está na mão, nada mais rola ou dá zoom. */
-    c.addEventListener('touchmove',e=>{if(mode==='curl')e.preventDefault()},{passive:false});
+    c.addEventListener('touchmove',e=>{if(mode==='drag')e.preventDefault()},{passive:false});
 
+    const zonaDeToque=(x,largura)=>{
+      if(x<largura*0.28)return this.rtl?1:-1;
+      if(x>largura*0.72)return this.rtl?-1:1;
+      return 0;
+    };
     const finish=e=>{
       if(pid===null||(e&&e.pointerId!==undefined&&e.pointerId!==pid))return;
-      const dx=lx-sx,dy=ly-sy,elapsed=performance.now()-st;
-      const wasCurl=mode==='curl',wasSwipe=mode==='swipe',wasPending=mode==='pending';
+      const dx=lx-sx,dy=ly-sy,decorrido=performance.now()-st;
+      const arrastou=mode==='drag',deslizou=mode==='swipe',parado=mode==='pending';
+      const motor=engine;
       reset();
-      if(wasCurl){this.curl.release(vx);return}
-      if(hasSelection())return;
-      if(verticalReading){
-        if(Math.hypot(dx,dy)<10&&elapsed<600)this.toggleUI();
+      const rect=c.getBoundingClientRect();
+      const largura=rect.width||window.innerWidth;
+      if(arrastou){motor.release(vx);return}
+      if(deslizou){
+        /* "Sem animação": o deslize continua valendo, só não há
+           acompanhamento visual durante o gesto. Qualquer seleção que o
+           arraste tenha criado pelo caminho é desfeita aqui. */
+        try{const s=window.getSelection();if(s&&!s.isCollapsed)s.removeAllRanges()}catch(err){}
+        if(Math.abs(dx)>Math.max(40,largura*0.12)||Math.abs(vx)>0.45)this.flip(this.dirFromDx(dx));
         return;
       }
-      if(wasSwipe&&Math.abs(dx)>50){this.flip(dx<0?1:-1);return}
-      if(!wasPending)return;
-      if(Math.hypot(dx,dy)>=12||elapsed>=600)return;
+      if(hasSelection())return;
+      if(verticalReading){
+        if(Math.hypot(dx,dy)<12&&decorrido<700)this.toggleUI();
+        return;
+      }
+      if(!parado)return;
+      if(Math.hypot(dx,dy)>=14||decorrido>=700)return;
       if(e&&e.target&&e.target.closest&&e.target.closest('[data-annotation-id]'))return;
-      const rect=c.getBoundingClientRect();
-      const w=rect.width||window.innerWidth;
       const x=(e?e.clientX:lx)-rect.left;
-      if(x<w*0.25)this.flip(-1);
-      else if(x>w*0.75)this.flip(1);
-      else this.toggleUI();
+      const y=(e?e.clientY:ly)-rect.top;
+
+      /* Quadrinho: dois toques seguidos ampliam (ou voltam ao tamanho
+         normal). Por isso o toque simples espera um instante antes de
+         agir — é o tempo de saber se vem um segundo toque. */
+      if(isComic){
+        const agora=performance.now();
+        if(agora-lastTapAt<300&&Math.hypot(x-lastTapX,y-lastTapY)<40){
+          cancelTap();lastTapAt=0;
+          this.comicToggleZoom(e?e.clientX:lx,e?e.clientY:ly);
+          return;
+        }
+        lastTapAt=agora;lastTapX=x;lastTapY=y;
+        cancelTap();
+        tapTimer=setTimeout(()=>{
+          tapTimer=null;
+          if(this.comicZoom.scale>1.02){this.toggleUI();return}
+          const dir=zonaDeToque(x,largura);
+          if(dir)this.flip(dir);else this.toggleUI();
+        },250);
+        return;
+      }
+      if(zoomed()){this.toggleUI();return}
+      const dir=zonaDeToque(x,largura);
+      if(dir)this.flip(dir);else this.toggleUI();
     };
     c.addEventListener('pointerup',finish,{passive:true});
     c.addEventListener('pointercancel',e=>{
       if(pid===null||e.pointerId!==pid)return;
-      const wasCurl=mode==='curl';
+      const arrastou=mode==='drag';
+      const motor=engine;
       reset();
-      if(wasCurl)this.curl.release(vx);
+      if(arrastou)motor.release(vx);
     },{passive:true});
 
     c.addEventListener('click',e=>{
@@ -4721,6 +5573,8 @@ class ReaderEngine{
   
   turnToPage(index,options={}){
     if(this.curl&&this.curl.active&&!options.fromCurl)this.curl.cancel();
+    if(this.slide&&this.slide.active&&!options.fromCurl)this.slide.cancel();
+    if(this.comic&&index!==this.currentPageIndex)this.resetComicZoom();
     if(this.sliderBook && index >= 0 && index < this.pagesData.length) {
        if(this.isVerticalReading()){
          this.currentPageIndex=index;
@@ -4728,12 +5582,12 @@ class ReaderEngine{
          const page=this.container.querySelector(`.page[data-page="${index}"]`);
          if(page&&!options.fromScroll)page.scrollIntoView({block:'start',behavior:options.instant?'auto':'smooth'});
          this.updateProgressText(index);this.persistProgressDebounced(index);this.applyAnnotationsToRenderedPage(index);
-         if(this.currentBook.format==='pdf'){
-           this.renderPdfPageIfNeeded(index);this.renderPdfPageIfNeeded(index+1);this.renderPdfPageIfNeeded(index-1);
+         if(this.currentBook.format==='pdf'||this.comic){
+           this.renderLazyPage(index);this.renderLazyPage(index+1);this.renderLazyPage(index-1);
          }
          return;
        }
-       
+
        this.currentPageIndex = index;
        const pages = this.container.querySelectorAll('.page');
        pages.forEach((p, i) => {
@@ -4759,11 +5613,21 @@ class ReaderEngine{
        this.updateProgressText(index);
        this.persistProgressDebounced(index);
        this.applyAnnotationsToRenderedPage(index);
-       this.renderPdfPageIfNeeded(index);
+       this.renderLazyPage(index);
+       /* Quadrinho: a página seguinte (e a anterior) já ficam prontas,
+          para a virada nunca mostrar um vazio. */
+       if(this.comic){this.renderLazyPage(index+1);this.renderLazyPage(index-1)}
     }
   }
 
+  /* Porta única para "prepare a página que vai aparecer": o PDF
+     desenha, o quadrinho carrega a imagem. */
+  renderLazyPage(pageIndex){
+    if(this.comic)return this.renderComicPageIfNeeded(pageIndex);
+    return this.renderPdfPageIfNeeded(pageIndex);
+  }
   async renderPdfPageIfNeeded(pageIndex){
+    if(this.comic)return this.renderComicPageIfNeeded(pageIndex);
     if(!this.pdfDoc)return;
     const wrap=document.querySelector(`.page[data-page="${pageIndex}"] .pdf-page-wrap`);
     if(!wrap||wrap.dataset.rendered==='1')return;
@@ -4780,7 +5644,7 @@ class ReaderEngine{
       wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>`;
     }
   }
-  /* Padrão de fábrica de cada formato: horizontal para EPUB, MOBI, TXT e
+  /* Padrão de fábrica de cada formato: horizontal para EPUB, MOBI, quadrinhos, TXT e
      MD (texto que reflui); vertical para PDF e DOCX (página fixa). */
   defaultReadingMode(format){
     return BookFormats.defaultScroll(format)==='vertical'?'vertical':'horizontal';
@@ -4822,7 +5686,9 @@ class ReaderEngine{
     if(!btn)return;
     const vertical=this.isVerticalReading();
     btn.innerHTML=`<i data-lucide="${vertical?'arrow-up-down':'arrow-left-right'}"></i>`;
-    btn.title=vertical?'Mudar para leitura horizontal':'Mudar para rolagem vertical';
+    btn.title=this.comic
+      ? (vertical?'Voltar para página a página':'Rolagem contínua (estilo webtoon)')
+      : (vertical?'Mudar para leitura horizontal':'Mudar para rolagem vertical');
     btn.setAttribute('aria-label',btn.title);
     btn.classList.toggle('active',vertical);
     lucide.createIcons({root:btn});
@@ -4830,9 +5696,20 @@ class ReaderEngine{
   updatePdfControls(){this.updateReadingModeControl()}
   async reloadReadingMode(){
     if(!this.currentBook||!this.sliderBook)return;
-    const index=this.currentPageIndex;
+    let index=this.currentPageIndex;
+    const pagina=this.comic?this.currentComicPage():null;
     this.readingMode=this.resolveReadingMode(this.currentBook.format);
     this.pdfMode=this.readingMode;
+    if(this.comic){
+      /* Trocar entre página a página e rolagem contínua muda o
+         agrupamento das páginas: as vistas são refeitas antes. */
+      this.buildComicViews();
+      index=this.viewOfComicPage(pagina);
+      const slider=document.getElementById('reader-page-slider');
+      if(slider)slider.max=Math.max(0,this.pagesData.length-1);
+      const total=document.getElementById('scrubber-total');
+      if(total)total.textContent=this.pagesData.length;
+    }
     await this.initSliderBook(index);
   }
   async toggleReadingMode(){
@@ -4840,6 +5717,12 @@ class ReaderEngine{
     const next=this.isVerticalReading()?'horizontal':'vertical';
     await this.setReadingMode(next);
     App.syncReadingModeUi();
+    if(this.comic){
+      Utils.toast(next==='vertical'
+        ?'Rolagem contínua ativada neste quadrinho.'
+        :'Leitura página a página ativada neste quadrinho.','book-image');
+      return;
+    }
     Utils.toast(next==='vertical'
       ?'Rolagem vertical ativada neste livro.'
       :'Leitura horizontal ativada neste livro.','file-text');
@@ -4856,13 +5739,186 @@ class ReaderEngine{
         this.container.querySelectorAll('.page').forEach(page=>{
           const rect=page.getBoundingClientRect(),d=Math.abs(rect.top-middle);
           if(d<distance){distance=d;nearest=Number(page.dataset.page)}
-          if(this.currentBook?.format==='pdf'&&rect.bottom>0&&rect.top<window.innerHeight){
-            this.renderPdfPageIfNeeded(Number(page.dataset.page));
+          if((this.currentBook?.format==='pdf'||this.comic)&&rect.bottom>-600&&rect.top<window.innerHeight+600){
+            this.renderLazyPage(Number(page.dataset.page));
           }
         });
         if(nearest!==null&&nearest!==this.currentPageIndex)this.turnToPage(nearest,{fromScroll:true,instant:true});
       });
     },{passive:true});
+  }
+  /* ============================================================
+     QUADRINHO — ZOOM E ARRASTE
+     ------------------------------------------------------------
+     Numa HQ, ampliar um balão é tão importante quanto virar a
+     página. A imagem inteira (a vista) é transformada de uma vez
+     com `transform`, que roda na GPU: dá para pinçar, arrastar e
+     dar dois toques sem o menor engasgo, mesmo em páginas grandes.
+     Enquanto há zoom, o deslize lateral serve para passear pela
+     página — a virada volta assim que o zoom é desfeito.
+     ============================================================ */
+  comicViewEl(index=this.currentPageIndex){
+    if(!this.container)return null;
+    return this.container.querySelector(`.comic-page-wrap[data-comic-view="${index}"]`);
+  }
+  applyComicZoom(anima=false){
+    const el=this.comicViewEl();
+    if(!el)return;
+    const z=this.comicZoom;
+    el.style.transition=anima?'transform .22s cubic-bezier(.2,.8,.2,1)':'none';
+    el.style.transform=z.scale>1.001
+      ? `translate3d(${z.x}px,${z.y}px,0) scale(${z.scale})`
+      : '';
+    if(this.container)this.container.classList.toggle('comic-zoomed',z.scale>1.02);
+    const badge=document.getElementById('comic-zoom-badge');
+    if(badge){
+      badge.textContent=`${Math.round(z.scale*100)}%`;
+      badge.classList.toggle('show',z.scale>1.02);
+    }
+  }
+  /* Impede que a imagem seja arrastada para fora da tela. */
+  clampComicPan(){
+    const el=this.comicViewEl();
+    if(!el)return;
+    const z=this.comicZoom;
+    if(z.scale<=1.001){z.x=0;z.y=0;return}
+    const rect=this.container.getBoundingClientRect();
+    const folgaX=Math.max(0,(rect.width*z.scale-rect.width)/2);
+    const folgaY=Math.max(0,(rect.height*z.scale-rect.height)/2);
+    z.x=Utils.clamp(z.x,-folgaX,folgaX);
+    z.y=Utils.clamp(z.y,-folgaY,folgaY);
+  }
+  resetComicZoom(){
+    const el=this.comicViewEl();
+    if(el){el.style.transition='none';el.style.transform=''}
+    this.comicZoom={scale:1,x:0,y:0};
+    if(this.container)this.container.classList.remove('comic-zoomed');
+    const badge=document.getElementById('comic-zoom-badge');
+    if(badge)badge.classList.remove('show');
+  }
+  /* Dois toques: amplia no ponto tocado ou volta ao tamanho da tela. */
+  comicToggleZoom(clientX,clientY){
+    if(!this.comic||!this.container)return;
+    if(this.comicZoom.scale>1.02){
+      this.comicZoom={scale:1,x:0,y:0};
+      this.applyComicZoom(true);
+      setTimeout(()=>this.applyComicZoom(false),240);
+      return;
+    }
+    const rect=this.container.getBoundingClientRect();
+    const escala=2.4;
+    const px=(clientX-rect.left)-rect.width/2;
+    const py=(clientY-rect.top)-rect.height/2;
+    this.comicZoom={scale:escala,x:-px*(escala-1),y:-py*(escala-1)};
+    this.clampComicPan();
+    this.applyComicZoom(true);
+    setTimeout(()=>this.applyComicZoom(false),240);
+    if(navigator.vibrate)navigator.vibrate(8);
+  }
+  setupComicZoom(){
+    const c=this.container;
+    if(!c)return;
+    let pincando=false,d0=0,s0=1,cx0=0,cy0=0,x0=0,y0=0;
+    let arrastando=false,ax=0,ay=0,px=0,py=0;
+    const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+
+    c.addEventListener('touchstart',e=>{
+      if(e.touches.length===2){
+        pincando=true;arrastando=false;
+        d0=dist(e.touches)||1;
+        s0=this.comicZoom.scale;
+        const rect=c.getBoundingClientRect();
+        cx0=((e.touches[0].clientX+e.touches[1].clientX)/2)-rect.left-rect.width/2;
+        cy0=((e.touches[0].clientY+e.touches[1].clientY)/2)-rect.top-rect.height/2;
+        x0=this.comicZoom.x;y0=this.comicZoom.y;
+        return;
+      }
+      if(e.touches.length===1&&this.comicZoom.scale>1.02){
+        arrastando=true;
+        ax=e.touches[0].clientX;ay=e.touches[0].clientY;
+        px=this.comicZoom.x;py=this.comicZoom.y;
+      }
+    },{passive:true});
+
+    c.addEventListener('touchmove',e=>{
+      if(pincando&&e.touches.length===2){
+        e.preventDefault();
+        const escala=Utils.clamp(s0*(dist(e.touches)/d0),1,5);
+        const k=escala/s0;
+        /* O ponto entre os dedos fica parado enquanto a imagem cresce. */
+        this.comicZoom.scale=escala;
+        this.comicZoom.x=cx0+(x0-cx0)*k;
+        this.comicZoom.y=cy0+(y0-cy0)*k;
+        this.clampComicPan();
+        this.applyComicZoom(false);
+        return;
+      }
+      if(arrastando&&e.touches.length===1){
+        e.preventDefault();
+        this.comicZoom.x=px+(e.touches[0].clientX-ax);
+        this.comicZoom.y=py+(e.touches[0].clientY-ay);
+        this.clampComicPan();
+        this.applyComicZoom(false);
+      }
+    },{passive:false});
+
+    const soltar=()=>{
+      if(pincando){
+        pincando=false;
+        if(this.comicZoom.scale<=1.05){
+          this.comicZoom={scale:1,x:0,y:0};
+          this.applyComicZoom(true);
+          setTimeout(()=>this.applyComicZoom(false),240);
+        }else{
+          this.clampComicPan();
+          this.applyComicZoom(false);
+        }
+      }
+      arrastando=false;
+    };
+    c.addEventListener('touchend',soltar,{passive:true});
+    c.addEventListener('touchcancel',soltar,{passive:true});
+
+    /* No computador: roda do mouse com Ctrl amplia. */
+    c.addEventListener('wheel',e=>{
+      if(!e.ctrlKey)return;
+      e.preventDefault();
+      const rect=c.getBoundingClientRect();
+      const anterior=this.comicZoom.scale;
+      const escala=Utils.clamp(anterior*(e.deltaY<0?1.12:1/1.12),1,5);
+      const k=escala/anterior;
+      const cx=(e.clientX-rect.left)-rect.width/2;
+      const cy=(e.clientY-rect.top)-rect.height/2;
+      this.comicZoom.scale=escala;
+      this.comicZoom.x=cx+(this.comicZoom.x-cx)*k;
+      this.comicZoom.y=cy+(this.comicZoom.y-cy)*k;
+      if(escala<=1.02)this.comicZoom={scale:1,x:0,y:0};
+      this.clampComicPan();
+      this.applyComicZoom(false);
+    },{passive:false});
+  }
+  /* Botões do topo e seção "Quadrinhos" das configurações. */
+  updateComicControls(){
+    const comic=!!this.comic;
+    const tts=document.getElementById('btn-reader-tts');
+    if(tts)tts.hidden=comic;
+    const secao=document.getElementById('comic-settings');
+    if(secao)secao.hidden=!comic;
+    if(!comic)return;
+    const marcar=(seletor,atributo,valor)=>{
+      document.querySelectorAll(seletor).forEach(b=>
+        b.classList.toggle('active',b.dataset[atributo]===String(valor)));
+    };
+    marcar('#comic-fit-grid button','comicFit',this.comicFit);
+    marcar('#comic-direction-grid button','comicDir',this.comicRtl?'rtl':'ltr');
+    const spread=document.getElementById('comic-spread-toggle');
+    if(spread)spread.checked=!!this.comicSpread;
+    const dica=document.getElementById('comic-settings-tip');
+    if(dica){
+      dica.textContent=this.comicSpreadActive()
+        ? 'Agora em revista aberta: duas páginas lado a lado, com a capa sozinha.'
+        : 'Gire o aparelho para a horizontal para ver duas páginas lado a lado.';
+    }
   }
   setupPdfContinuousScroll(){return this.setupContinuousReadingScroll()}
   setupPdfPinch(){
@@ -4901,6 +5957,9 @@ class ReaderEngine{
     this.pdfZoom=Utils.clamp(zoom,.75,3);
     await App.updateSetting('pdfZoom',this.pdfZoom);
     if(!this.container)return;
+    /* Com zoom, a página precisa poder ser arrastada para os lados;
+       sem zoom, o movimento lateral pertence à virada de página. */
+    this.container.classList.toggle('pdf-zoomed',this.pdfZoom>1.02);
     this.container.querySelectorAll('.pdf-page-wrap').forEach(wrap=>{
       wrap.dataset.rendered='';
       wrap.innerHTML=`<div class="pdf-loading"><div class="spinner"></div><span>Aplicando zoom...</span></div>`;
@@ -4924,15 +5983,24 @@ class ReaderEngine{
   async flip(dir){
     if(!this.sliderBook||this.navigating)return;
     const index = this.currentPageIndex + dir;
-    if(index >= this.pagesData.length){Utils.toast('Você chegou ao fim do livro.','check-circle');return;}
-    if(index < 0){Utils.toast('Este é o início do livro.','info');return;}
-    if(this.curl&&this.curl.animate(dir))return;
+    if(index >= this.pagesData.length){
+      Utils.toast(this.comic?'Você chegou ao fim do quadrinho.':'Você chegou ao fim do livro.','check-circle');return;
+    }
+    if(index < 0){Utils.toast(this.comic?'Esta é a primeira página.':'Este é o início do livro.','info');return;}
+    const motor=this.turnEngine();
+    if(motor&&motor.animate(dir))return;
     this.turnToPage(index);
   }
   async persistProgress(i){
     if(!this.currentBook)return;
     const readPage=i+1,total=this.pagesData.length,pct=Math.round((readPage/Math.max(1,total))*100);
     this.currentBook.progress={globalPage:i,readPages:readPage,totalPages:total,percentage:pct};
+    if(this.comic){
+      /* O quadrinho guarda também a PÁGINA (e não só a vista): assim,
+         girar o aparelho e passar para revista aberta não perde o ponto. */
+      this.currentBook.progress.comicPage=(this.comicViews[i]||[i])[0];
+      this.currentBook.progress.totalComicPages=this.comic.length;
+    }
     this.currentBook.totalPages=total;
     this.currentBook.lastRead=Date.now();
     if(i>=total-1)this.currentBook.status='read';
@@ -5195,6 +6263,8 @@ class ReaderEngine{
   }
   async triggerRePagination(){
     if(!this.currentBook)return;
+    /* Quadrinho não tem tipografia para recalcular: basta rearranjar. */
+    if(this.comic)return this.refreshComicLayout();
     const old=this.currentPageIndex||0;
     Utils.showLoader('Ajustando leitura','Recalculando páginas...',{progress:true});
     try{
@@ -5233,6 +6303,7 @@ class ReaderEngine{
   }
   destroySliderOnly(){
     if(this.curl){this.curl.cancel();this.curl=null}
+    if(this.slide){this.slide.cancel();this.slide=null}
     this.navigating=false;
     if(this.container&&this.container.isConnected)this.container.remove();
     this.container=null;
@@ -5243,12 +6314,19 @@ class ReaderEngine{
     this.destroySliderOnly();
     this.pdfDoc?.destroy?.();
     this.pdfDoc=null;
+    /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
+    if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
+    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;
+    this.updateComicControls();
     this.currentExtractor=null;
     this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
   }
 }
 /* Tempo máximo para preparar um livro antes de desistir e avisar o leitor. */
 ReaderEngine.OPEN_TIMEOUT=90000;
+/* Quadrinhos em RAR/7z são descompactados por inteiro de uma vez:
+   um álbum grande pode levar bem mais do que um livro de texto. */
+ReaderEngine.OPEN_TIMEOUT_COMIC=300000;
 /* Acima disso as páginas prontas não vão para o cache, para não estourar o
    armazenamento do aparelho com imagens embutidas. */
 ReaderEngine.MAX_CACHE_CHARS=14*1024*1024;
@@ -6058,16 +7136,20 @@ class LibraryManager{
     const video=AudioFormats.isVideoBook(book);
     const audio=media;                 /* nome antigo, mantido para o resto do método */
     const fmt=BookFormats.normalize(book.format);
+    const comic=BookFormats.isComic(fmt);
     const mediaIcon=media?AudioFormats.icon(fmt):BookFormats.icon(fmt);
+    /* Quadrinho e audiolivro levam o ícone do formato junto da etiqueta:
+       são os tipos que a pessoa procura de relance na estante. */
+    const comIcone=media||comic;
     /* capas de audiolivro costumam ser quadradas: aparecem inteiras sobre um fundo desfocado */
     const squareCover=media&&!video&&!!book.cover&&(book.coverAspect||0)>0.85;
     const subRight=media?this.audioSubText(book):(book.progress?.readPages?`p. ${book.progress.readPages}`:'');
     const cover=book.cover
       ?`<img src="${book.cover}" alt="${Utils.esc(book.title)}" loading="lazy">`
-      :`<div class="fallback${media?' audio-fallback':''}">${media?`<i data-lucide="${mediaIcon}"></i>`:''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
+      :`<div class="fallback${comIcone?' audio-fallback':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
     /* Uma etiqueta só, montada a partir do formato: acrescentar um formato
        novo não exige mexer aqui de novo. */
-    const badge=`<span class="badge fmt-badge ${fmt}-badge${media?' audio-badge':''}">${media?`<i data-lucide="${mediaIcon}"></i>`:''}${BookFormats.label(fmt)}</span>`;
+    const badge=`<span class="badge fmt-badge ${fmt}-badge${media?' audio-badge':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}${BookFormats.label(fmt)}</span>`;
     el.innerHTML=`
       <div class="book-menu-wrap">
         ${fmt==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
@@ -6146,6 +7228,8 @@ async shareBook(book){
       subtitle:'Formato protegido',
       message:AudioFormats.isAudioBook(book)
         ?'Audiolivros e vídeos ficam guardados somente no seu aparelho e não podem ser compartilhados por este aplicativo.'
+        :BookFormats.isComic(book.format)
+        ?'Quadrinhos ficam guardados somente no seu aparelho e não podem ser compartilhados por este aplicativo.'
         :'Para manter a política de compartilhamento da biblioteca, arquivos EPUB e MOBI não podem ser compartilhados por este aplicativo.',
       confirmText:'Entendi',
       confirmIcon:'lock'
@@ -6657,7 +7741,7 @@ downloadConvertedEpub(result,outputName){
           multiple:true,
           excludeAcceptAllOption:false,
           types:[{
-            description:'Livros, documentos, audiolivros e vídeos',
+            description:'Livros, quadrinhos, documentos, audiolivros e vídeos',
             accept:{
               'application/epub+zip':['.epub'],
               'application/x-mobipocket-ebook':['.mobi'],
@@ -6665,6 +7749,9 @@ downloadConvertedEpub(result,outputName){
               'text/plain':['.txt'],
               'text/markdown':['.md','.markdown'],
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document':['.docx'],
+              'application/vnd.comicbook+zip':['.cbz'],
+              'application/vnd.comicbook-rar':['.cbr'],
+              'application/x-cb7':['.cb7','.cbt'],
               'audio/mpeg':['.mp3'],
               'audio/mp4':['.m4b'],
               'video/mp4':['.mp4']
@@ -6776,6 +7863,7 @@ downloadConvertedEpub(result,outputName){
       const v=AudioFormats.isVideoBook(result.book);
       Utils.toast(v?'Vídeo importado e salvo no dispositivo.'
         :AudioFormats.isAudioBook(result.book)?'Audiolivro importado e salvo no dispositivo.'
+        :BookFormats.isComic(result.book.format)?'Quadrinho importado e salvo no dispositivo.'
         :'Livro importado e salvo no dispositivo.','check');
       await this.render();
       return;
@@ -6804,9 +7892,12 @@ downloadConvertedEpub(result,outputName){
       if(!seguir)return;
       Utils.showLoader('Importando livro','Salvando na sua estante...');
       try{
-        if(result.pending.blobs)await AudioImport.save(this.db,result.pending.meta,result.pending.blobs);
+        if(result.pending.comicBlob)await this.db.saveComicBook(result.pending.meta,result.pending.comicBlob);
+        else if(result.pending.blobs)await AudioImport.save(this.db,result.pending.meta,result.pending.blobs);
         else await this.db.saveBook(result.pending.meta,result.pending.buffer);
-        Utils.toast(result.pending.blobs?'Audiolivro importado e salvo no dispositivo.':'Livro importado e salvo no dispositivo.','check');
+        Utils.toast(result.pending.comicBlob?'Quadrinho importado e salvo no dispositivo.'
+          :result.pending.blobs?'Audiolivro importado e salvo no dispositivo.'
+          :'Livro importado e salvo no dispositivo.','check');
         await this.render();
       }catch(err){
         console.error(err);
@@ -6829,6 +7920,7 @@ downloadConvertedEpub(result,outputName){
   async importFile(file,{quiet=false,meter=null,signal=null}={}){
     const ext=BookFormats.normalize(file.name);
     if(AudioFormats.has(ext))return this.importAudioFile(file,{quiet,meter,signal});
+    if(BookFormats.isComic(ext))return this.importComicFile(file,{quiet,meter,signal});
     if(!BookFormats.TEXT.includes(ext)){
       if(!quiet)Utils.toast('Formato não suportado.','alert-triangle');
       return {status:'error',message:'Formato não suportado.'};
@@ -6919,6 +8011,79 @@ downloadConvertedEpub(result,outputName){
     }
     /* Mantem a lista em memoria atualizada para que dois arquivos iguais
        dentro da mesma importacao em lote nao entrem duas vezes. */
+    this.allBooks.push(Utils.normalizeBook(meta));
+    return {status:'ok',book:meta};
+  }
+
+  /* ------------------------------------------------------------
+     QUADRINHOS
+     O arquivo é guardado como Blob (igual ao audiolivro): um CBZ de
+     300 MB não pode virar ArrayBuffer na memória a cada abertura.
+     Da importação sai só o essencial para a estante — capa, título,
+     autor e número de páginas — lendo apenas a primeira imagem.
+     ------------------------------------------------------------ */
+  async importComicFile(file,{quiet=false,meter=null,signal=null}={}){
+    const ext=BookFormats.normalize(file.name);
+    let construido=null;
+    try{
+      let arquivo=file;
+      /* Igual ao audiolivro: se o arquivo ainda está na nuvem, ele é
+         trazido de uma vez, com barra de progresso. */
+      if(file.size<=FileTransfer.MAX_LOCAL_COPY&&await FileTransfer.looksRemote(file)){
+        arquivo=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
+        meter?.finish();
+      }
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      const impressao=await FileFingerprint.hashBlob(arquivo);
+      const identico=await this.findByHash(impressao,arquivo.size);
+      if(identico)return {status:'duplicate',book:identico,exact:true};
+      Utils.setLoaderText(null,'Lendo o quadrinho...');
+      const pacote=await ComicArchive.open(arquivo,{
+        name:file.name,coverOnly:true,signal,
+        onStatus:texto=>Utils.setLoaderText(null,texto)
+      });
+      let capa=null;
+      try{capa=await pacote.coverDataURL()}catch(e){console.warn(e)}
+      const info=pacote.info;
+      const paginas=pacote.length;
+      pacote.close();
+      const base=file.name.replace(/\.[^/.]+$/,'');
+      construido={
+        blob:arquivo,
+        meta:{
+          id:Utils.id(),
+          title:ComicSupport.buildTitle(info,base)||base,
+          author:(info&&info.author)||'Autor Desconhecido',
+          format:ext,
+          sourceFileName:file.name,
+          addedAt:Date.now(),
+          cover:capa,progress:null,status:'toread',favorite:false,
+          tags:[],collections:[],series:(info&&info.series)||'',folder:'',
+          bookmarks:[],annotations:[],
+          order:Date.now(),manualOrder:false,
+          fileHash:impressao,fileSize:arquivo.size,
+          totalPages:paginas,
+          comicRtl:!!(info&&info.rtl)
+        }
+      };
+    }catch(err){
+      if(Utils.isAbort(err))return {status:'cancelled'};
+      console.error(err);
+      return {status:'error',message:err?.message||'Falha ao processar o quadrinho.',error:err};
+    }
+    const parecido=this.findSimilar(construido.meta);
+    if(parecido)return {status:'duplicate',book:parecido,exact:false,
+      pending:{meta:construido.meta,comicBlob:construido.blob}};
+    return this.saveComicResult(construido);
+  }
+  async saveComicResult({meta,blob}){
+    try{
+      Utils.setLoaderText('Salvando na sua estante','Quadrinhos grandes podem levar alguns instantes...');
+      await this.db.saveComicBook(meta,blob);
+    }catch(err){
+      console.error(err);
+      return {status:'error',message:err?.message||'Não foi possível salvar o quadrinho.',error:err};
+    }
     this.allBooks.push(Utils.normalizeBook(meta));
     return {status:'ok',book:meta};
   }
@@ -7175,19 +8340,23 @@ const Docs={
     'lic-lucide':{title:'Lucide',subtitle:'Licença ISC',icon:'scale',path:'licencas/LICENSE-Lucide.txt',kind:'txt'},
     'lic-jszip':{title:'JSZip',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-JSZip.txt',kind:'txt'},
     'lic-pdfjs':{title:'PDF.js',subtitle:'Licença Apache 2.0',icon:'scale',path:'licencas/LICENSE-Apache.txt',kind:'txt'},
-    'lic-mammoth':{title:'Mammoth.js',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-mammoth.txt',kind:'txt'}
+    'lic-mammoth':{title:'Mammoth.js',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-mammoth.txt',kind:'txt'},
+    'lic-libarchivejs':{title:'libarchive.js',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-libarchivejs.txt',kind:'txt'},
+    'lic-libarchive':{title:'libarchive',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-libarchive.txt',kind:'txt'}
   },
   fallbacks:{
     sobre:[
       '# Veredas Reader',
       '',
       'O Veredas Reader é um leitor de livros digitais que funciona inteiramente no seu dispositivo.',
-      'Ele abre arquivos **EPUB**, **MOBI**, **PDF**, **TXT**, **MD** (Markdown) e **DOCX**, toca audiolivros em **MP3** e **M4B**,',
+      'Ele abre arquivos **EPUB**, **MOBI**, **PDF**, **TXT**, **MD** (Markdown) e **DOCX**, lê quadrinhos em',
+      '**CBZ**, **CBR**, **CB7** e **CBT**, toca audiolivros em **MP3** e **M4B**,',
       'reproduz vídeos em **MP4**, guarda a sua estante no dispositivo e preserva marcações, citações, anotações e progresso.',
       '',
       '## O que ele faz',
       '',
       '- Importa livros do seu aparelho e mantém uma cópia local para leitura no dispositivo.',
+      '- Lê quadrinhos com zoom por pinça, revista aberta no modo paisagem, sentido mangá e rolagem contínua.',
       '- Organiza a estante por status, coleções, séries, autores e tags.',
       '- Permite grifar trechos, criar citações, anotações e marcadores.',
       '- Ajusta tema, tipografia, espaçamento, margens, brilho e modo de virada de página.',
@@ -7270,7 +8439,9 @@ const Docs={
     'lic-lucide':'Lucide — Licença ISC\n\nO texto completo da licença deve estar em licencas/LICENSE-Lucide.txt.\nReferência oficial: https://github.com/lucide-icons/lucide/blob/main/LICENSE',
     'lic-jszip':'JSZip — Licença MIT\n\nO texto completo da licença deve estar em licencas/LICENSE-JSZip.txt.\nReferência oficial: https://github.com/Stuk/jszip/blob/main/LICENSE.markdown',
     'lic-pdfjs':'PDF.js — Licença Apache 2.0\n\nO texto completo da licença deve estar em licencas/LICENSE-Apache.txt.\nReferência oficial: https://www.apache.org/licenses/LICENSE-2.0',
-    'lic-mammoth':'Mammoth.js — Licença BSD-2-Clause\n\nO texto completo da licença deve estar em licencas/LICENSE-mammoth.txt.\nReferência oficial: https://github.com/mwilliamson/mammoth.js/blob/master/LICENSE'
+    'lic-mammoth':'Mammoth.js — Licença BSD-2-Clause\n\nO texto completo da licença deve estar em licencas/LICENSE-mammoth.txt.\nReferência oficial: https://github.com/mwilliamson/mammoth.js/blob/master/LICENSE',
+    'lic-libarchivejs':'libarchive.js — Licença MIT\n\nO empacotamento do libarchive para o navegador, usado pelo leitor de\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\nO texto completo da licença deve estar em licencas/LICENSE-libarchivejs.txt.\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
+    'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\n\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\nquadrinhos em CBR, CB7 e CBT.\nO texto completo da licença deve estar em licencas/LICENSE-libarchive.txt.\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
   },
   init(){
     this.el=document.getElementById('doc-modal');
@@ -7380,11 +8551,11 @@ const Docs={
    uma pasta e o aplicativo percorre tudo o que existe dentro dela.
    ============================================================ */
 const DeviceScan={
-  /* M4B entra junto com EPUB e MOBI: são os formatos que o usuário
-     costuma já ter guardados no aparelho e que dá para reconhecer só
-     pela extensão, sem abrir cada arquivo. */
-  exts:['epub','mobi','m4b'],
-  label:'EPUB, MOBI e M4B',
+  /* CBZ, CBR, M4B, EPUB e MOBI: são os formatos que o usuário costuma
+     já ter guardados no aparelho e que dá para reconhecer só pela
+     extensão, sem abrir cada arquivo. */
+  exts:['epub','mobi','cbz','cbr','cb7','cbt','m4b'],
+  label:'EPUB, MOBI, CBZ, CBR e M4B',
   maxFiles:600,
   busy:false,
   el:null,body:null,footer:null,titleEl:null,subEl:null,iconEl:null,confirmBtn:null,cancelBtn:null,closeBtn:null,
@@ -7460,7 +8631,7 @@ const DeviceScan={
     try{
       this.setHead('Buscar livros no dispositivo',`Escolha uma pasta para procurar ${this.label}.`,'folder-search');
       this.body.innerHTML=`
-        <p>${auto?'Para montar sua estante rapidamente, o':'O'} aplicativo pode procurar livros em <strong>EPUB</strong> e <strong>MOBI</strong> e audiolivros em <strong>M4B</strong> dentro de uma pasta do seu aparelho, incluindo as subpastas.</p>
+        <p>${auto?'Para montar sua estante rapidamente, o':'O'} aplicativo pode procurar livros em <strong>EPUB</strong> e <strong>MOBI</strong>, quadrinhos em <strong>CBZ</strong> e <strong>CBR</strong> e audiolivros em <strong>M4B</strong> dentro de uma pasta do seu aparelho, incluindo as subpastas.</p>
         <div class="conversion-warning">
           <i data-lucide="shield-check"></i>
           <div><strong>Você escolhe a pasta</strong><div>A leitura acontece só no seu dispositivo e apenas na pasta autorizada. Downloads costuma ser o melhor ponto de partida.</div></div>
@@ -7795,7 +8966,7 @@ const FirstRun={
       document.getElementById('onb-lead').textContent='O aplicativo pode procurar os livros que já estão no seu aparelho.';
       this.body.innerHTML=`
         <div class="onb-points">
-          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>Busca por EPUB, MOBI e M4B</strong><span>Escolha uma pasta (Downloads é um bom começo) e o aplicativo procura nela e em todas as subpastas.</span></div></div>
+          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>Busca por EPUB, MOBI, CBZ, CBR e M4B</strong><span>Escolha uma pasta (Downloads é um bom começo) e o aplicativo procura nela e em todas as subpastas.</span></div></div>
           <div class="onb-point"><i data-lucide="list-checks"></i><div><strong>Você revisa antes</strong><span>Nada entra na estante sem a sua confirmação: você vê a lista e marca o que quer importar.</span></div></div>
           <div class="onb-point"><i data-lucide="plus"></i><div><strong>Dá para fazer depois</strong><span>A busca fica sempre disponível no menu lateral, em Sistema.</span></div></div>
         </div>`;
@@ -7988,7 +9159,7 @@ const App={
       tip.textContent=`Esta escolha vale só para “${livro.title||'este livro'}”. Cada livro guarda o seu sentido de rolagem. `+
         `Agora está em ${efetivo}; no automático, ${BookFormats.label(livro.format)} abre em ${padrao}.`;
     }else{
-      tip.textContent='Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. '+
+      tip.textContent='Automático usa rolagem horizontal para EPUB, MOBI, TXT, MD e quadrinhos, e vertical para PDF e DOCX. '+
         'Mudando durante a leitura, o ajuste fica guardado só naquele livro.';
     }
   },
@@ -8030,6 +9201,27 @@ const App={
       const label={curl:'Virada em folha real ativada.',slide:'Virada deslizante ativada.',none:'Virada sem animação ativada.'}[b.dataset.pageTurn];
       Utils.toast(label,'book-open');
     });
+
+    /* ---------- Quadrinhos ---------- */
+    document.querySelectorAll('#comic-fit-grid button').forEach(b=>b.onclick=async()=>{
+      if(!this.reader||!this.reader.comic)return;
+      await this.reader.setComicOption('comicFit',b.dataset.comicFit);
+      Utils.toast(b.dataset.comicFit==='width'
+        ?'A página passa a ocupar toda a largura da tela.'
+        :'A página inteira passa a caber na tela.','book-image');
+    });
+    document.querySelectorAll('#comic-direction-grid button').forEach(b=>b.onclick=async()=>{
+      if(!this.reader||!this.reader.comic)return;
+      await this.reader.setComicOption('comicRtl',b.dataset.comicDir==='rtl');
+      Utils.toast(b.dataset.comicDir==='rtl'
+        ?'Leitura da direita para a esquerda (mangá).'
+        :'Leitura da esquerda para a direita.','book-image');
+    });
+    const spreadToggle=document.getElementById('comic-spread-toggle');
+    if(spreadToggle)spreadToggle.onchange=async e=>{
+      if(!this.reader||!this.reader.comic){e.target.checked=!e.target.checked;return}
+      await this.reader.setComicOption('comicSpread',!!e.target.checked);
+    };
 
     const bindings=[['set-font-size','fontSize'],['set-line-height','lineHeight'],['set-margin','margin'],['set-brightness','brightness']];
     bindings.forEach(([id,key])=>{
@@ -8082,7 +9274,10 @@ const App={
   },
   openPanel(id){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('visible'));
-    if(id==='panel-settings')this.syncReadingModeUi();
+    if(id==='panel-settings'){
+      this.syncReadingModeUi();
+      if(this.reader&&this.reader.updateComicControls)this.reader.updateComicControls();
+    }
     document.getElementById(id).classList.add('visible');
     document.getElementById('backdrop').classList.add('visible');
     lucide.createIcons();

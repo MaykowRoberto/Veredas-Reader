@@ -1,0 +1,4 @@
+Este arquivo nao e mais usado pelo Veredas Reader.
+O leitor de CBR/CB7/CBT passou a ser o libarchive-embutido.js, que funciona
+tambem com o aplicativo aberto direto do disco (file://).
+Pode apagar este arquivo com seguranca.

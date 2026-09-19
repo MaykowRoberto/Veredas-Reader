@@ -443,6 +443,19 @@ body.reader-open .search-bar{display:none!important}
 }
 
 /* ============================================================
+   MOTOR DE VIRADA "DESLIZAR"
+   A página que sai e a que entra andam juntas, acompanhando o
+   dedo. Durante o gesto nada usa transição de CSS: quem comanda
+   o movimento é o motor, quadro a quadro.
+   ============================================================ */
+.slider-book.slide-running .page{transition:none!important}
+.page.slide-incoming{
+  visibility:visible!important;z-index:4!important;pointer-events:none!important;
+  transition:none!important;will-change:transform;
+}
+.slider-book.pt-slide .page{transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+
+/* ============================================================
    MOTOR DE VIRADA "FOLHA REAL"
    A folha é dobrada pela bissetriz perpendicular entre o canto
    segurado e o dedo: a mesma geometria de um papel real.
@@ -543,13 +556,92 @@ body.reader-open .search-bar{display:none!important}
 }
 .pdf-loading .spinner{width:26px;height:26px;border-width:2px;margin:0}
 
-/* PDF: leitura por página (lateral) ou contínua */
-.page.pdf-page{overflow:auto;overscroll-behavior:contain;background:#e9e9e9;touch-action:pan-x pan-y pinch-zoom}
-.slider-book.pdf-vertical{overflow-y:auto;overflow-x:hidden;background:#e9e9e9;scroll-snap-type:y proximity;perspective:none;touch-action:pan-y pinch-zoom}
+/* PDF: leitura por página (lateral) ou contínua
+   ------------------------------------------------------------
+   O `touch-action` aqui é o que decide se o dedo pertence ao
+   navegador ou ao aplicativo. Com `pan-x`, o navegador assumia
+   todo movimento horizontal dentro da página e cancelava o gesto
+   no meio do caminho — era por isso que deslizar não virava a
+   página e só o toque na borda funcionava. Deixando apenas
+   `pan-y`, a rolagem vertical continua sendo do navegador e o
+   movimento lateral volta a ser da virada de página. O `pan-x`
+   só retorna quando há zoom, quando arrastar para o lado passa a
+   significar "passear pela página". */
+.page.pdf-page{overflow:auto;overscroll-behavior:contain;background:#e9e9e9;touch-action:pan-y}
+.slider-book.pdf-zoomed .page.pdf-page{touch-action:pan-x pan-y}
+.slider-book.pdf-vertical{overflow-y:auto;overflow-x:hidden;background:#e9e9e9;scroll-snap-type:y proximity;perspective:none;touch-action:pan-y}
 .slider-book.pdf-vertical .page.pdf-page{position:relative;inset:auto;visibility:visible;transform:none;opacity:1;z-index:auto;pointer-events:auto;min-height:100%;margin:0 0 12px;overflow:visible;scroll-snap-align:start;box-shadow:none}
 .slider-book.pdf-vertical .page.pdf-page .pdf-page-wrap{min-height:calc(100dvh - 16px)}
 .pdf-zoom-badge{position:absolute;right:14px;bottom:16px;z-index:5;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font:700 11px var(--ui-font);pointer-events:none;opacity:0;transition:opacity .2s}
 .pdf-zoom-badge.show{opacity:1}
+
+/* ============================================================
+   QUADRINHOS — CBZ / CBR / CB7 / CBT
+   ------------------------------------------------------------
+   Uma HQ é imagem: o fundo escuro some e deixa a arte falar, a
+   página inteira é transformada de uma vez (GPU) no zoom, e o
+   dedo nunca disputa o gesto com o navegador — daí o
+   `touch-action` ser explícito em cada estado.
+   ============================================================ */
+/* `hidden` precisa vencer o display dos botões da barra do leitor e das
+   seções do painel — senão o botão de ouvir continua aparecendo num
+   quadrinho, que não tem texto para ler em voz alta. */
+.reader-icon[hidden],.setting-section[hidden],.ap-icon[hidden]{display:none!important}
+
+.slider-book.comic-book{background:#101014}
+.page.comic-page{
+  background:#101014;overflow:hidden;overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+.slider-book.comic-book.fit-width .page.comic-page{overflow-y:auto}
+.slider-book.comic-book.comic-zoomed .page.comic-page{overflow:hidden;touch-action:none}
+
+.comic-page-wrap{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;min-height:100%;
+  transform-origin:center center;will-change:transform;backface-visibility:hidden;
+}
+.comic-page-wrap.is-spread{gap:2px}
+.slider-book.comic-rtl .comic-page-wrap.is-spread{flex-direction:row-reverse}
+.comic-slot{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  flex:1 1 0;min-width:0;height:100%;max-height:100%;
+}
+.comic-img{
+  display:block;max-width:100%;max-height:100%;width:auto;height:auto;
+  object-fit:contain;opacity:0;transition:opacity .18s ease-out;
+  -webkit-user-drag:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+}
+.comic-slot.ready .comic-img{opacity:1}
+
+/* "Largura da tela": a página pode ficar mais alta que a tela e rolar. */
+.slider-book.comic-book.fit-width .comic-page-wrap{align-items:flex-start;height:auto}
+.slider-book.comic-book.fit-width .comic-slot{height:auto;align-items:flex-start}
+.slider-book.comic-book.fit-width .comic-img{width:100%;height:auto;max-height:none}
+
+/* Rolagem contínua (estilo webtoon): as páginas emendam uma na outra. */
+.slider-book.comic-vertical{background:#101014;scroll-snap-type:none}
+.slider-book.comic-vertical .page.comic-page{
+  min-height:0;height:auto;overflow:visible;margin:0;box-shadow:none;background:#101014;
+}
+.slider-book.comic-vertical .comic-page-wrap{height:auto;min-height:0;align-items:flex-start}
+.slider-book.comic-vertical .comic-slot{height:auto;align-items:flex-start}
+.slider-book.comic-vertical .comic-img{width:100%;height:auto;max-height:none}
+/* Espaço reservado para a página que ainda não carregou, para a
+   rolagem não pular quando a imagem chega. */
+.slider-book.comic-vertical .comic-loading{min-height:72vh}
+
+.comic-loading{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;min-height:160px;
+}
+.comic-loading .spinner{width:26px;height:26px;border-width:2px;margin:0}
+.comic-error{
+  padding:20px;text-align:center;color:#b9b9c2;
+  font:12px/1.6 var(--ui-font);max-width:260px;
+}
+/* A etiqueta de formato do quadrinho na estante acompanha as demais. */
+.badge.cbz-badge,.badge.cbr-badge,.badge.cb7-badge,.badge.cbt-badge{letter-spacing:.04em}
 
 .reader-stage,.page,.page-text{user-select:text;-webkit-user-select:text}
 .reader-stage{-webkit-touch-callout:none}
