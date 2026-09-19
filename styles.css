@@ -1514,3 +1514,81 @@ body.has-mini .toast-wrap{bottom:calc(150px + var(--safe-bottom))}
 .panel:not(.visible){box-shadow:none}
 /* Com o player aberto, os avisos sobem para o topo e não cobrem os controles. */
 body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
+
+/* ============================================================
+   NOVOS FORMATOS, VÍDEO E TRANSFERÊNCIA
+   ------------------------------------------------------------
+   Tudo o que estas regras acrescentam é aditivo: nenhuma regra
+   anterior foi alterada, então a aparência do que já existia
+   continua exatamente igual.
+   ============================================================ */
+
+/* ---------- loader: linha de transferência ---------- */
+/* "12,4 MB de 24 MB · 1,8 MB/s · faltam ~7s" — é esta linha que conta
+   ao usuário que existe um download acontecendo. */
+.loader-meta{
+  display:none;margin-top:6px;font-size:11px;line-height:1.45;
+  color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.loader-meta.visible{display:block}
+
+/* ---------- etiquetas dos formatos novos ---------- */
+.md-badge{background:color-mix(in srgb,#0f766e 13%,#fff);color:#0f766e}
+.mp4-badge{background:color-mix(in srgb,#b91c1c 13%,#fff);color:#b91c1c}
+.badge.fmt-badge{display:inline-flex;align-items:center;gap:3px}
+.badge.fmt-badge svg{width:10px;height:10px;stroke-width:2.6}
+
+/* ---------- capa de vídeo na estante ---------- */
+.book-cover.is-video .cover-play{
+  position:absolute;inset:0;margin:auto;width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;z-index:3;pointer-events:none;
+  background:rgba(12,12,14,.52);color:#fff;backdrop-filter:blur(3px);
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
+}
+.book-cover.is-video .cover-play svg{width:20px;height:20px;fill:currentColor;margin-left:2px}
+.book-card.is-playing .cover-play{opacity:0}
+
+/* ---------- prateleira agrupada por tipo ---------- */
+.shelf-head h3{display:inline-flex;align-items:center;gap:7px}
+.shelf-icon{width:16px;height:16px;color:var(--accent);flex:none}
+
+/* ---------- player: superfície de vídeo ---------- */
+/* O vídeo ocupa o lugar da capa. Todo o resto do player (barra, capítulos,
+   marcadores, velocidade, timer) continua idêntico ao do audiolivro. */
+.ap-video{
+  --ar:1.7778;
+  position:relative;width:min(100%,560px);aspect-ratio:var(--ar);
+  max-height:min(52dvh,420px);border-radius:20px;overflow:hidden;
+  background:#000;box-shadow:0 30px 64px -22px rgba(0,0,0,.6),0 0 0 1px var(--border);
+}
+.ap-video video{width:100%;height:100%;display:block;object-fit:contain;background:#000}
+.audio-player.is-video .ap-stage{width:100%}
+.audio-player.is-video .ap-art{display:none}
+.audio-player.is-video .ap-bg{opacity:.5}
+@media (orientation:landscape) and (max-height:520px){
+  .ap-video{max-height:64dvh}
+}
+
+/* ---------- Markdown ---------- */
+.page-text .md-pre{
+  background:color-mix(in srgb,var(--text) 6%,transparent);
+  border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;margin:1em 0;font-size:.86em;line-height:1.5;
+}
+.page-text code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:.88em;background:color-mix(in srgb,var(--text) 7%,transparent);
+  padding:.08em .34em;border-radius:5px;
+}
+.page-text .md-pre code{background:none;padding:0}
+.page-text .md-hr{border:none;border-top:1px solid var(--border);margin:1.6em auto;width:62%}
+.page-text .md-table{margin:1em 0}
+.page-text .md-table th{background:color-mix(in srgb,var(--text) 5%,transparent);font-weight:800}
+.page-text .md-link{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+.page-text .md-img{display:block;text-align:center;color:var(--muted);font-size:.9em;margin:.8em 0}
+.page-text ul,.page-text ol{margin:0 0 1.15em 1.4em;text-indent:0}
+.page-text li{margin-bottom:.35em}
+.page-text blockquote{
+  margin:1em 0;padding:.2em 0 .2em 1em;text-indent:0;
+  border-left:3px solid color-mix(in srgb,var(--accent) 55%,transparent);color:var(--muted);
+}

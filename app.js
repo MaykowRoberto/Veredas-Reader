@@ -54,8 +54,16 @@ const Utils={
     cancel.classList.toggle('visible',typeof opts.onCancel==='function');
     cancel.disabled=false;
     cancel.textContent='Cancelar';
+    Utils.setLoaderMeta('');
     Utils._onCancel=opts.onCancel||null;
     document.getElementById('loader').classList.add('active');
+  },
+  /* Linha extra do loader: "12,4 MB de 24 MB · 1,8 MB/s · faltam ~7s". */
+  setLoaderMeta:(text)=>{
+    const el=document.getElementById('loader-meta');
+    if(!el)return;
+    el.textContent=text||'';
+    el.classList.toggle('visible',!!text);
   },
   setLoaderText:(title,sub)=>{
     if(title!=null)document.getElementById('loader-title').textContent=title;
@@ -73,6 +81,7 @@ const Utils={
   },
   hideLoader:()=>{
     Utils._onCancel=null;
+    Utils.setLoaderMeta('');
     const l=document.getElementById('loader');
     if(l)l.classList.remove('active');
     const c=document.getElementById('loader-cancel');
@@ -91,7 +100,8 @@ const Utils={
     if(!Number.isFinite(n))return '';
     const u=['B','KB','MB','GB'];let i=0;
     while(n>=1024&&i<u.length-1){n/=1024;i++}
-    return `${n.toFixed(n<10&&i>0?1:0)} ${u[i]}`;
+    /* vírgula decimal: é assim que o número é lido em português */
+    return `${n.toFixed(n<10&&i>0?1:0).replace('.',',')} ${u[i]}`;
   },
   normalizeBook:b=>({...b,
     tags:Array.isArray(b.tags)?b.tags:[],
@@ -115,6 +125,136 @@ document.getElementById('loader-cancel').addEventListener('click',e=>{
   e.currentTarget.textContent='Cancelando...';
   try{Utils._onCancel()}catch(err){console.error(err)}
 });
+
+/* ============================================================
+   TRANSFERÊNCIA DE ARQUIVOS — "de onde vem" importa
+   ------------------------------------------------------------
+   Um arquivo escolhido no seletor nem sempre está no aparelho.
+   No Android, o que vem do Google Drive (ou de qualquer provedor
+   de nuvem) chega como um "atalho": só quando o aplicativo pede
+   os bytes é que o download realmente começa — e isso pode levar
+   minutos em um arquivo de 20 MB numa rede lenta.
+
+   Até aqui o aplicativo pedia o arquivo inteiro de uma vez
+   (file.arrayBuffer()), o que não dá nenhum sinal de vida: a tela
+   ficava parada e parecia que nada estava acontecendo.
+
+   A leitura passa a ser feita em pedaços (file.stream()), então
+   sabemos exatamente quantos bytes já chegaram. Com isso dá para
+   mostrar barra, quantidade, velocidade, tempo restante e um
+   botão de cancelar de verdade.
+   ============================================================ */
+const FileTransfer={
+  /* Acima disso não trazemos o arquivo inteiro para a memória. */
+  MAX_LOCAL_COPY:700*1024*1024,
+  PROBE_BYTES:128*1024,
+  SLOW_MS:260,
+
+  supportsStream(file){
+    try{return !!file&&typeof file.stream==='function'}catch(e){return false}
+  },
+  /* Lê um naco pequeno e cronometra: arquivo local responde na hora,
+     arquivo de nuvem demora. Serve para decidir se vale a pena avisar
+     o usuário de que há um download em andamento. */
+  async looksRemote(file){
+    if(!file||!file.size)return false;
+    const t0=performance.now();
+    try{
+      await file.slice(0,Math.min(FileTransfer.PROBE_BYTES,file.size)).arrayBuffer();
+    }catch(e){return true}
+    return (performance.now()-t0)>FileTransfer.SLOW_MS;
+  },
+  /* ArrayBuffer com progresso. Cai no método simples se o navegador
+     não tiver streams — nunca deixa de importar por causa disso. */
+  async toBuffer(file,{onProgress=null,signal=null}={}){
+    const total=Number(file.size)||0;
+    if(!FileTransfer.supportsStream(file)||!total){
+      if(onProgress)onProgress(0,total);
+      const buf=await file.arrayBuffer();
+      if(onProgress)onProgress(total||buf.byteLength,total||buf.byteLength);
+      return buf;
+    }
+    let reader;
+    try{reader=file.stream().getReader()}
+    catch(e){return file.arrayBuffer()}
+    const chunks=[];
+    let loaded=0;
+    try{
+      for(;;){
+        if(signal&&signal.aborted){
+          try{await reader.cancel()}catch(e){}
+          throw new DOMException('Cancelado','AbortError');
+        }
+        const {done,value}=await reader.read();
+        if(done)break;
+        chunks.push(value);
+        loaded+=value.byteLength;
+        if(onProgress)onProgress(loaded,total);
+      }
+    }catch(err){
+      if(Utils.isAbort(err))throw err;
+      console.warn('Leitura em pedaços falhou; usando a leitura direta.',err);
+      return file.arrayBuffer();
+    }
+    const out=new Uint8Array(loaded);
+    let offset=0;
+    for(const c of chunks){out.set(c,offset);offset+=c.byteLength}
+    return out.buffer;
+  },
+  /* Cópia local do arquivo (usada em áudio e vídeo, que ficam guardados
+     como Blob). Depois disso, ler pedaços é instantâneo. */
+  async localCopy(file,{onProgress=null,signal=null}={}){
+    const buffer=await FileTransfer.toBuffer(file,{onProgress,signal});
+    const copy=new File([buffer],file.name,{type:file.type||'',lastModified:file.lastModified||Date.now()});
+    return copy;
+  }
+};
+
+/* Mostra o andamento de uma transferência de um jeito que faça sentido
+   para quem está olhando: quanto já veio, quão rápido e quanto falta. */
+class TransferMeter{
+  constructor(name,total,{mode='bar',prefix=''}={}){
+    this.name=name||'Arquivo';
+    this.total=Number(total)||0;
+    this.mode=mode;                 /* 'bar' usa a barra; 'text' só a legenda */
+    this.prefix=prefix;
+    this.t0=performance.now();
+    this.loaded=0;this.lastPaint=0;this.announced=false;
+  }
+  update(loaded){
+    this.loaded=loaded;
+    const now=performance.now();
+    const elapsed=(now-this.t0)/1000;
+    const complete=this.total>0&&loaded>=this.total;
+    /* Passou de meio segundo e ainda falta arquivo? Então é download. */
+    if(!this.announced&&elapsed>0.55&&this.total&&loaded<this.total*0.92){
+      this.announced=true;
+      if(this.mode==='bar'){
+        Utils.setLoaderText('Baixando o arquivo','O arquivo está vindo do armazenamento em nuvem para o seu aparelho.');
+      }
+    }
+    if(!complete&&now-this.lastPaint<130)return;
+    this.lastPaint=now;
+    const rate=elapsed>0.3?loaded/elapsed:0;
+    const left=rate>0&&this.total>loaded?(this.total-loaded)/rate:0;
+    const bits=[];
+    if(this.total)bits.push(`${Utils.fmtBytes(loaded)} de ${Utils.fmtBytes(this.total)}`);
+    else bits.push(Utils.fmtBytes(loaded));
+    if(rate>0&&!complete)bits.push(`${Utils.fmtBytes(rate)}/s`);
+    if(left>1.5&&!complete)bits.push(`faltam ~${AudioFmt.long(left)}`);
+    const line=bits.join(' · ');
+    if(this.mode==='bar'){
+      const pct=this.total?Utils.clamp((loaded/this.total)*100,0,100):0;
+      Utils.setLoaderProgress(pct,null);
+      Utils.setLoaderMeta(line);
+    }else{
+      Utils.setLoaderText(null,`${this.prefix}${this.name} — ${line}`);
+    }
+  }
+  /* Devolve a função pronta para entregar a quem faz a leitura. */
+  handler(){return (loaded)=>this.update(loaded)}
+  finish(){if(this.mode==='bar')Utils.setLoaderMeta('')}
+}
 
 /* ============================================================
    DB
@@ -257,8 +397,73 @@ const AppDefaults={settings:{
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
   readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
-  consent:null,scanInvited:false
+  consent:null,scanInvited:false,scrollPerBook:false
 }};
+
+/* ============================================================
+   FORMATOS DE LIVRO
+   ------------------------------------------------------------
+   Um lugar só para responder: quais extensões o aplicativo abre,
+   como cada uma se chama na tela, qual ícone usa e em que sentido
+   ela rola por padrão. Acrescentar um formato novo é acrescentar
+   uma linha aqui.
+   ============================================================ */
+const BookFormats={
+  TEXT:['epub','pdf','txt','md','docx','mobi'],
+  /* extensões alternativas que apontam para o mesmo formato */
+  ALIASES:{markdown:'md',mkd:'md',mdown:'md',mdtext:'md',text:'txt'},
+  INFO:{
+    epub:{label:'EPUB',icon:'book-open',scroll:'horizontal',mime:'application/epub+zip',share:false},
+    mobi:{label:'MOBI',icon:'book',scroll:'horizontal',mime:'application/x-mobipocket-ebook',share:false},
+    txt:{label:'TXT',icon:'file-text',scroll:'horizontal',mime:'text/plain',share:true},
+    md:{label:'MD',icon:'file-code-2',scroll:'horizontal',mime:'text/markdown',share:true},
+    pdf:{label:'PDF',icon:'file-type-2',scroll:'vertical',mime:'application/pdf',share:true},
+    docx:{label:'DOCX',icon:'file-text',scroll:'vertical',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',share:true},
+    mp3:{label:'MP3',icon:'headphones',scroll:null,mime:'audio/mpeg',share:false},
+    m4b:{label:'M4B',icon:'headphones',scroll:null,mime:'audio/mp4',share:false},
+    mp4:{label:'MP4',icon:'film',scroll:null,mime:'video/mp4',share:false}
+  },
+  /* ordem em que os grupos aparecem quando a estante é agrupada por tipo */
+  GROUP_ORDER:['epub','mobi','pdf','docx','txt','md','mp3','m4b','mp4'],
+  ext(name){
+    const raw=(String(name||'').split('.').pop()||'').toLowerCase();
+    return BookFormats.ALIASES[raw]||raw;
+  },
+  /* aceita tanto "livro.md" quanto "markdown" */
+  normalize(value){
+    const v=String(value||'').toLowerCase().trim();
+    if(v.includes('.'))return BookFormats.ext(v);
+    return BookFormats.ALIASES[v]||v;
+  },
+  isText:f=>BookFormats.TEXT.includes(BookFormats.normalize(f)),
+  isSupported:f=>{
+    const n=BookFormats.normalize(f);
+    return BookFormats.TEXT.includes(n)||Object.prototype.hasOwnProperty.call(AUDIO_FORMATS,n);
+  },
+  info:f=>BookFormats.INFO[BookFormats.normalize(f)]||null,
+  label:f=>(BookFormats.info(f)||{}).label||String(f||'').toUpperCase()||'Outro',
+  icon:f=>(BookFormats.info(f)||{}).icon||'file',
+  mime:f=>(BookFormats.info(f)||{}).mime||'application/octet-stream',
+  canShare:f=>!!(BookFormats.info(f)||{}).share,
+  /* Sentido de rolagem que cada formato usa quando o leitor ainda não
+     escolheu nada para AQUELE livro. */
+  defaultScroll:f=>(BookFormats.info(f)||{}).scroll||'horizontal',
+  /* Nome amigável do grupo na estante agrupada por tipo. */
+  groupName(f){
+    const n=BookFormats.normalize(f);
+    const names={epub:'EPUB',mobi:'MOBI',pdf:'PDF',docx:'Word (DOCX)',txt:'Texto (TXT)',
+      md:'Markdown (MD)',mp3:'Audiolivro (MP3)',m4b:'Audiolivro (M4B)',mp4:'Vídeo (MP4)'};
+    return names[n]||(n?n.toUpperCase():'Outros');
+  },
+  groupRank(f){
+    const i=BookFormats.GROUP_ORDER.indexOf(BookFormats.normalize(f));
+    return i<0?BookFormats.GROUP_ORDER.length:i;
+  },
+  /* Lista para o atributo accept e para o seletor avançado. */
+  acceptList(){
+    return ['.epub','.pdf','.txt','.md','.markdown','.docx','.mobi','.mp3','.m4b','.mp4'];
+  }
+};
 
 /* ============================================================
    DOCX & MOBI PARSERS
@@ -1076,6 +1281,171 @@ class TXTParser{
 }
 
 /* ============================================================
+   MARKDOWN PARSER
+   ------------------------------------------------------------
+   Markdown entra pela mesma porta do TXT: é texto puro. A
+   diferença é que aqui os títulos viram capítulos de verdade
+   (aparecem no sumário), as listas viram listas e o negrito
+   aparece como negrito.
+
+   Conversor próprio, sem biblioteca externa: o aplicativo precisa
+   funcionar offline e um arquivo .md não justifica mais um
+   download. Cobre o que se encontra em livros e apostilas:
+   títulos, ênfase, código, citações, listas, tabelas, linhas
+   horizontais e links (que viram texto simples, porque um link
+   real tiraria o leitor de dentro do livro).
+   ============================================================ */
+class MDParser{
+  static decode(buffer){
+    try{return new TextDecoder('utf-8',{fatal:true}).decode(buffer)}
+    catch(e){return new TextDecoder('windows-1252').decode(buffer)}
+  }
+  /* Título do documento: primeiro "# " do arquivo, quando existir. */
+  static guessTitle(text){
+    const m=String(text||'').match(/^\s*#\s+(.+?)\s*#*\s*$/m);
+    return m?m[1].trim().slice(0,160):'';
+  }
+  static inline(raw){
+    /* 1) escapa tudo; 2) devolve só as marcações que reconhecemos */
+    let s=Utils.esc(raw);
+    /* código em linha primeiro: o que está dentro dele não é markdown */
+    const codes=[];
+    s=s.replace(/(`+)([\s\S]*?)\1/g,(m,tick,body)=>{
+      codes.push(body.trim());
+      return `\u0000CODE${codes.length-1}\u0000`;
+    });
+    /* imagem: mostramos a legenda, já que o arquivo da imagem não vem junto */
+    s=s.replace(/!\[([^\]]*)\]\(([^)\s]*)[^)]*\)/g,(m,alt)=>alt?`<em class="md-img">${alt}</em>`:'');
+    /* link: vira texto (nada dentro do livro leva para fora do aplicativo) */
+    s=s.replace(/\[([^\]]+)\]\(([^)\s]*)[^)]*\)/g,'<span class="md-link">$1</span>');
+    s=s.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g,'<span class="md-link">$1</span>');
+    s=s.replace(/\*\*\*([^*]+)\*\*\*/g,'<strong><em>$1</em></strong>');
+    s=s.replace(/___([^_]+)___/g,'<strong><em>$1</em></strong>');
+    s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+    s=s.replace(/__([^_]+)__/g,'<strong>$1</strong>');
+    s=s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+    s=s.replace(/(^|[^_\w])_([^_\n]+)_(?!_)/g,'$1<em>$2</em>');
+    s=s.replace(/~~([^~]+)~~/g,'<s>$1</s>');
+    s=s.replace(/\u0000CODE(\d+)\u0000/g,(m,i)=>`<code>${codes[Number(i)]}</code>`);
+    return s;
+  }
+  static toHtml(text){
+    const lines=String(text||'').replace(/\r\n?/g,'\n').replace(/\t/g,'    ').split('\n');
+    const out=[];
+    let i=0;
+    const para=[];
+    const flushPara=()=>{
+      if(!para.length)return;
+      out.push(`<p>${MDParser.inline(para.join('\n')).replace(/\n/g,'<br>')}</p>`);
+      para.length=0;
+    };
+    const listItems=(ordered,items)=>{
+      const tag=ordered?'ol':'ul';
+      out.push(`<${tag}>${items.map(it=>`<li>${MDParser.inline(it)}</li>`).join('')}</${tag}>`);
+    };
+    while(i<lines.length){
+      const line=lines[i];
+      /* bloco de código cercado por ``` ou ~~~ */
+      const fence=line.match(/^\s{0,3}(`{3,}|~{3,})\s*([\w+-]*)\s*$/);
+      if(fence){
+        flushPara();
+        const mark=fence[1][0];
+        const body=[];
+        i++;
+        while(i<lines.length&&!new RegExp(`^\\s{0,3}${mark==='`'?'`':'~'}{3,}\\s*$`).test(lines[i])){
+          body.push(lines[i]);i++;
+        }
+        i++;
+        out.push(`<pre class="md-pre"><code>${Utils.esc(body.join('\n'))}</code></pre>`);
+        continue;
+      }
+      /* linha horizontal */
+      if(/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(line)){
+        flushPara();out.push('<hr class="md-hr">');i++;continue;
+      }
+      /* título com # */
+      const head=line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
+      if(head){
+        flushPara();
+        const level=head[1].length;
+        out.push(`<h${level}>${MDParser.inline(head[2])}</h${level}>`);
+        i++;continue;
+      }
+      /* título sublinhado (=== ou ---) */
+      const next=lines[i+1];
+      if(line.trim()&&next&&/^\s{0,3}(=+|-+)\s*$/.test(next)&&!/^\s{0,3}[-*+]\s/.test(line)){
+        flushPara();
+        const level=next.trim()[0]==='='?1:2;
+        out.push(`<h${level}>${MDParser.inline(line.trim())}</h${level}>`);
+        i+=2;continue;
+      }
+      /* tabela: | a | b | seguida de |---|---| */
+      if(/^\s{0,3}\|.*\|\s*$/.test(line)&&/^\s{0,3}\|[\s:|-]+\|\s*$/.test(lines[i+1]||'')){
+        flushPara();
+        const cells=row=>row.trim().replace(/^\||\|$/g,'').split('|').map(c=>MDParser.inline(c.trim()));
+        const head2=cells(line);
+        i+=2;
+        const rows=[];
+        while(i<lines.length&&/^\s{0,3}\|.*\|\s*$/.test(lines[i])){rows.push(cells(lines[i]));i++}
+        out.push(`<table class="md-table"><thead><tr>${head2.map(c=>`<th>${c}</th>`).join('')}</tr></thead>`+
+          `<tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+        continue;
+      }
+      /* citação */
+      if(/^\s{0,3}>\s?/.test(line)){
+        flushPara();
+        const body=[];
+        while(i<lines.length&&/^\s{0,3}>\s?/.test(lines[i])){
+          body.push(lines[i].replace(/^\s{0,3}>\s?/,''));i++;
+        }
+        out.push(`<blockquote>${MDParser.inline(body.join('\n')).replace(/\n/g,'<br>')}</blockquote>`);
+        continue;
+      }
+      /* listas */
+      const bullet=line.match(/^\s{0,3}([-*+])\s+(.*)$/);
+      const numbered=line.match(/^\s{0,3}(\d{1,9})[.)]\s+(.*)$/);
+      if(bullet||numbered){
+        flushPara();
+        const ordered=!!numbered;
+        const items=[];
+        while(i<lines.length){
+          const b=lines[i].match(ordered?/^\s{0,3}(\d{1,9})[.)]\s+(.*)$/:/^\s{0,3}([-*+])\s+(.*)$/);
+          if(b){
+            /* marca de tarefa: [ ] e [x] viram símbolos legíveis */
+            items.push(b[2].replace(/^\[( |x|X)\]\s*/,(m,c)=>c===' '?'☐ ':'☑ '));
+            i++;
+            /* continuações indentadas pertencem ao mesmo item */
+            while(i<lines.length&&/^\s{2,}\S/.test(lines[i])&&!/^\s{0,3}([-*+]|\d{1,9}[.)])\s/.test(lines[i])){
+              items[items.length-1]+=' '+lines[i].trim();i++;
+            }
+            continue;
+          }
+          if(!lines[i].trim()&&lines[i+1]&&(ordered?/^\s{0,3}\d{1,9}[.)]\s/:/^\s{0,3}[-*+]\s/).test(lines[i+1])){i++;continue}
+          break;
+        }
+        listItems(ordered,items);
+        continue;
+      }
+      if(!line.trim()){flushPara();i++;continue}
+      para.push(line.trim());
+      i++;
+    }
+    flushPara();
+    const html=out.join('');
+    return html||'<p>Arquivo vazio.</p>';
+  }
+  /* Mesma assinatura dos outros leitores (DOCXParser / MOBIParser). */
+  static async parse(buffer,opts={}){
+    const onProgress=opts.onProgress||(()=>{});
+    onProgress('Lendo o texto',.15);
+    const text=MDParser.decode(buffer);
+    onProgress('Convertendo o Markdown',.6);
+    await Utils.yieldToUI();
+    return DocUtils.stripLinks(MDParser.toHtml(text));
+  }
+}
+
+/* ============================================================
    DOM PAGINATOR
    ------------------------------------------------------------
    Monta as páginas medindo os blocos direto no DOM.
@@ -1254,19 +1624,36 @@ DOMPaginator.MAX_STEPS=2000000;
    • M4B  — átomos MP4: mvhd (duração), ilst (título, autor,
             narrador, capa) e capítulos, tanto no formato Nero
             (chpl) quanto na faixa de texto do QuickTime.
+   • MP4  — mesmo contêiner do M4B, com imagem. Usa exatamente o
+            mesmo leitor de metadados, a mesma linha do tempo e os
+            mesmos marcadores; só a tela muda (um <video> ocupa o
+            lugar da capa).
 
    Para acrescentar um formato novo (m4a, ogg, opus, flac…) basta
-   registrá-lo em AUDIO_FORMATS e escrever a função de leitura.
+   registrá-lo em MEDIA_FORMATS e escrever a função de leitura.
    ============================================================ */
 const AUDIO_FORMATS={
-  mp3:{label:'MP3',mime:'audio/mpeg'},
-  m4b:{label:'M4B',mime:'audio/mp4'}
+  mp3:{label:'MP3',mime:'audio/mpeg',kind:'audio',icon:'headphones'},
+  m4b:{label:'M4B',mime:'audio/mp4',kind:'audio',icon:'headphones'},
+  mp4:{label:'MP4',mime:'video/mp4',kind:'video',icon:'film'}
 };
+/* Nome novo, mais honesto (áudio + vídeo); AUDIO_FORMATS continua
+   apontando para o mesmo objeto para não quebrar nada que já existia. */
+const MEDIA_FORMATS=AUDIO_FORMATS;
 const AudioFormats={
   has:f=>Object.prototype.hasOwnProperty.call(AUDIO_FORMATS,String(f||'').toLowerCase()),
   ext:name=>(String(name||'').split('.').pop()||'').toLowerCase(),
   isAudioName:name=>AudioFormats.has(AudioFormats.ext(name)),
   isAudioBook:book=>!!book&&AudioFormats.has(book.format),
+  /* vídeo: toca no mesmo player, mas mostra imagem e não pode ser compartilhado */
+  isVideo:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).kind==='video',
+  isVideoBook:book=>!!book&&AudioFormats.isVideo(book.format),
+  isSoundOnly:f=>AudioFormats.has(f)&&!AudioFormats.isVideo(f),
+  isSoundOnlyBook:book=>!!book&&AudioFormats.isSoundOnly(book.format),
+  kind:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).kind||'audio',
+  icon:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).icon||'headphones',
+  /* “audiolivro” x “vídeo”: usado nas mensagens para o usuário */
+  noun:f=>AudioFormats.isVideo(f)?'vídeo':'audiolivro',
   mime:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).mime||'audio/mpeg',
   label:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).label||String(f||'').toUpperCase()
 };
@@ -1848,7 +2235,7 @@ class MP4Reader{
 class AudioMeta{
   static async read(file,format){
     format=String(format||AudioFormats.ext(file.name)).toLowerCase();
-    if(format==='m4b')return AudioMeta.readMp4(file);
+    if(format==='m4b'||format==='mp4')return AudioMeta.readMp4(file,format);
     return AudioMeta.readMp3(file);
   }
   static async readMp3(file){
@@ -1868,10 +2255,10 @@ class AudioMeta{
       bitrate:info?info.bitrate:0,vbr:!!(info&&info.vbr),drm:false,codec:'mp3'
     };
   }
-  static async readMp4(file){
+  static async readMp4(file,format='m4b'){
     const m=await MP4Reader.parse(file);
     return{
-      format:'m4b',
+      format:format==='mp4'?'mp4':'m4b',
       title:m.title||m.album,album:m.album,
       author:m.artist||m.albumArtist||'',
       narrator:m.narrator,description:m.description,year:m.year,
@@ -1966,6 +2353,84 @@ const AudioCover={
   }
 };
 
+/* ------------------------------------------------------------
+   Capa de vídeo
+   ------------------------------------------------------------
+   Um MP4 pode trazer capa nas etiquetas (átomo "covr"); quando não
+   traz, pegamos um quadro do próprio vídeo — assim a estante nunca
+   mostra um retângulo vazio. Tudo acontece no aparelho e o arquivo
+   original não é tocado.
+   ------------------------------------------------------------ */
+const VideoCover={
+  MAX:720,
+  /* Tenta 3 instantes: 10% do vídeo, 2s e 0s. O primeiro quadro que
+     não for preto vira a capa. */
+  async fromFile(file,duration){
+    if(!file)return null;
+    const dur=Number.isFinite(duration)&&duration>0?duration:0;
+    const times=[dur?Math.min(dur*0.1,60):1.5,2,0.2].filter((v,i,a)=>a.indexOf(v)===i);
+    for(const t of times){
+      try{
+        const r=await VideoCover.grab(file,t);
+        if(r&&r.shot)return r.shot;
+        /* O navegador não decodifica este vídeo: insistir só faria o
+           usuário esperar à toa. A estante usa a capa padrão. */
+        if(r&&r.fatal)return null;
+      }catch(e){ /* tenta o próximo instante */ }
+    }
+    return null;
+  },
+  grab(file,time){
+    return new Promise(resolve=>{
+      const url=URL.createObjectURL(file);
+      const v=document.createElement('video');
+      v.preload='metadata';v.muted=true;v.playsInline=true;
+      v.setAttribute('playsinline','');v.crossOrigin='anonymous';
+      let done=false;
+      const finish=result=>{
+        if(done)return;done=true;
+        clearTimeout(timer);
+        v.onloadeddata=v.onseeked=v.onerror=v.onloadedmetadata=null;
+        try{v.removeAttribute('src');v.load()}catch(e){}
+        URL.revokeObjectURL(url);
+        resolve(result);
+      };
+      const timer=setTimeout(()=>finish({fatal:true}),12000);
+      const draw=()=>{
+        try{
+          const w=v.videoWidth,h=v.videoHeight;
+          if(!w||!h)return finish({fatal:true});
+          const scale=Math.min(1,VideoCover.MAX/Math.max(w,h));
+          const cw=Math.max(1,Math.round(w*scale)),chh=Math.max(1,Math.round(h*scale));
+          const canvas=document.createElement('canvas');
+          canvas.width=cw;canvas.height=chh;
+          const ctx=canvas.getContext('2d');
+          ctx.drawImage(v,0,0,cw,chh);
+          if(!VideoCover.hasContent(ctx,cw,chh))return finish({});
+          finish({shot:{dataUrl:canvas.toDataURL('image/jpeg',.82),aspect:w/h}});
+        }catch(e){finish({fatal:true})}
+      };
+      v.onloadedmetadata=()=>{
+        const target=Utils.clamp(time,0,Math.max(0,(v.duration||0)-0.2));
+        if(!Number.isFinite(target)){draw();return}
+        v.onseeked=draw;
+        try{v.currentTime=target}catch(e){draw()}
+      };
+      v.onerror=()=>finish({fatal:true});
+      v.src=url;
+    });
+  },
+  /* Descarta quadros totalmente pretos (abertura de muitos vídeos). */
+  hasContent(ctx,w,h){
+    try{
+      const data=ctx.getImageData(0,0,Math.min(w,64),Math.min(h,64)).data;
+      let sum=0;
+      for(let i=0;i<data.length;i+=4)sum+=data[i]+data[i+1]+data[i+2];
+      return sum/(data.length/4)>18;
+    }catch(e){return true}
+  }
+};
+
 const AudioImport={
   tagCache:new WeakMap(),
   collator:(typeof Intl!=='undefined'&&Intl.Collator)?new Intl.Collator('pt-BR',{numeric:true,sensitivity:'base'}):null,
@@ -2008,8 +2473,10 @@ const AudioImport={
      codecs sem suporte (ALAC, AC-3…) na importação, não na hora de ouvir. */
   probe(blob,format){
     return new Promise(resolve=>{
-      const a=document.createElement('audio');
+      /* vídeo precisa de um <video>: um <audio> recusa alguns MP4 */
+      const a=document.createElement(AudioFormats.isVideo(format)?'video':'audio');
       a.preload='metadata';
+      a.muted=true;
       const url=URL.createObjectURL(blob.slice(0,blob.size,AudioFormats.mime(format)));
       let done=false;
       const finish=r=>{
@@ -2027,29 +2494,33 @@ const AudioImport={
     });
   },
   unplayable(tags,format){
-    if(tags&&tags.drm)return new ParseError('Este audiolivro está protegido por DRM.','Arquivos com proteção não podem ser reproduzidos aqui. Use uma cópia sem DRM.');
+    const video=AudioFormats.isVideo(format);
+    if(tags&&tags.drm)return new ParseError(`Este ${AudioFormats.noun(format)} está protegido por DRM.`,'Arquivos com proteção não podem ser reproduzidos aqui. Use uma cópia sem DRM.');
     if(tags&&/^(alac|ac-3|ec-3)$/i.test(tags.codec||''))return new ParseError(
       'O navegador não reproduz o formato de áudio deste arquivo.',
-      'Converta o audiolivro para M4B com áudio AAC (ou para MP3) e importe novamente.');
+      video?'Converta o vídeo para MP4 com áudio AAC e vídeo H.264 e importe novamente.'
+           :'Converta o audiolivro para M4B com áudio AAC (ou para MP3) e importe novamente.');
     return new ParseError(
       `Este ${AudioFormats.label(format)} não pode ser reproduzido neste navegador.`,
-      'O arquivo pode estar corrompido ou usar um codec sem suporte. Tente converter para MP3 ou M4B (AAC).');
+      video?'O arquivo pode estar corrompido ou usar um codec sem suporte. Tente converter para MP4 com vídeo H.264 e áudio AAC.'
+           :'O arquivo pode estar corrompido ou usar um codec sem suporte. Tente converter para MP3 ou M4B (AAC).');
   },
 
   /* ---------- um arquivo = um audiolivro ---------- */
   async buildSingle(file,{fingerprint=null,onStatus=null}={}){
     const format=AudioFormats.ext(file.name);
+    const video=AudioFormats.isVideo(format);
     const say=t=>{try{onStatus&&onStatus(t)}catch(e){}};
     say('Lendo título, capítulos e capa...');
     const tags=await this.tags(file);
     if(tags.drm)throw this.unplayable(tags,format);
-    say('Conferindo se o áudio pode ser reproduzido...');
+    say(video?'Conferindo se o vídeo pode ser reproduzido...':'Conferindo se o áudio pode ser reproduzido...');
     const probe=await this.probe(file,format);
     if(probe.ok===false)throw this.unplayable(tags,format);
     let duration=tags.duration;
     if(probe.ok&&probe.duration&&(!duration||Math.abs(duration-probe.duration)>2))duration=probe.duration;
     if(!(duration>0)){
-      throw new ParseError('Não foi possível descobrir a duração deste áudio.','O arquivo pode estar incompleto. Tente baixá-lo novamente.');
+      throw new ParseError(`Não foi possível descobrir a duração deste ${video?'vídeo':'áudio'}.`,'O arquivo pode estar incompleto. Tente baixá-lo novamente.');
     }
     const base=this.cleanName(file.name);
     let title=tags.title;
@@ -2057,8 +2528,11 @@ const AudioImport={
       const generic=/^(cap[ií]tulo|chapter|parte|part|faixa|track|cd|disco)?\s*\d+/i.test(tags.title||'');
       if(!tags.title||generic||tags.title===tags.album)title=tags.album;
     }
-    title=Bin.clean(title)||base||'Audiolivro';
-    const cover=await AudioCover.fromBlob(tags.cover&&tags.cover.blob);
+    title=Bin.clean(title)||base||(video?'Vídeo':'Audiolivro');
+    say('Preparando a capa...');
+    let cover=await AudioCover.fromBlob(tags.cover&&tags.cover.blob);
+    /* MP4 sem capa nas etiquetas: usamos um quadro do próprio vídeo. */
+    if(!cover&&video)cover=await VideoCover.fromFile(file,duration);
     const chapters=AudioChapters.normalize(tags.chapters,duration);
     const hash=fingerprint||await FileFingerprint.hashBlob(file);
     const mime=AudioFormats.mime(format);
@@ -2263,10 +2737,17 @@ class AudioPlayer{
   constructor(db,state){
     this.db=db;this.state=state;
     const g=id=>document.getElementById(id)||document.createElement('div');
-    this.el=document.getElementById('audio-el')||document.createElement('audio');
+    /* Dois elementos, um player só: o <audio> serve MP3/M4B e o <video>
+       serve MP4. `this.el` sempre aponta para o que está tocando, então
+       todo o resto do código (busca, capítulos, marcadores, timer) não
+       precisa saber a diferença. */
+    this.audioEl=document.getElementById('audio-el')||document.createElement('audio');
+    this.videoEl=document.getElementById('video-el')||document.createElement('video');
+    this.mediaEl=this.audioEl;
     this.root=g('audio-player');this.mini=g('mini-player');
     this.ui={
       bg:g('ap-bg'),collapse:g('ap-collapse'),topMid:g('ap-top-mid'),options:g('ap-options'),
+      stage:g('ap-stage'),video:g('ap-video'),
       art:g('ap-art'),title:g('ap-title'),author:g('ap-author'),narrator:g('ap-narrator'),
       chapterBtn:g('ap-chapter-btn'),chapterName:g('ap-chapter-name'),
       seek:g('ap-seek'),elapsed:g('ap-elapsed'),remaining:g('ap-remaining'),scope:g('ap-scope'),
@@ -2294,6 +2775,8 @@ class AudioPlayer{
   }
 
   /* ---------- atalhos de leitura ---------- */
+  get el(){return this.mediaEl}
+  get isVideo(){return AudioFormats.isVideoBook(this.book)}
   get s(){return this.state.settings}
   get skipBack(){return Number(this.s.audioSkipBack)||15}
   get skipFwd(){return Number(this.s.audioSkipForward)||30}
@@ -2313,20 +2796,27 @@ class AudioPlayer{
      LIGAÇÕES (eventos)
      ============================================================ */
   bind(){
-    const el=this.el,ui=this.ui;
+    const ui=this.ui;
     const on=(node,ev,fn,opts)=>node&&node.addEventListener(ev,fn,opts);
-    el.preload='auto';
-    el.addEventListener('play',()=>this.onPlayState());
-    el.addEventListener('playing',()=>{this.setBusy(false);this.onPlayState()});
-    el.addEventListener('pause',()=>this.onPause());
-    el.addEventListener('waiting',()=>{if(!this.loading&&!el.paused)this.setBusy(true)});
-    el.addEventListener('canplay',()=>{if(!this.loading)this.setBusy(false)});
-    el.addEventListener('timeupdate',()=>this.onTime());
-    el.addEventListener('ended',()=>this.onEnded());
-    el.addEventListener('error',()=>this.onError());
-    el.addEventListener('seeked',()=>{this.setBusy(false);this.render(true)});
-    el.addEventListener('durationchange',()=>this.onDurationChange());
+    /* Os mesmos tratadores valem para os dois elementos; o que não está
+       em uso fica sem src e nunca dispara nada. */
+    [this.audioEl,this.videoEl].forEach(el=>{
+      el.preload='auto';
+      const mine=fn=>()=>{if(el===this.mediaEl)fn()};
+      el.addEventListener('play',mine(()=>this.onPlayState()));
+      el.addEventListener('playing',mine(()=>{this.setBusy(false);this.onPlayState()}));
+      el.addEventListener('pause',mine(()=>this.onPause()));
+      el.addEventListener('waiting',mine(()=>{if(!this.loading&&!el.paused)this.setBusy(true)}));
+      el.addEventListener('canplay',mine(()=>{if(!this.loading)this.setBusy(false)}));
+      el.addEventListener('timeupdate',mine(()=>this.onTime()));
+      el.addEventListener('ended',mine(()=>this.onEnded()));
+      el.addEventListener('error',mine(()=>this.onError()));
+      el.addEventListener('seeked',mine(()=>{this.setBusy(false);this.render(true)}));
+      el.addEventListener('durationchange',mine(()=>this.onDurationChange()));
+    });
 
+    /* No vídeo, tocar na imagem pausa e retoma — como em qualquer player. */
+    on(this.videoEl,'click',()=>{if(this.isVideo)this.toggle()});
     on(ui.collapse,'click',()=>this.collapse());
     on(ui.miniOpen,'click',()=>this.expand());
     on(ui.miniPlay,'click',()=>this.toggle());
@@ -2403,12 +2893,25 @@ class AudioPlayer{
   unlock(){
     if(this.unlocked)return;
     this.unlocked=true;
-    try{
-      this.el.muted=true;
-      this.el.src=AudioPlayer.SILENCE;
-      const p=this.el.play();
-      if(p&&p.catch)p.catch(()=>{});
-    }catch(e){}
+    /* Os dois elementos precisam ser liberados dentro do mesmo gesto:
+       só se sabe qual deles vai tocar depois de ler o livro no banco. */
+    [this.audioEl,this.videoEl].forEach(el=>{
+      try{
+        el.muted=true;
+        el.src=AudioPlayer.SILENCE;
+        const p=el.play();
+        if(p&&p.catch)p.catch(()=>{});
+      }catch(e){}
+    });
+  }
+  /* Escolhe o elemento certo para o livro e devolve o outro ao repouso. */
+  useMediaFor(book){
+    const next=AudioFormats.isVideoBook(book)?this.videoEl:this.audioEl;
+    if(next===this.mediaEl)return;
+    const old=this.mediaEl;
+    try{old.pause()}catch(e){}
+    try{old.removeAttribute('src');old.load()}catch(e){}
+    this.mediaEl=next;
   }
   async open(book,opts={}){
     if(!book)return;
@@ -2426,6 +2929,7 @@ class AudioPlayer{
     await this.unload({soft:true});
     if(token!==this.openToken)return;
     this.book=book;
+    this.useMediaFor(book);
     this.paintBook();
     this.setBusy(true);
     this.expand();
@@ -2434,12 +2938,13 @@ class AudioPlayer{
       if(token!==this.openToken)return;
       const meta=fresh||book;
       const blobs=rec&&(rec.blobs||(rec.blob?[rec.blob]:null));
+      const noun=AudioFormats.noun(book.format);
       if(!blobs||!blobs.length){
-        throw new ParseError('O arquivo deste audiolivro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar ouvindo.');
+        throw new ParseError(`O arquivo deste ${noun} não está mais salvo no aparelho.`,`Importe o arquivo novamente para continuar ${AudioFormats.isVideoBook(book)?'assistindo':'ouvindo'}.`);
       }
       const trackMeta=(meta.audio&&meta.audio.tracks)||[];
       if(!trackMeta.length||trackMeta.length!==blobs.length){
-        throw new ParseError('Os dados deste audiolivro estão incompletos.','Exclua-o da biblioteca e importe o arquivo novamente.');
+        throw new ParseError(`Os dados deste ${noun} estão incompletos.`,'Exclua-o da biblioteca e importe o arquivo novamente.');
       }
       this.book=meta;
       this.blobs=blobs;
@@ -2476,13 +2981,20 @@ class AudioPlayer{
     clearTimeout(this.persistTimer);
     if(this.book&&this.loaded){try{await this.persist()}catch(e){}}
     this.loadToken++;this.loading=false;this.transitioning=false;
-    try{this.el.pause()}catch(e){}
-    try{this.el.removeAttribute('src');this.el.load()}catch(e){}
-    this.el.muted=false;
+    [this.audioEl,this.videoEl].forEach(el=>{
+      try{el.pause()}catch(e){}
+      try{el.removeAttribute('src');el.load()}catch(e){}
+      el.muted=false;
+    });
     if(this.objectUrl){URL.revokeObjectURL(this.objectUrl);this.objectUrl=''}
     if(this.coverUrl){URL.revokeObjectURL(this.coverUrl);this.coverUrl=''}
     this.clearSleep(true);
     this.book=null;this.tracks=[];this.blobs=[];this.chapters=[];this.duration=0;
+    this.mediaEl=this.audioEl;
+    this.root.classList.remove('is-video');
+    if(this.ui.video)this.ui.video.hidden=true;
+    if(this.ui.art)this.ui.art.hidden=false;
+    try{this.videoEl.removeAttribute('poster')}catch(e){}
     this.loaded=false;this.trackIndex=0;this.lastChapterIdx=-2;this.uiTimeOverride=null;this.metaDirty=false;
     this.clearMediaSession();
     this.syncCards();
@@ -2649,7 +3161,7 @@ class AudioPlayer{
     try{await this.el.play()}
     catch(e){
       if(e&&e.name==='NotAllowedError')Utils.toast('Toque em reproduzir para começar.','play');
-      else if(!e||e.name!=='AbortError'){console.warn(e);Utils.toast('Não foi possível reproduzir este áudio.','alert-triangle')}
+      else if(!e||e.name!=='AbortError'){console.warn(e);Utils.toast(`Não foi possível reproduzir este ${this.isVideo?'vídeo':'áudio'}.`,'alert-triangle')}
     }
   }
   pause(){try{this.el.pause()}catch(e){}}
@@ -2713,7 +3225,7 @@ class AudioPlayer{
     if(this.metaDirty)this.schedulePersist(3000);
   }
   onEnded(){
-    if(this.loading||!this.book)return;
+    if(this.loading||!this.book||!this.loaded||!this.tracks.length)return;
     if(this.trackIndex<this.tracks.length-1){
       this.transitioning=true;
       this.loadTrack(this.trackIndex+1,{time:0,play:true}).catch(e=>{this.transitioning=false;this.fail(e)});
@@ -2730,7 +3242,7 @@ class AudioPlayer{
     }
   }
   onError(){
-    if(this.loading||!this.book)return;
+    if(this.loading||!this.book||!this.loaded)return;
     const err=this.el.error;
     if(!err||err.code===1)return;
     this.pause();
@@ -2740,19 +3252,21 @@ class AudioPlayer{
     console.error(e);
     const isParse=e instanceof ParseError;
     const code=e&&e.code;
+    const v=this.isVideo;
     const msg=isParse?e.message
-      :code===4?'O navegador não consegue reproduzir este arquivo de áudio.'
-      :code===3?'O áudio está danificado neste ponto.'
-      :code===2?'Não foi possível ler o arquivo de áudio.'
-      :'Não foi possível abrir este audiolivro.';
+      :code===4?`O navegador não consegue reproduzir este arquivo de ${v?'vídeo':'áudio'}.`
+      :code===3?`O ${v?'vídeo':'áudio'} está danificado neste ponto.`
+      :code===2?`Não foi possível ler o arquivo de ${v?'vídeo':'áudio'}.`
+      :`Não foi possível abrir este ${v?'vídeo':'audiolivro'}.`;
     Utils.toast(msg,'alert-triangle');
     if(isParse&&e.hint)setTimeout(()=>Utils.toast(e.hint,'info'),900);
   }
   async finish(){
+    const video=this.isVideo;
     await this.persist({finished:true});
     this.updatePlayUi();
     this.render(true);
-    Utils.toast('Audiolivro concluído.','check-circle');
+    Utils.toast(video?'Vídeo concluído.':'Audiolivro concluído.','check-circle');
   }
 
   /* ============================================================
@@ -2829,8 +3343,11 @@ class AudioPlayer{
     const b=this.book;
     if(!b)return;
     const ui=this.ui;
-    ui.title.textContent=b.title||'Audiolivro';
-    ui.miniTitle.textContent=b.title||'Audiolivro';
+    const video=AudioFormats.isVideoBook(b);
+    const icon=AudioFormats.icon(b.format);
+    const fallbackName=video?'Vídeo':'Audiolivro';
+    ui.title.textContent=b.title||fallbackName;
+    ui.miniTitle.textContent=b.title||fallbackName;
     const author=b.author&&b.author!=='Autor Desconhecido'?b.author:'';
     ui.author.textContent=author;ui.author.hidden=!author;
     const narrator=b.audio&&b.audio.narrator;
@@ -2845,13 +3362,23 @@ class AudioPlayer{
         const f=document.createElement('div');
         f.className='ap-art-fallback';
         f.innerHTML=big
-          ?`<i data-lucide="headphones"></i><strong>${Utils.esc(b.title||'')}</strong>`
-          :`<i data-lucide="headphones"></i>`;
+          ?`<i data-lucide="${icon}"></i><strong>${Utils.esc(b.title||'')}</strong>`
+          :`<i data-lucide="${icon}"></i>`;
         host.appendChild(f);
         lucide.createIcons({root:host});
       }
     };
-    fill(ui.art,true);fill(ui.miniCover,false);
+    /* No vídeo, a própria imagem ocupa o lugar da capa; a capa continua
+       valendo na estante, no mini-player e nos controles do sistema. */
+    this.root.classList.toggle('is-video',video);
+    if(ui.video)ui.video.hidden=!video;
+    ui.art.hidden=video;
+    if(!video)fill(ui.art,true);
+    fill(ui.miniCover,false);
+    if(video){
+      this.videoEl.poster=b.cover||'';
+      ui.video.style.setProperty('--ar',String(Utils.clamp(Number(b.coverAspect)||16/9,.5,2.4)));
+    }
     ui.art.style.setProperty('--ar',String(Utils.clamp(Number(b.coverAspect)||1,.6,1.4)));
     this.root.classList.toggle('no-cover',!b.cover);
     ui.bg.style.backgroundImage=b.cover?`url("${b.cover}")`:'none';
@@ -3680,7 +4207,8 @@ class ReaderEngine{
     this.readerStage=document.getElementById('reader-stage');
     this.ui=document.getElementById('reader-ui');
     this.navigating=false;this.uiTimer=null;this.curl=null;
-    this.readingMode=this.state.settings.readingMode||'auto';
+    /* sentido efetivo do livro aberto; definido a cada abertura */
+    this.readingMode='horizontal';
     this.pendingSelection=null;this.selectedHighlightColor='#f3d76a';
     this.annotationPressTimer=null;this.activeAnnotationId=null;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
@@ -3766,6 +4294,8 @@ class ReaderEngine{
     App.player?.pauseForOtherMedia();
     this.navigating=true;
     this.currentBook=Utils.normalizeBook(book);
+    /* cada livro entra com o SEU sentido de rolagem */
+    this.readingMode=this.resolveReadingMode(this.currentBook.format,this.currentBook);
     const ctrl=new AbortController();
     this.openController=ctrl;
     const watchdog=setTimeout(()=>{
@@ -3785,7 +4315,7 @@ class ReaderEngine{
       if(!file||!file.buffer)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
       this.destroy();
       document.getElementById('reader-title').textContent=book.title||'Livro';
-      this.pdfMode=this.state.settings.pdfReadingMode||'lateral';
+      this.pdfMode=this.readingMode;
       this.pdfZoom=Utils.clamp(Number(this.state.settings.pdfZoom)||1,.75,3);
       App.switchView('reader');
       this.hideUI();
@@ -3799,6 +4329,8 @@ class ReaderEngine{
         start=await this.openDocx(file.buffer,book,w,h,start,signal);
       }else if(book.format==='mobi'){
         start=await this.openMobi(file.buffer,book,w,h,start,signal);
+      }else if(book.format==='md'){
+        start=await this.openMd(file.buffer,book,w,h,start,signal);
       }else if(book.format==='txt'){
         start=await this.openTxt(file.buffer,book,w,h,start,signal);
       }else{
@@ -3932,9 +4464,9 @@ class ReaderEngine{
       if(start===null)start=book.progress?.pageIndex??0;
       return start;
     }
-    const label=format==='docx'?'Lendo o documento':'Lendo o livro';
+    const label=format==='docx'?'Lendo o documento':format==='md'?'Lendo o Markdown':'Lendo o livro';
     Utils.setLoaderProgress(4,label+'...');
-    const parser=format==='docx'?DOCXParser:MOBIParser;
+    const parser=format==='docx'?DOCXParser:format==='md'?MDParser:MOBIParser;
     const html=await parser.parse(buffer,{
       signal,
       onProgress:(text,ratio)=>Utils.setLoaderProgress(4+(Number(ratio)||0)*10,text+'...')
@@ -3959,6 +4491,11 @@ class ReaderEngine{
   }
   async openMobi(buffer,book,w,h,start,signal){
     return this.openDocument(buffer,book,w,h,start,signal,'mobi');
+  }
+  /* Markdown segue o caminho do DOCX: vira HTML, ganha capítulos pelos
+     títulos e é paginado igual a qualquer outro livro. */
+  async openMd(buffer,book,w,h,start,signal){
+    return this.openDocument(buffer,book,w,h,start,signal,'md');
   }
   async openTxt(buffer,book,w,h,start,signal){
     const sig=this.pagSignature(book,w,h);
@@ -4243,18 +4780,42 @@ class ReaderEngine{
       wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>`;
     }
   }
+  /* Padrão de fábrica de cada formato: horizontal para EPUB, MOBI, TXT e
+     MD (texto que reflui); vertical para PDF e DOCX (página fixa). */
   defaultReadingMode(format){
-    return ['pdf','docx'].includes(String(format||'').toLowerCase())?'vertical':'horizontal';
+    return BookFormats.defaultScroll(format)==='vertical'?'vertical':'horizontal';
   }
-  resolveReadingMode(format=this.currentBook?.format){
+  /* A escolha é DO LIVRO. Só quando o livro não tem escolha própria é que
+     entram o padrão geral das configurações e, por fim, o do formato —
+     por isso mudar a rolagem de um livro não mexe nos outros. */
+  resolveReadingMode(format=this.currentBook?.format,book=this.currentBook){
+    const own=book&&book.readingMode;
+    if(own==='vertical'||own==='horizontal')return own;
     const pref=this.state.settings.readingMode||'auto';
     if(pref==='vertical'||pref==='horizontal')return pref;
-    if(String(format||'').toLowerCase()==='pdf'&&this.state.settings.pdfReadingMode){
-      return this.state.settings.pdfReadingMode==='vertical'?'vertical':'horizontal';
-    }
     return this.defaultReadingMode(format);
   }
-  isVerticalReading(){return this.readingMode==='vertical'||this.resolveReadingMode()==='vertical'}
+  isVerticalReading(){return this.readingMode==='vertical'}
+  /* Grava o sentido de rolagem NESTE livro. `null` devolve o livro ao
+     comportamento automático do formato. */
+  async setReadingMode(mode){
+    if(!this.currentBook)return false;
+    const value=(mode==='vertical'||mode==='horizontal')?mode:null;
+    if(value)this.currentBook.readingMode=value;
+    else delete this.currentBook.readingMode;
+    try{
+      await this.db.patchBook(this.currentBook.id,b=>{
+        if(value)b.readingMode=value;else delete b.readingMode;
+      });
+    }catch(e){console.warn('Não foi possível salvar o sentido de rolagem.',e)}
+    const list=App.library&&App.library.allBooks;
+    if(list){
+      const i=list.findIndex(b=>b.id===this.currentBook.id);
+      if(i>=0){if(value)list[i].readingMode=value;else delete list[i].readingMode}
+    }
+    await this.reloadReadingMode();
+    return true;
+  }
   isPdfVertical(){return this.currentBook?.format==='pdf'&&this.isVerticalReading()}
   updateReadingModeControl(){
     const btn=document.getElementById('btn-reader-layout');
@@ -4277,11 +4838,11 @@ class ReaderEngine{
   async toggleReadingMode(){
     if(!this.currentBook||!this.sliderBook)return;
     const next=this.isVerticalReading()?'horizontal':'vertical';
-    this.readingMode=next;
-    await App.updateSetting('readingMode',next);
-    if(this.currentBook.format==='pdf')await App.updateSetting('pdfReadingMode',next);
-    await this.reloadReadingMode();
-    Utils.toast(next==='vertical'?'Rolagem vertical ativada.':'Leitura horizontal ativada.','file-text');
+    await this.setReadingMode(next);
+    App.syncReadingModeUi();
+    Utils.toast(next==='vertical'
+      ?'Rolagem vertical ativada neste livro.'
+      :'Leitura horizontal ativada neste livro.','file-text');
   }
   async togglePdfReadingMode(){return this.toggleReadingMode()}
   setupContinuousReadingScroll(){
@@ -5231,6 +5792,7 @@ class LibraryManager{
     const options=[
       {value:'custom',label:'Minha Ordem',desc:'Use a ordem manual da sua estante.',icon:'arrow-down-up'},
       {value:'author',label:'Agrupar por Autor',desc:'Organiza e separa os livros por autor.',icon:'users'},
+      {value:'format',label:'Tipo de arquivo',desc:'Separa em prateleiras de EPUB, PDF, DOCX, audiolivros, vídeos…',icon:'file-stack'},
       {value:'title',label:'Título',desc:'Ordem alfabética pelo título.',icon:'type'},
       {value:'recent',label:'Recentes',desc:'Livros adicionados ou lidos mais recentemente.',icon:'clock-3'},
       {value:'progress',label:'Progresso',desc:'Do maior para o menor progresso de leitura.',icon:'chart-no-axes-column-increasing'}
@@ -5306,6 +5868,12 @@ class LibraryManager{
       const aa=(a.author||'').toLowerCase(),cc=(c.author||'').toLowerCase();
       return aa.localeCompare(cc,'pt')||a.title.localeCompare(c.title,'pt');
     });
+    if(s==='format')return b.sort((a,c)=>{
+      const d=BookFormats.groupRank(a.format)-BookFormats.groupRank(c.format);
+      if(d)return d;
+      const ga=BookFormats.groupName(a.format),gc=BookFormats.groupName(c.format);
+      return ga.localeCompare(gc,'pt')||(a.title||'').localeCompare(c.title||'','pt');
+    });
     if(s==='title')return b.sort((a,c)=>(a.title||'').localeCompare(c.title||'','pt'));
     if(s==='recent')return b.sort((a,c)=>(c.lastRead||c.addedAt||0)-(a.lastRead||a.addedAt||0));
     return b.sort((a,c)=>(c.progress?.percentage||0)-(a.progress?.percentage||0));
@@ -5331,18 +5899,22 @@ class LibraryManager{
     const b=this.sortedBooks(this.baseBooks());
     title.textContent=
       this.currentFilter==='all'?'Sua Biblioteca':
-      this.currentFilter==='audio'?'Audiolivros':
+      this.currentFilter==='audio'?'Áudio e vídeo':
       this.currentFilter==='favorite'?'Favoritos':
       this.currentFilter==='reading'?'Lendo agora':
       this.currentFilter==='read'?'Lidos':
       this.currentFilter==='toread'?'Para ler':'Pausados';
     sub.textContent=this.search
       ?`${b.length} resultado(s) para “${this.search}”`
-      :(this.currentFilter==='audio'?'Toque em um audiolivro para ouvir de onde parou.':App.state.settings.sort==='author'?'Autores agrupados em ordem alfabética.':App.state.settings.sort==='custom'?'Ordem manual da sua estante.':'Livros organizados pela opção selecionada.');
+      :(this.currentFilter==='audio'?'Toque para continuar de onde parou.'
+        :App.state.settings.sort==='author'?'Autores agrupados em ordem alfabética.'
+        :App.state.settings.sort==='format'?'Uma prateleira para cada tipo de arquivo.'
+        :App.state.settings.sort==='custom'?'Ordem manual da sua estante.'
+        :'Livros organizados pela opção selecionada.');
     this.renderHero();
     if(!b.length){
       content.innerHTML=this.currentFilter==='audio'&&!this.search
-        ?`<div class="empty"><i data-lucide="headphones"></i><h3>Nenhum audiolivro ainda</h3><p>Toque em + e escolha arquivos MP3 ou M4B. Vários MP3 de capítulos podem virar um único audiolivro.</p></div>`
+        ?`<div class="empty"><i data-lucide="headphones"></i><h3>Nada para ouvir ou assistir ainda</h3><p>Toque em + e escolha arquivos MP3, M4B ou MP4. Vários MP3 de capítulos podem virar um único audiolivro.</p></div>`
         :`<div class="empty"><i data-lucide="library"></i><h3>Nada por aqui ainda</h3><p>Importe um livro ou ajuste seus filtros de organização.</p></div>`;
       lucide.createIcons({root:content});
       return;
@@ -5354,16 +5926,21 @@ class LibraryManager{
       hint.innerHTML=`<i data-lucide="arrow-down-up"></i><span>Arraste um livro para reposicioná-lo: a estante passa para Minha Ordem e guarda a sequência.</span>`;
       content.appendChild(hint);
     }
+    const modo=App.state.settings.sort;
     const grouped=new Map();
     b.forEach(book=>{
-      const key=App.state.settings.sort==='author'?(book.author||'Autor desconhecido'):'Sua estante';
+      const key=modo==='author'?(book.author||'Autor desconhecido')
+        :modo==='format'?BookFormats.groupName(book.format)
+        :'Sua estante';
       if(!grouped.has(key))grouped.set(key,[]);
       grouped.get(key).push(book);
     });
     for(const[name,books]of grouped){
       const shelf=document.createElement('section');
       shelf.className='shelf';
-      shelf.innerHTML=`<div class="shelf-head"><h3>${Utils.esc(name)}</h3><span>${books.length} ${books.length===1?'livro':'livros'}</span></div><div class="book-grid"></div>`;
+      const icone=modo==='format'?`<i data-lucide="${BookFormats.icon(books[0].format)}" class="shelf-icon"></i>`:'';
+      const unidade=books.length===1?'item':'itens';
+      shelf.innerHTML=`<div class="shelf-head"><h3>${icone}${Utils.esc(name)}</h3><span>${books.length} ${modo==='format'?unidade:(books.length===1?'livro':'livros')}</span></div><div class="book-grid"></div>`;
       const grid=shelf.querySelector('.book-grid');
       books.forEach(book=>grid.appendChild(this.card(book)));
       content.appendChild(shelf);
@@ -5423,13 +6000,15 @@ class LibraryManager{
     const page=b.progress?.readPages||1;
     const totalPages=b.progress?.totalPages||b.totalPages||'—';
     const isAudio=AudioFormats.isAudioBook(b);
+    const verbo=AudioFormats.isVideoBook(b)?'assistindo':isAudio?'ouvindo':'lendo';
+    const chamada=AudioFormats.isVideoBook(b)?'Continue assistindo':isAudio?'Continue ouvindo':'Continue lendo';
     const footLeft=isAudio
       ?(pct>=100?'Concluído':`${AudioFmt.long(Math.max(0,(b.audio?.duration||0)-(b.progress?.position||0)))} restantes`)
       :`Página ${page} de ${totalPages}`;
     hero.innerHTML=`
-      <div class="hero-card" id="hero-continue" role="button" tabindex="0" aria-label="Continuar ${isAudio?'ouvindo':'lendo'} ${Utils.esc(b.title)}">
+      <div class="hero-card" id="hero-continue" role="button" tabindex="0" aria-label="Continuar ${verbo} ${Utils.esc(b.title)}">
         <div>
-          <div class="hero-label">${isAudio?'Continue ouvindo':'Continue lendo'}</div>
+          <div class="hero-label">${chamada}</div>
           <div class="hero-title">${Utils.esc(b.title)}</div>
           <div class="hero-meta">${Utils.esc(b.author||'Autor desconhecido')}</div>
         </div>
@@ -5475,37 +6054,37 @@ class LibraryManager{
     const el=document.createElement('article');
     el.className='book-card';el.draggable=true;el.dataset.id=book.id;
     const pct=book.progress?.percentage||0;
-    const audio=AudioFormats.isAudioBook(book);
+    const media=AudioFormats.isAudioBook(book);
+    const video=AudioFormats.isVideoBook(book);
+    const audio=media;                 /* nome antigo, mantido para o resto do método */
+    const fmt=BookFormats.normalize(book.format);
+    const mediaIcon=media?AudioFormats.icon(fmt):BookFormats.icon(fmt);
     /* capas de audiolivro costumam ser quadradas: aparecem inteiras sobre um fundo desfocado */
-    const squareCover=audio&&!!book.cover&&(book.coverAspect||0)>0.85;
-    const subRight=audio?this.audioSubText(book):(book.progress?.readPages?`p. ${book.progress.readPages}`:'');
+    const squareCover=media&&!video&&!!book.cover&&(book.coverAspect||0)>0.85;
+    const subRight=media?this.audioSubText(book):(book.progress?.readPages?`p. ${book.progress.readPages}`:'');
     const cover=book.cover
       ?`<img src="${book.cover}" alt="${Utils.esc(book.title)}" loading="lazy">`
-      :`<div class="fallback${audio?' audio-fallback':''}">${audio?'<i data-lucide="headphones"></i>':''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
+      :`<div class="fallback${media?' audio-fallback':''}">${media?`<i data-lucide="${mediaIcon}"></i>`:''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
+    /* Uma etiqueta só, montada a partir do formato: acrescentar um formato
+       novo não exige mexer aqui de novo. */
+    const badge=`<span class="badge fmt-badge ${fmt}-badge${media?' audio-badge':''}">${media?`<i data-lucide="${mediaIcon}"></i>`:''}${BookFormats.label(fmt)}</span>`;
     el.innerHTML=`
       <div class="book-menu-wrap">
-        ${book.format==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
-        ${['pdf','docx','txt'].includes(book.format)?'<button class="book-menu share-btn" title="Compartilhar livro" aria-label="Compartilhar livro"><i data-lucide="share-2"></i></button>':''}
+        ${fmt==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
+        ${BookFormats.canShare(fmt)?'<button class="book-menu share-btn" title="Compartilhar livro" aria-label="Compartilhar livro"><i data-lucide="share-2"></i></button>':''}
         <button class="book-menu organize-btn" title="Organizar livro" aria-label="Organizar livro"><i data-lucide="more-horizontal"></i></button>
         <button class="book-delete" title="Excluir da biblioteca" aria-label="Excluir da biblioteca"><i data-lucide="trash-2"></i></button>
       </div>
-      <div class="book-cover${audio?' is-audio':''}${squareCover?' cover-square':''}">
+      <div class="book-cover${media?' is-audio':''}${video?' is-video':''}${squareCover?' cover-square':''}">
         ${squareCover?'<div class="cover-blur" aria-hidden="true"></div>':''}
         ${cover}
-        <div class="cover-format-badge">
-          ${book.format==='pdf'?'<span class="badge pdf-badge">PDF</span>':''}
-          ${book.format==='epub'?'<span class="badge epub-badge">EPUB</span>':''}
-          ${book.format==='docx'?'<span class="badge docx-badge">DOCX</span>':''}
-          ${book.format==='mobi'?'<span class="badge mobi-badge">MOBI</span>':''}
-          ${book.format==='txt'?'<span class="badge txt-badge">TXT</span>':''}
-          ${book.format==='mp3'?'<span class="badge audio-badge mp3-badge"><i data-lucide="headphones"></i>MP3</span>':''}
-          ${book.format==='m4b'?'<span class="badge audio-badge m4b-badge"><i data-lucide="headphones"></i>M4B</span>':''}
-        </div>
+        <div class="cover-format-badge">${badge}</div>
         <div class="cover-badges">
           ${book.favorite?'<span class="badge">♥</span>':''}
           ${book.status==='read'?'<span class="badge">Lido</span>':''}
         </div>
-        ${audio?`<span class="cover-duration"><i data-lucide="clock-3"></i>${AudioFmt.long(book.audio?.duration||0)}</span><span class="cover-eq" aria-hidden="true"><i></i><i></i><i></i></span>`:''}
+        ${media?`<span class="cover-duration"><i data-lucide="clock-3"></i>${AudioFmt.long(book.audio?.duration||0)}</span><span class="cover-eq" aria-hidden="true"><i></i><i></i><i></i></span>`:''}
+        ${video?'<span class="cover-play" aria-hidden="true"><i data-lucide="play"></i></span>':''}
       </div>
       <div class="book-info">
         <div class="book-title">${Utils.esc(book.title)}</div>
@@ -5561,12 +6140,13 @@ class LibraryManager{
 
 async shareBook(book){
   if(!book)return;
-  const shareableFormats=new Set(['pdf','docx','txt']);
-  if(!shareableFormats.has(book.format)){
+  if(!BookFormats.canShare(book.format)){
     await AppModal.alert({
       title:'Compartilhamento indisponível',
       subtitle:'Formato protegido',
-      message:'Para manter a política de compartilhamento da biblioteca, arquivos EPUB e MOBI não podem ser compartilhados por este aplicativo.',
+      message:AudioFormats.isAudioBook(book)
+        ?'Audiolivros e vídeos ficam guardados somente no seu aparelho e não podem ser compartilhados por este aplicativo.'
+        :'Para manter a política de compartilhamento da biblioteca, arquivos EPUB e MOBI não podem ser compartilhados por este aplicativo.',
       confirmText:'Entendi',
       confirmIcon:'lock'
     });
@@ -5575,7 +6155,7 @@ async shareBook(book){
   try{
     const rec=await this.db.getFile(book.id);
     if(!rec?.buffer)throw new Error('A cópia deste livro não está disponível na biblioteca.');
-    const mime=({pdf:'application/pdf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',txt:'text/plain'})[book.format]||'application/octet-stream';
+    const mime=BookFormats.mime(book.format);
     const safeTitle=(book.title||'livro').replace(/[\\/:*?"<>|]+/g,'-').trim()||'livro';
     const name=book.sourceFileName||`${safeTitle}.${book.format}`;
     const file=new File([rec.buffer],name,{type:mime});
@@ -5859,15 +6439,16 @@ downloadConvertedEpub(result,outputName){
     }
     items.forEach(({book,m})=>{
       const isAudioBm=m.kind==='audio';
+      const isVideoBm=isAudioBm&&AudioFormats.isVideoBook(book);
       const c=document.createElement('div');
       c.className='bookmark-card';
       c.innerHTML=`
         <div class="item-head">
           <div class="item-type">Marcador</div>
-          <i data-lucide="${isAudioBm?'headphones':'bookmark'}" class="bookmark-icon" style="width:16px;height:16px"></i>
+          <i data-lucide="${isVideoBm?'film':isAudioBm?'headphones':'bookmark'}" class="bookmark-icon" style="width:16px;height:16px"></i>
         </div>
-        <div class="item-text">${Utils.esc(isAudioBm?(m.title||m.chapter||'Marcador de áudio'):(m.title||'Página salva'))}</div>
-        <div class="item-meta">${Utils.esc(book.title)} · ${isAudioBm?`ouvir a partir de ${AudioFmt.clock(m.time)}`:`página ${(m.globalPage??m.pageIndex??0)+1}`}${!isAudioBm&&m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>
+        <div class="item-text">${Utils.esc(isAudioBm?(m.title||m.chapter||(isVideoBm?'Marcador de vídeo':'Marcador de áudio')):(m.title||'Página salva'))}</div>
+        <div class="item-meta">${Utils.esc(book.title)} · ${isAudioBm?`${isVideoBm?'assistir':'ouvir'} a partir de ${AudioFmt.clock(m.time)}`:`página ${(m.globalPage??m.pageIndex??0)+1}`}${!isAudioBm&&m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>
         <div class="item-actions">
            <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
         </div>`;
@@ -6076,15 +6657,17 @@ downloadConvertedEpub(result,outputName){
           multiple:true,
           excludeAcceptAllOption:false,
           types:[{
-            description:'Livros, documentos e audiolivros',
+            description:'Livros, documentos, audiolivros e vídeos',
             accept:{
               'application/epub+zip':['.epub'],
               'application/x-mobipocket-ebook':['.mobi'],
               'application/pdf':['.pdf'],
               'text/plain':['.txt'],
+              'text/markdown':['.md','.markdown'],
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document':['.docx'],
               'audio/mpeg':['.mp3'],
-              'audio/mp4':['.m4b']
+              'audio/mp4':['.m4b'],
+              'video/mp4':['.mp4']
             }
           }]
         });
@@ -6125,22 +6708,27 @@ downloadConvertedEpub(result,outputName){
       ...arquivos.map(f=>({file:f,name:f.name}))
     ];
 
-    let importados=0,repetidos=0,falhas=0;
+    let importados=0,repetidos=0,falhas=0,cancelado=false;
     const erros=[];
-    Utils.showLoader('Importando livros',`0 de ${list.length}`,{progress:true});
+    const ctrl=new AbortController();
+    Utils.showLoader('Importando livros',`0 de ${list.length}`,{progress:true,onCancel:()=>ctrl.abort()});
     try{
       for(let i=0;i<list.length;i++){
+        if(ctrl.signal.aborted){cancelado=true;break}
         const job=list[i];
         Utils.setLoaderProgress(Math.round((i/list.length)*100),`${i} de ${list.length} · ${job.name}`);
         await Utils.yieldToUI();
+        /* Progresso de cada arquivo na legenda; a barra continua contando o lote. */
+        const meter=job.file?new TransferMeter(job.file.name,job.file.size,{mode:'text',prefix:`${i+1}/${list.length} · `}):null;
         const result=job.group
           ?await this.importAudioGroup(job.group,{quiet:true})
-          :await this.importFile(job.file,{quiet:true});
+          :await this.importFile(job.file,{quiet:true,meter,signal:ctrl.signal});
+        if(result.status==='cancelled'){cancelado=true;break}
         if(result.status==='ok')importados++;
         else if(result.status==='duplicate')repetidos++;
         else{falhas++;erros.push(`${job.name}: ${result.message||'não foi possível ler o arquivo'}`)}
       }
-      Utils.setLoaderProgress(100,'Finalizando…');
+      if(!cancelado)Utils.setLoaderProgress(100,'Finalizando…');
     }finally{
       Utils.hideLoader();
     }
@@ -6149,11 +6737,12 @@ downloadConvertedEpub(result,outputName){
     const linhas=[
       `${importados} livro(s) adicionado(s) à estante.`,
       repetidos?`${repetidos} já estavam na biblioteca e foram ignorados.`:'',
-      falhas?`${falhas} arquivo(s) não puderam ser lidos.`:''
+      falhas?`${falhas} arquivo(s) não puderam ser lidos.`:'',
+      cancelado?'A importação foi interrompida; o que já tinha entrado continua na estante.':''
     ].filter(Boolean);
     if(erros.length)console.warn('Falhas na importação:',erros);
     await AppModal.alert({
-      title:'Importação concluída',
+      title:cancelado?'Importação interrompida':'Importação concluída',
       subtitle:`${list.length} arquivo(s) processado(s)`,
       message:linhas.join('\n'),
       icon:importados?'library-big':'info',
@@ -6162,16 +6751,32 @@ downloadConvertedEpub(result,outputName){
   }
 
   async importSingle(file,group=null){
-    Utils.showLoader(group?'Importando audiolivro':'Importando livro',group?`${group.plan.files.length} arquivos de áudio...`:'Lendo estrutura e capa...');
+    const ctrl=new AbortController();
+    const meter=file?new TransferMeter(file.name,file.size,{mode:'bar'}):null;
+    Utils.showLoader(
+      group?'Importando audiolivro':'Preparando o arquivo',
+      group?`${group.plan.files.length} arquivos de áudio...`:file.name,
+      {progress:!group,onCancel:group?null:()=>ctrl.abort()}
+    );
     let result;
     try{
-      result=group?await this.importAudioGroup(group):await this.importFile(file);
+      result=group
+        ?await this.importAudioGroup(group)
+        :await this.importFile(file,{meter,signal:ctrl.signal});
     }finally{
       Utils.hideLoader();
     }
 
+    if(result.status==='cancelled'){
+      Utils.toast('Importação cancelada.','x');
+      return;
+    }
+
     if(result.status==='ok'){
-      Utils.toast(AudioFormats.isAudioBook(result.book)?'Audiolivro importado e salvo offline.':'Livro importado e salvo offline.','check');
+      const v=AudioFormats.isVideoBook(result.book);
+      Utils.toast(v?'Vídeo importado e salvo no dispositivo.'
+        :AudioFormats.isAudioBook(result.book)?'Audiolivro importado e salvo no dispositivo.'
+        :'Livro importado e salvo no dispositivo.','check');
       await this.render();
       return;
     }
@@ -6201,7 +6806,7 @@ downloadConvertedEpub(result,outputName){
       try{
         if(result.pending.blobs)await AudioImport.save(this.db,result.pending.meta,result.pending.blobs);
         else await this.db.saveBook(result.pending.meta,result.pending.buffer);
-        Utils.toast(result.pending.blobs?'Audiolivro importado e salvo offline.':'Livro importado e salvo offline.','check');
+        Utils.toast(result.pending.blobs?'Audiolivro importado e salvo no dispositivo.':'Livro importado e salvo no dispositivo.','check');
         await this.render();
       }catch(err){
         console.error(err);
@@ -6221,18 +6826,22 @@ downloadConvertedEpub(result,outputName){
   }
 
   /* Le o arquivo, confere se ele ja existe na estante e so entao salva. */
-  async importFile(file,{quiet=false}={}){
-    const ext=(file.name.split('.').pop()||'').toLowerCase();
-    if(AudioFormats.has(ext))return this.importAudioFile(file,{quiet});
-    if(!['epub','pdf','txt','docx','mobi'].includes(ext)){
+  async importFile(file,{quiet=false,meter=null,signal=null}={}){
+    const ext=BookFormats.normalize(file.name);
+    if(AudioFormats.has(ext))return this.importAudioFile(file,{quiet,meter,signal});
+    if(!BookFormats.TEXT.includes(ext)){
       if(!quiet)Utils.toast('Formato não suportado.','alert-triangle');
       return {status:'error',message:'Formato não suportado.'};
     }
 
     let buffer;
     try{
-      buffer=await file.arrayBuffer();
+      /* Leitura em pedaços: é aqui que um arquivo vindo do Google Drive
+         realmente é baixado, e é isso que a barra de progresso mostra. */
+      buffer=await FileTransfer.toBuffer(file,{onProgress:meter?meter.handler():null,signal});
+      meter?.finish();
     }catch(err){
+      if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
       return {status:'error',message:'Não foi possível ler o arquivo.',error:err};
     }
@@ -6287,6 +6896,12 @@ downloadConvertedEpub(result,outputName){
         if(!(head[0]===0x50&&head[1]===0x4B)){
           throw new ParseError('Este arquivo não é um .docx válido.','Se for um .doc antigo, abra no Word e salve como .docx antes de importar.');
         }
+      }else if(ext==='md'){
+        /* O primeiro "# Título" do arquivo costuma ser o nome do livro. */
+        try{
+          const titulo=MDParser.guessTitle(MDParser.decode(buffer));
+          if(titulo)meta.title=titulo;
+        }catch(e){console.warn(e)}
       }
     }catch(err){
       console.error(err);
@@ -6313,9 +6928,19 @@ downloadConvertedEpub(result,outputName){
      Nunca carregam o arquivo inteiro na memória: a assinatura, os
      metadados e a verificação de reprodução leem só pequenas fatias.
      ------------------------------------------------------------ */
-  async importAudioFile(file,{quiet=false}={}){
+  async importAudioFile(file,{quiet=false,meter=null,signal=null}={}){
     let built;
     try{
+      /* Áudio e vídeo são guardados como Blob e lidos por fatias. Isso é
+         ótimo para um arquivo que já está no aparelho e péssimo para um
+         que ainda está na nuvem: cada fatia viraria um download novo.
+         Por isso, quando o arquivo parece remoto, ele é trazido de uma
+         vez — com barra de progresso — antes de qualquer outra coisa. */
+      if(file.size<=FileTransfer.MAX_LOCAL_COPY&&await FileTransfer.looksRemote(file)){
+        file=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
+        meter?.finish();
+      }
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
       const impressao=await FileFingerprint.hashBlob(file);
       const identico=await this.findByHash(impressao,file.size);
       if(identico)return {status:'duplicate',book:identico,exact:true};
@@ -6324,6 +6949,7 @@ downloadConvertedEpub(result,outputName){
         onStatus:t=>Utils.setLoaderText(null,t)
       });
     }catch(err){
+      if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
       return {status:'error',message:err?.message||'Falha ao processar o arquivo.',error:err};
     }
@@ -6556,17 +7182,18 @@ const Docs={
       '# Veredas Reader',
       '',
       'O Veredas Reader é um leitor de livros digitais que funciona inteiramente no seu dispositivo.',
-      'Ele abre arquivos **EPUB**, **MOBI**, **PDF**, **TXT** e **DOCX**, toca audiolivros em **MP3** e **M4B**, guarda a sua estante offline e',
-      'preserva marcações, citações, anotações e progresso de leitura.',
+      'Ele abre arquivos **EPUB**, **MOBI**, **PDF**, **TXT**, **MD** (Markdown) e **DOCX**, toca audiolivros em **MP3** e **M4B**,',
+      'reproduz vídeos em **MP4**, guarda a sua estante no dispositivo e preserva marcações, citações, anotações e progresso.',
       '',
       '## O que ele faz',
       '',
-      '- Importa livros do seu aparelho e mantém uma cópia local para leitura offline.',
+      '- Importa livros do seu aparelho e mantém uma cópia local para leitura no dispositivo.',
       '- Organiza a estante por status, coleções, séries, autores e tags.',
       '- Permite grifar trechos, criar citações, anotações e marcadores.',
       '- Ajusta tema, tipografia, espaçamento, margens, brilho e modo de virada de página.',
       '- Lê o texto em voz alta com as vozes disponíveis no dispositivo.',
-      '- Toca audiolivros com capítulos, marcadores, velocidade ajustável, timer de sono e retomada exata de onde você parou.',
+      '- Toca audiolivros e vídeos com capítulos, marcadores, velocidade ajustável, timer de sono e retomada exata de onde você parou.',
+      '- Guarda o sentido de rolagem de cada livro separadamente: mudar em um não muda nos outros.',
       '- Converte PDF em EPUB localmente, sem enviar o arquivo para lugar nenhum.',
       '',
       '## Tecnologia',
@@ -6583,7 +7210,7 @@ const Docs={
       '',
       '## Dados que ficam no seu dispositivo',
       '',
-      '- Os livros que você importa e a cópia usada para leitura offline.',
+      '- Os livros que você importa e a cópia usada para leitura no dispositivo.',
       '- Seu progresso de leitura, marcadores, grifos, citações e anotações.',
       '- Suas preferências de tema, tipografia e leitura.',
       '',
@@ -6753,7 +7380,11 @@ const Docs={
    uma pasta e o aplicativo percorre tudo o que existe dentro dela.
    ============================================================ */
 const DeviceScan={
-  exts:['epub','mobi'],
+  /* M4B entra junto com EPUB e MOBI: são os formatos que o usuário
+     costuma já ter guardados no aparelho e que dá para reconhecer só
+     pela extensão, sem abrir cada arquivo. */
+  exts:['epub','mobi','m4b'],
+  label:'EPUB, MOBI e M4B',
   maxFiles:600,
   busy:false,
   el:null,body:null,footer:null,titleEl:null,subEl:null,iconEl:null,confirmBtn:null,cancelBtn:null,closeBtn:null,
@@ -6827,9 +7458,9 @@ const DeviceScan={
     }
     this.busy=true;
     try{
-      this.setHead('Buscar livros no dispositivo','Escolha uma pasta para procurar EPUB e MOBI.','folder-search');
+      this.setHead('Buscar livros no dispositivo',`Escolha uma pasta para procurar ${this.label}.`,'folder-search');
       this.body.innerHTML=`
-        <p>${auto?'Para montar sua estante rapidamente, o':'O'} aplicativo pode procurar livros em <strong>EPUB</strong> e <strong>MOBI</strong> dentro de uma pasta do seu aparelho, incluindo as subpastas.</p>
+        <p>${auto?'Para montar sua estante rapidamente, o':'O'} aplicativo pode procurar livros em <strong>EPUB</strong> e <strong>MOBI</strong> e audiolivros em <strong>M4B</strong> dentro de uma pasta do seu aparelho, incluindo as subpastas.</p>
         <div class="conversion-warning">
           <i data-lucide="shield-check"></i>
           <div><strong>Você escolhe a pasta</strong><div>A leitura acontece só no seu dispositivo e apenas na pasta autorizada. Downloads costuma ser o melhor ponto de partida.</div></div>
@@ -6847,7 +7478,7 @@ const DeviceScan={
         this.body.innerHTML=`
           <div class="scan-empty">
             <i data-lucide="search-x"></i>
-            <div>Não encontramos arquivos EPUB ou MOBI nessa pasta.<br>Você pode tentar outra pasta ou importar os arquivos pelo botão +.</div>
+            <div>Não encontramos arquivos ${Utils.esc(this.label)} nessa pasta.<br>Você pode tentar outra pasta ou importar os arquivos pelo botão +.</div>
           </div>`;
         this.setFooter('<i data-lucide="folder-open"></i>Tentar outra pasta','Fechar');
         lucide.createIcons({root:this.el});
@@ -6893,7 +7524,7 @@ const DeviceScan={
     if(files===null)return null;
     const found=[];
     for(const file of files){
-      const ext=(file.name.split('.').pop()||'').toLowerCase();
+      const ext=BookFormats.ext(file.name);
       if(!this.exts.includes(ext))continue;
       found.push({file,path:file.webkitRelativePath||file.name});
       if(found.length>=this.maxFiles)break;
@@ -6951,7 +7582,7 @@ const DeviceScan={
             Utils.setLoaderText(null,`${scanned} arquivo(s) verificado(s) · ${found.length} livro(s) encontrado(s)`);
             await Utils.yieldToUI();
           }
-          const ext=(entry.name.split('.').pop()||'').toLowerCase();
+          const ext=BookFormats.ext(entry.name);
           if(!this.exts.includes(ext))continue;
           try{
             const file=await entry.getFile();
@@ -7164,7 +7795,7 @@ const FirstRun={
       document.getElementById('onb-lead').textContent='O aplicativo pode procurar os livros que já estão no seu aparelho.';
       this.body.innerHTML=`
         <div class="onb-points">
-          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>Busca por EPUB e MOBI</strong><span>Escolha uma pasta (Downloads é um bom começo) e o aplicativo procura nela e em todas as subpastas.</span></div></div>
+          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>Busca por EPUB, MOBI e M4B</strong><span>Escolha uma pasta (Downloads é um bom começo) e o aplicativo procura nela e em todas as subpastas.</span></div></div>
           <div class="onb-point"><i data-lucide="list-checks"></i><div><strong>Você revisa antes</strong><span>Nada entra na estante sem a sua confirmação: você vê a lista e marca o que quer importar.</span></div></div>
           <div class="onb-point"><i data-lucide="plus"></i><div><strong>Dá para fazer depois</strong><span>A busca fica sempre disponível no menu lateral, em Sistema.</span></div></div>
         </div>`;
@@ -7197,6 +7828,15 @@ const App={
       this.db=new DBManager();
       await this.db.init();
       this.state.settings=await this.db.getSettings();
+      /* Antes, o sentido de rolagem era uma preferência única para toda a
+         biblioteca. Agora é de cada livro: na primeira abertura depois da
+         atualização, a preferência geral volta para "Automático" para que
+         cada formato abra do jeito natural dele. */
+      if(this.state.settings.scrollPerBook!==true){
+        this.state.settings.scrollPerBook=true;
+        this.state.settings.readingMode='auto';
+        try{await this.db.saveSettings(this.state.settings)}catch(e){console.warn(e)}
+      }
     }catch(e){
       console.error(e);
       FirstRun.unlock();
@@ -7308,7 +7948,7 @@ const App={
     document.querySelectorAll('.theme-option').forEach(b=>b.classList.toggle('active',b.dataset.themeValue===s.theme));
     document.querySelectorAll('#font-grid button').forEach(b=>b.classList.toggle('active',b.dataset.font===s.fontFamily));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.classList.toggle('active',b.dataset.orientation===s.orientation));
-    document.querySelectorAll('#reading-mode-grid button').forEach(b=>b.classList.toggle('active',b.dataset.readingMode=== (s.readingMode||'auto')));
+    this.syncReadingModeUi();
     const turn=s.pageTurn||'curl';
     document.querySelectorAll('#page-turn-grid button').forEach(b=>b.classList.toggle('active',b.dataset.pageTurn===turn));
     if(this.reader&&this.reader.container)this.reader.applyPageTurnMode();
@@ -7327,6 +7967,31 @@ const App={
     if(bg)bg.value=s.readerBg || '#ffffff';
     if(txt)txt.value=s.readerText || '#000000';
   },
+  /* O seletor de rolagem mostra a escolha DO LIVRO enquanto há um livro
+     aberto, e o padrão geral quando o leitor está na estante. */
+  readerIsOpen(){
+    return !!(this.reader&&this.reader.currentBook&&
+      document.getElementById('view-reader')?.classList.contains('active'));
+  },
+  syncReadingModeUi(){
+    const grid=document.getElementById('reading-mode-grid');
+    if(!grid)return;
+    const aberto=this.readerIsOpen();
+    const livro=aberto?this.reader.currentBook:null;
+    const escolha=aberto?(livro.readingMode||'auto'):(this.state.settings.readingMode||'auto');
+    grid.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.readingMode===escolha));
+    const tip=document.getElementById('reading-mode-tip');
+    if(!tip)return;
+    if(aberto){
+      const efetivo=this.reader.resolveReadingMode(livro.format,livro)==='vertical'?'vertical':'horizontal';
+      const padrao=this.reader.defaultReadingMode(livro.format)==='vertical'?'vertical':'horizontal';
+      tip.textContent=`Esta escolha vale só para “${livro.title||'este livro'}”. Cada livro guarda o seu sentido de rolagem. `+
+        `Agora está em ${efetivo}; no automático, ${BookFormats.label(livro.format)} abre em ${padrao}.`;
+    }else{
+      tip.textContent='Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. '+
+        'Mudando durante a leitura, o ajuste fica guardado só naquele livro.';
+    }
+  },
   setupPanels(){
     document.querySelectorAll('[data-close-panel]').forEach(b=>b.onclick=()=>this.closePanels());
     document.getElementById('backdrop').onclick=()=>{this.closePanels();this.closeDrawer()};
@@ -7342,10 +8007,21 @@ const App={
     document.querySelectorAll('#font-grid button').forEach(b=>b.onclick=()=>this.updateSetting('fontFamily',b.dataset.font));
     document.querySelectorAll('#orientation-grid button').forEach(b=>b.onclick=()=>this.updateSetting('orientation',b.dataset.orientation));
     document.querySelectorAll('#reading-mode-grid button').forEach(b=>b.onclick=async()=>{
-      await this.updateSetting('readingMode',b.dataset.readingMode);
-      if(this.reader&&document.getElementById('view-reader').classList.contains('active')){
-        await this.reader.reloadReadingMode();
-        Utils.toast(b.dataset.readingMode==='auto'?'Modo automático aplicado.':`Leitura ${b.dataset.readingMode==='vertical'?'vertical':'horizontal'} aplicada.`,'book-open');
+      const valor=b.dataset.readingMode;
+      if(this.readerIsOpen()){
+        /* com um livro aberto, a escolha é só dele */
+        await this.reader.setReadingMode(valor==='auto'?null:valor);
+        this.syncReadingModeUi();
+        const efetivo=this.reader.isVerticalReading()?'vertical':'horizontal';
+        Utils.toast(valor==='auto'
+          ?`Automático neste livro: leitura ${efetivo}.`
+          :`Leitura ${efetivo} aplicada a este livro.`,'book-open');
+      }else{
+        await this.updateSetting('readingMode',valor);
+        this.syncReadingModeUi();
+        Utils.toast(valor==='auto'
+          ?'Padrão automático: cada formato abre no sentido natural dele.'
+          :`Novos livros vão abrir em leitura ${valor==='vertical'?'vertical':'horizontal'}.`,'book-open');
       }
     });
     
@@ -7406,6 +8082,7 @@ const App={
   },
   openPanel(id){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('visible'));
+    if(id==='panel-settings')this.syncReadingModeUi();
     document.getElementById(id).classList.add('visible');
     document.getElementById('backdrop').classList.add('visible');
     lucide.createIcons();

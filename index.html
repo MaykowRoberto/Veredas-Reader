@@ -36,8 +36,8 @@
     <button class="bar-btn primary" id="btn-import" aria-label="Importar livro">
       <i data-lucide="plus"></i>
     </button>
-    <!-- input file atualizado suportando epub, pdf, txt, docx, mobi e audiolivros (mp3, m4b) -->
-    <input type="file" id="file-input" accept=".epub,.pdf,.txt,.docx,.mobi,.mp3,.m4b,audio/mpeg,audio/mp4,audio/x-m4b" multiple hidden>
+    <!-- input file: livros (epub, pdf, txt, md, docx, mobi), audiolivros (mp3, m4b) e vídeo (mp4) -->
+    <input type="file" id="file-input" accept=".epub,.pdf,.txt,.md,.markdown,.docx,.mobi,.mp3,.m4b,.mp4,text/markdown,audio/mpeg,audio/mp4,audio/x-m4b,video/mp4" multiple hidden>
     <!-- entrada usada para vasculhar uma pasta inteira do dispositivo -->
     <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
   </header>
@@ -79,7 +79,7 @@
             <button class="nav-item" data-filter="toread"><i data-lucide="bookmark-plus"></i>Para ler<span class="count" id="count-toread">0</span></button>
             <button class="nav-item" data-filter="paused"><i data-lucide="pause-circle"></i>Pausados<span class="count" id="count-paused">0</span></button>
             <button class="nav-item" data-filter="favorite"><i data-lucide="heart"></i>Favoritos<span class="count" id="count-favorite">0</span></button>
-            <button class="nav-item" data-filter="audio"><i data-lucide="headphones"></i>Audiolivros<span class="count" id="count-audio">0</span></button>
+            <button class="nav-item" data-filter="audio"><i data-lucide="headphones"></i>Áudio e vídeo<span class="count" id="count-audio">0</span></button>
 
             <div class="nav-title">Organização</div>
             <button class="nav-item" data-filter="collections"><i data-lucide="layers-3"></i>Coleções</button>
@@ -213,6 +213,9 @@
      PLAYER DE AUDIOLIVRO (tela cheia) + MINI-PLAYER
      ============================================================ -->
 <audio id="audio-el" preload="auto" playsinline></audio>
+<!-- O <video> mora dentro do palco do player (ver .ap-video); fica escondido
+     enquanto o livro aberto for de áudio. -->
+
 
 <section class="audio-player" id="audio-player" role="dialog" aria-modal="true" aria-label="Player de audiolivro" hidden>
   <div class="ap-bg" id="ap-bg" aria-hidden="true"></div>
@@ -224,7 +227,14 @@
     </header>
 
     <div class="ap-body">
-      <div class="ap-stage"><div class="ap-art" id="ap-art"></div></div>
+      <div class="ap-stage">
+        <div class="ap-art" id="ap-art"></div>
+        <div class="ap-video" id="ap-video" hidden>
+          <video id="video-el" preload="auto" playsinline webkit-playsinline
+                 disablepictureinpicture controlslist="nodownload noremoteplayback nofullscreen"
+                 aria-label="Vídeo em reprodução"></video>
+        </div>
+      </div>
 
       <div class="ap-main">
         <div class="ap-meta">
@@ -356,7 +366,7 @@
         <button data-reading-mode="horizontal">Horizontal</button>
         <button data-reading-mode="vertical">Vertical</button>
       </div>
-      <div class="drag-tip">Automático usa rolagem horizontal para EPUB, MOBI e TXT; vertical para PDF e DOCX. Você pode alterar quando quiser.</div>
+      <div class="drag-tip" id="reading-mode-tip">Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. Mudando durante a leitura, o ajuste fica guardado só naquele livro.</div>
     </div>
     <div class="setting-section">
       <h4>Virada de página</h4>
@@ -582,6 +592,8 @@
       <div class="loader-fill" id="loader-fill"></div>
     </div>
     <div class="loader-pct" id="loader-pct">0%</div>
+    <!-- quanto já veio, velocidade e tempo restante durante um download -->
+    <div class="loader-meta" id="loader-meta"></div>
     <button type="button" class="loader-cancel" id="loader-cancel">Cancelar</button>
   </div>
 </div>
@@ -614,7 +626,7 @@
       <div class="conversion-dialog-icon" id="scan-icon"><i data-lucide="folder-search"></i></div>
       <div style="min-width:0;flex:1">
         <h3 id="scan-title">Buscar livros no dispositivo</h3>
-        <p id="scan-subtitle">Encontre arquivos EPUB e MOBI já salvos no aparelho.</p>
+        <p id="scan-subtitle">Encontre arquivos EPUB, MOBI e M4B já salvos no aparelho.</p>
       </div>
       <button class="icon-btn" id="scan-close" aria-label="Fechar"><i data-lucide="x"></i></button>
     </div>
