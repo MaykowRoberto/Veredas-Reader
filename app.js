@@ -4803,7 +4803,8 @@ class ReaderEngine{
     this.annotationPressTimer=null;this.activeAnnotationId=null;
     /* Quadrinhos: arquivo aberto, agrupamento de páginas e estado do zoom. */
     this.comic=null;this.comicViews=[];this.comicRtl=false;
-    this.comicFit='page';this.comicSpread=true;this.comicRatio=null;this.comicWideZoom=1;
+    this.comicFit='page';this.comicSpread=true;this.comicRatio=null;
+    this.comicWideZoom=1;this.comicFlow=null;this.comicPinching=false;
     this.comicZoom={scale:1,x:0,y:0};
     this.rtl=false;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
@@ -5180,6 +5181,9 @@ class ReaderEngine{
   }
   async renderComicPageIfNeeded(viewIndex){
     if(!this.comic||!this.container)return;
+    /* Durante a pinça a tela é da GPU: montar imagem aqui devolveria
+       o tremor que o gesto acabou de perder. */
+    if(this.comicPinching)return;
     if(viewIndex<0||viewIndex>=this.comicViews.length)return;
     const wrap=this.container.querySelector(`.comic-page-wrap[data-comic-view="${viewIndex}"]`);
     if(!wrap||wrap.dataset.rendered==='1')return;
@@ -5245,7 +5249,7 @@ class ReaderEngine{
   /* Mantém na memória só as páginas por perto: um quadrinho de 200
      páginas não cabe inteiro na memória de um celular. */
   trimComicMemory(){
-    if(!this.comic||!this.container)return;
+    if(!this.comic||!this.container||this.comicPinching)return;
     const atual=this.currentPageIndex;
     const janela=this.isVerticalReading()?4:2;
     const manter=new Set();
@@ -5410,9 +5414,24 @@ class ReaderEngine{
        palco que nem existe mais: todo arraste de um dedo era tratado como
        "passear pela página ampliada" e a rolagem parava de funcionar. */
     this.comicZoom={scale:1,x:0,y:0};
-    this.comicWideZoom=1;
+    this.comicWideZoom=1;this.comicPinching=false;
+    this.container.style.removeProperty('--comic-zoom');
+    this.container.classList.remove('comic-wide','comic-pinching');
     this.updateReadingModeControl();
     this.updateComicControls();
+
+    /* Na rolagem contínua do quadrinho, as páginas moram dentro de um
+       invólucro. Ele existe por causa da pinça: durante o gesto, ampliar
+       é só um `transform` nesse invólucro — um valor, na GPU, sem
+       recalcular o tamanho de nenhuma imagem. A largura de verdade só
+       muda quando o dedo sai da tela. */
+    this.comicFlow=null;
+    if(isComic&&verticalReading){
+      this.comicFlow=document.createElement('div');
+      this.comicFlow.className='comic-flow';
+      this.container.appendChild(this.comicFlow);
+    }
+    const destino=this.comicFlow||this.container;
 
     this.pagesData.forEach((html,i)=>{
       const d=document.createElement('div');
@@ -5425,7 +5444,7 @@ class ReaderEngine{
         ? html
         : `<div class="page-content"><div class="page-text" style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">Página ${i+1} de ${this.pagesData.length}</div></div>`;
 
-      this.container.appendChild(d);
+      destino.appendChild(d);
     });
 
     this.sliderBook = this.container;
@@ -5718,38 +5737,107 @@ class ReaderEngine{
     this.reserveComicHeights();
     c.scrollLeft=px*z-ax;
     c.scrollTop=py*z-ay;
-    const badge=document.getElementById('comic-zoom-badge');
-    if(badge){
-      badge.textContent=`${Math.round(z*100)}%`;
-      badge.classList.toggle('show',z>1.02);
-    }
+    this.atualizarSeloZoom();
   }
-  /* Pinça sem preventDefault: com `touch-action` proibindo o zoom
-     nativo, os dois dedos já chegam até aqui, e o ouvinte pode ser
-     passivo — ou seja, incapaz de travar a rolagem. */
+  /* ------------------------------------------------------------
+     Pinça na rolagem contínua
+     ------------------------------------------------------------
+     O zoom daqui mexe na LARGURA das páginas, e largura é layout:
+     refazer o tamanho de várias imagens a cada quadro do gesto faz
+     a tela tremer no celular. Então o gesto é dividido em dois
+     momentos:
+
+       enquanto os dedos se movem → `transform: scale()` no
+         invólucro. Um valor só, na GPU, sem layout nenhum;
+       quando os dedos saem      → a largura de verdade assume, e a
+         rolagem é reposicionada de uma vez para o quadro não pular.
+
+     Nenhum `preventDefault` em lugar nenhum: o `touch-action` já
+     impede o zoom nativo, e deixar o navegador arrastar junto com a
+     pinça é bom — é o movimento que o dedo está pedindo.
+     ------------------------------------------------------------ */
   setupComicWideZoom(){
     const c=this.container;
     if(!c)return;
-    let pincando=false,d0=1,z0=1,ax=0,ay=0;
+    let pincando=false,d0=1,z0=1,ox=0,oy=0,escala=1,raf=0;
     const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+    const flow=()=>this.comicFlow;
+
+    const pintar=()=>{
+      raf=0;
+      const f=flow();
+      if(f&&pincando)f.style.transform=`scale(${escala})`;
+    };
+
     c.addEventListener('touchstart',e=>{
-      if(e.touches.length!==2)return;
-      pincando=true;d0=dist(e.touches)||1;z0=this.comicWideZoom||1;
-      ax=(e.touches[0].clientX+e.touches[1].clientX)/2;
-      ay=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      if(e.touches.length!==2||!flow())return;
+      const rect=c.getBoundingClientRect();
+      const mx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
+      const my=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
+      pincando=true;
+      this.comicPinching=true;
+      d0=dist(e.touches)||1;
+      z0=this.comicWideZoom||1;
+      escala=1;
+      /* Âncora em coordenadas do conteúdo: é dela que sai, no fim,
+         o reposicionamento exato da rolagem. */
+      ox=c.scrollLeft+mx;
+      oy=c.scrollTop+my;
+      const f=flow();
+      f.style.transformOrigin=`${ox}px ${oy}px`;
+      f.style.willChange='transform';
+      c.classList.add('comic-pinching');
     },{passive:true});
+
     c.addEventListener('touchmove',e=>{
       if(!pincando||e.touches.length!==2)return;
-      this.setComicWideZoom(z0*(dist(e.touches)/d0),ax,ay);
+      const bruto=dist(e.touches)/d0;
+      /* O limite é do zoom final, não do gesto: assim a imagem não
+         "bate na parede" e volta, que é outra forma de tremer. */
+      escala=Utils.clamp(z0*bruto,1,4)/z0;
+      if(!raf)raf=requestAnimationFrame(pintar);
     },{passive:true});
-    const fim=()=>{pincando=false};
-    c.addEventListener('touchend',fim,{passive:true});
-    c.addEventListener('touchcancel',fim,{passive:true});
+
+    const encerrar=()=>{
+      if(!pincando)return;
+      pincando=false;
+      this.comicPinching=false;
+      c.classList.remove('comic-pinching');
+      if(raf){cancelAnimationFrame(raf);raf=0}
+      const f=flow();
+      const s=escala;
+      const destino=Utils.clamp(z0*s,1,4);
+      const sl=c.scrollLeft,st=c.scrollTop;
+      if(f){f.style.transform='';f.style.willChange=''}
+      if(Math.abs(destino-z0)<0.01){this.atualizarSeloZoom();return}
+      /* Tudo na mesma tarefa: trocar a largura, refazer as reservas e
+         recolocar a rolagem. Sem quadro intermediário, sem pulo. */
+      this.comicWideZoom=destino;
+      c.style.setProperty('--comic-zoom',String(destino));
+      c.classList.toggle('comic-wide',destino>1.02);
+      this.reserveComicHeights();
+      const k=destino/z0-1;
+      c.scrollLeft=sl+ox*k;
+      c.scrollTop=st+oy*k;
+      this.atualizarSeloZoom();
+      /* As páginas que entraram em cena com o novo tamanho. */
+      this.renderLazyPage(this.currentPageIndex);
+    };
+    c.addEventListener('touchend',e=>{if(e.touches.length<2)encerrar()},{passive:true});
+    c.addEventListener('touchcancel',encerrar,{passive:true});
+
     c.addEventListener('wheel',e=>{
       if(!e.ctrlKey)return;
       e.preventDefault();
       this.setComicWideZoom((this.comicWideZoom||1)*(e.deltaY<0?1.12:1/1.12),e.clientX,e.clientY);
     },{passive:false});
+  }
+  atualizarSeloZoom(){
+    const selo=document.getElementById('comic-zoom-badge');
+    if(!selo)return;
+    const z=this.comicWideZoom||1;
+    selo.textContent=`${Math.round(z*100)}%`;
+    selo.classList.toggle('show',z>1.02);
   }
   turnToPage(index,options={}){
     if(this.curl&&this.curl.active&&!options.fromCurl)this.curl.cancel();
@@ -6499,7 +6587,8 @@ class ReaderEngine{
     this.pdfDoc=null;
     /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
     if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
-    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;this.comicWideZoom=1;
+    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;
+    this.comicWideZoom=1;this.comicFlow=null;this.comicPinching=false;
     this.updateComicControls();
     this.currentExtractor=null;
     this.pagesData=[];this.pageMeta=[];this.chapterStarts=[];
@@ -8517,7 +8606,7 @@ const FileFingerprint={
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-19 · 5';
+const BUILD='2026-09-19 · 6';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

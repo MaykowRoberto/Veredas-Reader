@@ -648,15 +648,26 @@ body.reader-open .search-bar{display:none!important}
   overflow-y:auto;overflow-x:auto;
   touch-action:pan-x pan-y;overscroll-behavior:contain;
 }
-.slider-book.comic-vertical .page.comic-page{
-  position:relative;inset:auto;
+/* Invólucro das páginas. É ele que carrega a largura ampliada — e é
+   nele que a pinça aplica o `transform` enquanto os dedos se movem,
+   porque um `transform` não refaz layout nenhum. */
+.slider-book.comic-vertical .comic-flow{
+  display:block;
   width:calc(100% * var(--comic-zoom,1));
+  transform-origin:0 0;
+  backface-visibility:hidden;
+}
+.slider-book.comic-vertical .page.comic-page{
+  position:relative;inset:auto;width:100%;
   min-height:0;height:auto;margin:0;box-shadow:none;background:#101014;
   overflow:visible!important;
   overscroll-behavior:auto!important;
   touch-action:auto!important;
   scroll-snap-align:none;
 }
+/* Durante a pinça, nada de transições disputando com o gesto. */
+.slider-book.comic-vertical.comic-pinching .comic-img{transition:none}
+.slider-book.comic-vertical.comic-pinching{scroll-behavior:auto}
 .slider-book.comic-vertical .comic-page-wrap{height:auto;min-height:0;align-items:flex-start}
 .slider-book.comic-vertical .comic-slot{height:auto;align-items:flex-start}
 .slider-book.comic-vertical .comic-img{width:100%;height:auto;max-height:none}
