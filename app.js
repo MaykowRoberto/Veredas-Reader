@@ -9509,29 +9509,15 @@ const Backup={
      LER UM ARQUIVO DE BACKUP
      ------------------------------------------------------------ */
   async ler(file){
+    /* A restauração não depende de extensão/MIME. Isso é proposital:
+       um backup compartilhado pela Web Share pode viajar como .txt,
+       mas os bytes continuam sendo o ZIP original. */
     let zip;
     try{
       zip=await JSZip.loadAsync(file);
     }catch(e){
-      /* O botão "Enviar para outro app" usa um .txt de transporte porque
-         alguns navegadores móveis recusam application/zip no Web Share.
-         Um .zip normal continua sendo o caminho principal. */
-      let transporte=null;
-      try{
-        transporte=await this.arquivoDeCompartilhamentoParaZip(file);
-      }catch(err){
-        if(err instanceof ParseError)throw err;
-      }
-      if(!transporte){
-        throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
-          'Escolha o .zip gerado pelo aplicativo ou o .txt de backup recebido por outro aplicativo.');
-      }
-      try{
-        zip=await JSZip.loadAsync(transporte);
-      }catch(err){
-        throw new ParseError('O arquivo compartilhado está corrompido.',
-          'O conteúdo compactado não pôde ser aberto.');
-      }
+      throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
+        'Escolha o .zip salvo pelo Veredas ou o .txt recebido pelo compartilhamento.');
     }
     const entrada=zip.file(this.NOME_JSON)||zip.file(new RegExp(`${this.NOME_JSON}$`))[0];
     if(!entrada){
@@ -9855,97 +9841,31 @@ Object.assign(Backup,{
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
     return true;
   },
-  /* Arquivo de teste no formato que o navegador costuma aceitar para
-     compartilhamento entre aplicativos. O ZIP continua sendo o formato
-     oficial do backup salvo; este TXT é só o "envelope" usado pelo botão
-     Enviar para outro app. */
-  arquivoDeTesteCompartilhamento(){
-    return new File(
-      ['VEREDAS-READER-BACKUP-V1\\n'],
-      'Veredas Reader - teste.txt',
-      {type:'text/plain'}
-    );
-  },
+  /* O Chromium atual não permite .zip nem application/octet-stream no
+     Web Share. A lista oficial aceita .txt/text/plain. Para não perder o
+     backup nem obrigar o usuário a transformar o arquivo em Base64, o
+     Veredas faz uma adaptação mínima: mantém EXATAMENTE os bytes do ZIP e
+     troca apenas nome/extensão e MIME durante o compartilhamento.
 
-  /* O Web Share não trata "posso compartilhar arquivos?" e "posso
-     compartilhar ESTE tipo de arquivo?" como a mesma coisa. Android
-     Chromium, por exemplo, valida a extensão e o MIME contra uma lista
-     própria. Por isso o teste precisa usar exatamente .txt + text/plain,
-     que é o formato seguro que vamos entregar ao share sheet. */
+     O arquivo recebido continua sendo um ZIP por dentro. O restaurador
+     usa JSZip diretamente nos bytes, portanto a extensão .txt não altera
+     a restauração. */
+  arquivoDeTransporte(pacote){
+    if(!pacote||!pacote.blob)return null;
+    const nomeZip=String(pacote.nome||'Veredas Reader - backup.zip');
+    const nomeTxt=nomeZip.replace(/\.zip$/i,'')+'.txt';
+    return new File([pacote.blob],nomeTxt,{type:'text/plain',lastModified:Date.now()});
+  },
+  arquivoTxtDeTeste(){
+    const vazio=new Uint8Array([0x50,0x4b,0x05,0x06,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+    return new File([vazio],'teste.txt',{type:'text/plain'});
+  },
   podeCompartilhar(){
     try{
       if(typeof navigator.share!=='function')return false;
       if(typeof navigator.canShare!=='function')return false;
-      if(typeof isSecureContext!=='undefined'&&!isSecureContext)return false;
-      return !!navigator.canShare({
-        files:[this.arquivoDeTesteCompartilhamento()]
-      });
+      return !!navigator.canShare({files:[this.arquivoTxtDeTeste()]});
     }catch(e){return false}
-  },
-
-  /* Converte os bytes do ZIP para base64 sem usar spread em um array
-     gigantesco. O resultado é um TXT de transporte que continua contendo
-     exatamente o mesmo ZIP, apenas representado como texto. */
-  async zipParaArquivoDeCompartilhamento(pacote){
-    if(!pacote||!pacote.blob)throw new Error('Backup sem dados para compartilhar.');
-    const buffer=await pacote.blob.arrayBuffer();
-    const bytes=new Uint8Array(buffer);
-    const partes=[];
-    const TAM=0x8000;
-    for(let i=0;i<bytes.length;i+=TAM){
-      let bin='';
-      const fim=Math.min(i+TAM,bytes.length);
-      for(let j=i;j<fim;j++)bin+=String.fromCharCode(bytes[j]);
-      partes.push(bin);
-      if((i/TAM)%16===0)await Utils.yieldToUI();
-    }
-    const base64=btoa(partes.join(''));
-    const conteudo=[
-      'VEREDAS-READER-BACKUP-V1',
-      'format=zip',
-      `filename=${pacote.nome}`,
-      'encoding=base64',
-      'data:',
-      base64,
-      ''
-    ].join('\\n');
-    const safeName=pacote.nome.replace(/\\.zip$/i,'.txt');
-    return new File([conteudo],safeName,{type:'text/plain'});
-  },
-
-  /* Leitor do envelope TXT usado pelo compartilhamento. O ZIP original
-     continua sendo aceito pelo mesmo fluxo; isto só entra em ação quando
-     JSZip não consegue abrir o arquivo escolhido. */
-  async arquivoDeCompartilhamentoParaZip(file){
-    const texto=await file.text();
-    const marcador='VEREDAS-READER-BACKUP-V1';
-    if(!texto.startsWith(marcador))return null;
-
-    const inicio=texto.indexOf('data:');
-    if(inicio<0)throw new ParseError(
-      'O arquivo compartilhado está incompleto.',
-      'A parte de dados do backup não foi encontrada.'
-    );
-
-    const base64=texto.slice(inicio+'data:'.length).replace(/\\s+/g,'');
-    if(!base64)throw new ParseError(
-      'O arquivo compartilhado está vazio.',
-      'Nenhum dado do backup foi encontrado.'
-    );
-
-    let bin;
-    try{
-      bin=atob(base64);
-    }catch(e){
-      throw new ParseError(
-        'O arquivo compartilhado está corrompido.',
-        'Os dados recebidos não puderam ser decodificados.'
-      );
-    }
-
-    const bytes=new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-    return new Blob([bytes],{type:'application/zip'});
   },
   dataLegivel(ms){
     if(!ms)return null;
@@ -9964,7 +9884,6 @@ Object.assign(Backup,{
     const ultimo=this.dataLegivel(App.state.settings.lastBackupAt);
     const espera=await this.pendentes();
     const lembretesLigados=App.state.settings.backupLembretes!==false;
-    const shareOk=this.podeCompartilhar();
 
     corpo.innerHTML=`
       <div class="backup-stats">
@@ -9984,16 +9903,13 @@ Object.assign(Backup,{
         <h4>Guardar</h4>
         <div class="backup-actions">
           <button class="soft-btn primary" id="backup-save"><i data-lucide="download"></i>Salvar backup</button>
-          ${shareOk?'<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>Enviar para outro app</button>':''}
+          ${this.podeCompartilhar()?'<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>Enviar para outro app</button>':''}
         </div>
-        <div class="drag-tip">
-          O backup principal é um <strong>.zip</strong>: ele guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si, nem as capas.
-          ${shareOk
-            ?'<br><br><strong>Para enviar pelo botão acima, o navegador usa um arquivo .txt de transporte.</strong> Ele contém o mesmo backup compactado; por ser texto, pode ficar um pouco maior que o .zip original. Ao restaurar, o Veredas reconhece esse formato automaticamente.'
-            :(typeof isSecureContext!=='undefined'&&isSecureContext===false)
-              ?'<br><br>O envio direto para outro aplicativo não aparece porque esta página está aberta por um endereço <code>http://</code> comum. Abra o aplicativo pelo <code>https://</code> do GitHub Pages para liberar esse recurso.'
-              :'<br><br>Este navegador não oferece envio direto de arquivos para outro aplicativo. Salve o <strong>.zip</strong> e anexe-o pelo aplicativo que preferir.'}
-        </div>
+        <div class="drag-tip">O backup original é um ZIP. Em <strong>Enviar para outro app</strong>, o navegador exige um formato permitido para compartilhamento: o Veredas envia os <strong>mesmos bytes do ZIP</strong> com extensão <code>.txt</code>. Ao receber, o próprio Veredas reconhece o conteúdo e restaura normalmente. O arquivo guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si, nem as capas.${
+          this.podeCompartilhar()?''
+          :(typeof isSecureContext!=='undefined'&&isSecureContext===false)
+            ?'<br><br>O envio direto para outro aplicativo não aparece porque esta página está aberta por um endereço <code>http://</code> comum. Navegadores só liberam esse recurso em endereços seguros (<code>https://</code>) ou em <code>localhost</code>.'
+            :'<br><br>Este navegador não oferece o envio direto para outro aplicativo. Salve o arquivo e anexe-o pelo aplicativo que preferir.'}</div>
       </div>
 
       <div class="setting-section">
@@ -10137,21 +10053,23 @@ Object.assign(Backup,{
     const recado=(err&&err.message)||'';
     /* Os motivos que realmente acontecem, em português. */
     let causa='';
-    if(ctx&&ctx.seguro===false){
-      causa='O compartilhamento só funciona em um contexto seguro. Esta página está sendo aberta por um endereço que o navegador não considera apropriado para enviar arquivos a outros aplicativos.';
-    }else if(/NotAllowed/i.test(nome)){
-      causa='O navegador bloqueou o compartilhamento por uma regra de segurança. Isso pode envolver a ativação do toque, uma política do navegador ou uma restrição do tipo de arquivo.';
+    if(/NotAllowed/i.test(nome)){
+      causa='O navegador recebeu um arquivo em formato permitido para compartilhamento, mas recusou a abertura da folha nativa. Isso normalmente indica bloqueio de segurança, aba fora de primeiro plano ou perda da ativação do toque.';
     }else if(/NotSupported|TypeError/i.test(nome)){
-      causa='Este navegador não aceita o tipo de arquivo usado para o compartilhamento direto.';
+      causa='Este navegador não conseguiu iniciar o compartilhamento de arquivos. O Veredas usa um arquivo de transporte .txt porque o Chromium não permite .zip pela Web Share.';
+    }else if(ctx&&ctx.seguro===false){
+      causa='O compartilhamento só funciona em endereços seguros. Este aplicativo está sendo aberto por um endereço http:// comum, e nesse caso o navegador bloqueia o envio para outros aplicativos.';
     }else if(/Security|InvalidState/i.test(nome)){
-      causa='O navegador considerou a situação insegura para compartilhar o arquivo.';
+      causa='O navegador considerou a situação insegura para compartilhar.';
     }else{
       causa='O sistema não aceitou receber o arquivo.';
     }
     const detalhe=[nome,recado].filter(Boolean).join(': ')||'sem detalhes do navegador';
     const linhaTipo=ctx?'\n'+[
       ctx.tipo?`tipo: ${ctx.tipo}`:'',
+      ctx.nome?`nome: ${ctx.nome}`:'',
       ctx.bytes!=null?`tamanho: ${ctx.bytes} bytes`:'',
+      ctx.modo?`modo: ${ctx.modo}`:'',
       ctx.gesto!=null?`toque ainda ativo: ${ctx.gesto}`:'',
       ctx.seguro!=null?`endereço seguro: ${ctx.seguro}`:'',
       ctx.endereco?`origem: ${ctx.endereco}`:'',
@@ -10209,14 +10127,19 @@ Object.assign(Backup,{
   /* ------------------------------------------------------------
      ENVIAR o backup para outro aplicativo.
 
-     O ZIP continua sendo o arquivo oficial do backup. Para o Web Share,
-     porém, alguns navegadores móveis rejeitam explicitamente .zip /
-     application/zip. Nesses aparelhos, o botão usa um .txt de transporte
-     que contém os mesmos bytes do ZIP codificados em base64.
+     Aqui existe uma regra do navegador que decide tudo: a folha de
+     compartilhamento do Android só abre se `navigator.share()` for
+     chamado DENTRO do toque da pessoa. Um `await` no meio do caminho
+     — gerar o arquivo, por exemplo — já é tarde demais: o navegador
+     recusa, e o código acabava caindo no download comum. Era por isso
+     que este botão fazia a mesma coisa que "Salvar backup".
 
-     O preparo acontece ANTES do toque. A única operação feita no clique
-     do botão "Escolher o app" é `navigator.share()`, preservando a
-     ativação transitória exigida pelo navegador.
+     A solução é preparar o arquivo ANTES do toque que compartilha. O
+     aviso que a pessoa pediu para ver serve para as duas coisas ao
+     mesmo tempo: enquanto ela lê o que vai (e o que não vai) no
+     arquivo, ele está sendo montado em segundo plano; quando ela
+     toca em "Escolher o app", o arquivo já existe e a folha abre
+     na hora.
      ------------------------------------------------------------ */
   async compartilhar(){
     const livros=(App.library&&App.library.allBooks)||[];
@@ -10228,39 +10151,28 @@ Object.assign(Backup,{
       });
       return;
     }
-
     if(!this.podeCompartilhar()){
       const salvar=await AppModal.confirm({
-        title:'Compartilhamento direto indisponível',
-        message:'Este navegador não libera o envio de arquivos para outros aplicativos neste momento. Você pode salvar o backup normalmente e anexá-lo depois pelo aplicativo que quiser.',
-        confirmText:'Salvar o backup',confirmIcon:'download',
+        title:'Este aparelho não abre a lista de aplicativos',
+        message:'O navegador aqui não oferece o compartilhamento direto. Dá para salvar o arquivo e enviá-lo depois pelo aplicativo que você quiser.',
+        confirmText:'Salvar o arquivo',confirmIcon:'download',
         cancelText:'Agora não',icon:'share-2'
       });
       if(salvar)await this.exportar();
       return;
     }
 
+    /* O backup real continua sendo ZIP. Para a folha nativa, porém,
+       o arquivo de transporte é .txt/text/plain contendo os MESMOS bytes
+       do ZIP. Nada é recodificado e nada é perdido. */
     let arquivo=null,pacote=null,falhou=null;
-    const preparo=this.gerar({onStatus:t=>{
-      /* O loader geral pode estar fechado aqui; a mensagem aparece no
-         próprio modal e não interrompe a pessoa. */
-      const aviso=document.getElementById('share-pronto');
-      if(aviso&&aviso.isConnected){
-        const texto=String(t||'Preparando o backup...');
-        aviso.querySelector('div').textContent=texto;
-      }
-    }})
-      .then(async p=>{
-        pacote=p;
-        const aviso=document.getElementById('share-pronto');
-        if(aviso&&aviso.isConnected)aviso.querySelector('div').textContent='Preparando o arquivo para o compartilhamento...';
-        arquivo=await this.zipParaArquivoDeCompartilhamento(p);
-      })
+    const preparo=this.gerar()
+      .then(p=>{pacote=p;arquivo=this.arquivoDeTransporte(p)})
       .catch(e=>{console.error(e);falhou=e});
 
     const confirmou=await AppModal.custom({
       title:'Enviar para outro app',
-      subtitle:'O backup continua sendo o mesmo',
+      subtitle:'Vale conferir o que vai no arquivo',
       icon:'share-2',
       confirmText:'Escolher o app',
       confirmIcon:'share-2',
@@ -10269,18 +10181,13 @@ Object.assign(Backup,{
         <div class="share-what">
           <div class="share-line vai">
             <i data-lucide="check"></i>
-            <div><strong>Vai no backup</strong>
-            <small>Seu progresso, grifos, citações, notas, marcadores e organização da estante.</small></div>
+            <div><strong>Vai no arquivo</strong>
+            <small>O seu progresso de leitura, os grifos, as citações, as notas, os marcadores e a organização da estante — status, favoritos, coleções, séries e tags.</small></div>
           </div>
           <div class="share-line nao">
             <i data-lucide="x"></i>
-            <div><strong>Não vão os livros</strong>
-            <small>Os arquivos dos livros continuam fora do backup, assim como as capas.</small></div>
-          </div>
-          <div class="share-line vai">
-            <i data-lucide="file-text"></i>
-            <div><strong>Formato usado no envio</strong>
-            <small>O navegador recebe um <strong>.txt</strong> que contém o mesmo <strong>.zip</strong> compactado por dentro. O Veredas reconhece esse arquivo automaticamente na restauração.</small></div>
+            <div><strong>Não vai no arquivo</strong>
+            <small>Os livros em si, nem as capas — por isso o arquivo tem só alguns KB. Quem receber precisa ter os arquivos dos livros para que as marcações voltem ao lugar, e as capas reaparecem sozinhas na importação.</small></div>
           </div>
         </div>
         <div class="backup-status" id="share-pronto">
@@ -10291,23 +10198,21 @@ Object.assign(Backup,{
         const btn=AppModal.confirmBtn;
         if(btn)btn.disabled=true;
         const aviso=document.getElementById('share-pronto');
-
         preparo.then(()=>{
           if(!aviso||!aviso.isConnected)return;
           if(falhou||!arquivo){
             aviso.className='backup-status alerta';
-            aviso.innerHTML='<i data-lucide="alert-triangle"></i><div>Não foi possível preparar o arquivo de compartilhamento.</div>';
+            aviso.innerHTML='<i data-lucide="alert-triangle"></i><div>Não foi possível montar o arquivo.</div>';
           }else{
             aviso.className='backup-status ok';
-            aviso.innerHTML=`<i data-lucide="shield-check"></i><div>Pronto para enviar — <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>.</div>`;
+            aviso.innerHTML=`<i data-lucide="shield-check"></i><div>Arquivo pronto — <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>.</div>`;
             if(btn)btn.disabled=false;
           }
           lucide.createIcons({root:aviso});
         });
       },
-      /* IMPORTANTE: esta função não é async. O primeiro `await` do
-         compartilhamento só acontece DEPOIS de `navigator.share()` ter
-         sido chamado dentro do clique. */
+      /* Chamado de dentro do clique. Nada de pesado aqui: quanto menos
+         acontecer entre o toque e a chamada, melhor. */
       aoConfirmar:()=>{
         if(!arquivo)return false;
         return this.dispararEnvio(arquivo);
@@ -10315,7 +10220,7 @@ Object.assign(Backup,{
     });
     if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
 
-    if(!confirmou)return;
+    if(!confirmou)return;                       /* cancelou */
     if(!pacote||falhou){
       Utils.toast('Não foi possível montar o arquivo de backup.','alert-triangle');
       return;
@@ -10324,119 +10229,67 @@ Object.assign(Backup,{
     let r=this._envio;
     this._envio=null;
 
+    /* Nem chegou a tentar (o tipo do arquivo foi recusado). */
     if(!r||!r.promessa){
       this.baixar(pacote);
-      await this.explicarRecusa(null,{
-        tipo:arquivo?.type||'text/plain',
-        bytes:arquivo?.size,
+      await this.explicarRecusa(null,{tipo:'(o aparelho recusou o tipo do arquivo)',
         seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
-        endereco:location.protocol+'//'+location.hostname
-      });
+        endereco:location.protocol+'//'+location.hostname});
       await this.registrarBackupFeito(pacote);
       return;
     }
 
     let erro=await r.promessa.then(()=>null,e=>e);
-    if(!erro){
-      await this.registrarBackupFeito(pacote);
-      return;
-    }
-    if(erro.name==='AbortError')return;
+    if(!erro){await this.registrarBackupFeito(pacote);return}
+    if(erro.name==='AbortError')return;          /* fechou a folha */
 
     console.warn('[Veredas] navigator.share recusou o envio:',erro,r.contexto);
 
-    /* Segunda tentativa: o arquivo já está pronto e agora a ação fica
-       isolada em um segundo toque explícito. */
-    if(/NotAllowed|Security/i.test(erro.name||'')){
-      const tentou=await AppModal.custom({
-        title:'O navegador recusou o primeiro envio',
-        subtitle:'O arquivo já está pronto',
-        icon:'share-2',
-        confirmText:'Abrir a lista de apps',
-        confirmIcon:'share-2',
-        cancelText:'Salvar o backup',
-        html:`
-          <p>O backup está pronto e o formato usado para o envio é compatível.</p>
-          <p>Toque em <strong>Abrir a lista de apps</strong> para tentar novamente a partir de um toque novo.</p>`,
-        aoConfirmar:()=>this.dispararEnvio(arquivo)
-      });
-      if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
-      if(tentou){
-        const r2=this._envio;this._envio=null;
-        if(r2&&r2.promessa){
-          const erro2=await r2.promessa.then(()=>null,e=>e);
-          if(!erro2){
-            await this.registrarBackupFeito(pacote);
-            return;
-          }
-          if(erro2.name==='AbortError')return;
-          console.warn('[Veredas] segunda tentativa também recusada:',erro2,r2.contexto);
-          erro=erro2;r=r2;
-        }
-      }
-    }
-
+    /* O arquivo de transporte já usa .txt/text/plain, formato permitido
+       pelo Chromium. Se ainda houver NotAllowedError, a causa restante
+       é de contexto/segurança/ativação do gesto, não do tipo ZIP. Não
+       fazemos uma segunda tentativa automática porque isso exigiria um
+       novo gesto do usuário. */
     this.baixar(pacote);
     await this.explicarRecusa(erro,r.contexto);
     await this.registrarBackupFeito(pacote);
   },
 
-  /* Dispara o compartilhamento e guarda a promessa. Esta função precisa
-     permanecer síncrona: o navegador deve ser chamado na mesma tarefa
-     do clique que a abriu. */
+  /* Dispara o compartilhamento e guarda a promessa em `this._envio`.
+
+     Tudo o que esta função faz acontece na mesma tarefa do clique, e
+     na ordem certa: a leitura do estado do toque vem ANTES da
+     chamada, porque `navigator.share()` consome a ativação — medir
+     depois sempre daria "false" e não diria nada. Foi esse o erro do
+     diagnóstico anterior. */
   dispararEnvio(arquivo){
+    let enviar=arquivo;
+    let contexto={};
     try{
-      if(!arquivo)return false;
-
-      const podeEnviar=typeof navigator.canShare==='function'
-        ?navigator.canShare({files:[arquivo]})
-        :true;
-
-      if(!podeEnviar){
-        const erro=new DOMException('O tipo de arquivo não é aceito pelo compartilhamento.','NotSupportedError');
-        const contexto={
-          tipo:arquivo.type||'',
-          bytes:arquivo.size,
-          gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
-          seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
-          endereco:location.protocol+'//'+location.hostname,
-          navegador:(navigator.userAgent||'').slice(0,150)
-        };
-        this._envio={promessa:Promise.reject(erro),contexto};
-        return true;
-      }
-
-      const contexto={
-        tipo:arquivo.type,
-        bytes:arquivo.size,
+      if(!enviar)return false;
+      if(navigator.canShare&&!navigator.canShare({files:[enviar]}))return false;
+      contexto={
+        tipo:enviar.type,
+        nome:enviar.name,
+        bytes:enviar.size,
+        modo:'arquivo de transporte .txt contendo os bytes originais do backup ZIP',
         gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
         seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
+        visivel:(document.visibilityState||'?'),
         endereco:location.protocol+'//'+location.hostname,
         navegador:(navigator.userAgent||'').slice(0,150)
       };
-
-      /* Não há `await`, promessa intermediária ou transformação de arquivo
-         entre o clique e a chamada nativa. */
-      this._envio={
-        promessa:navigator.share({files:[arquivo]}),
-        contexto
-      };
-      return true;
+      /* Nenhum await/timeout/modal/Promise antes da chamada. Ela ocorre
+         diretamente no handler do clique, preservando a ativação. */
+      this._envio={promessa:navigator.share({
+        title:'Backup do Veredas Reader',
+        files:[enviar]
+      }),contexto};
     }catch(e){
-      console.warn(e);
-      this._envio={
-        promessa:Promise.reject(e),
-        contexto:{
-          tipo:arquivo&&arquivo.type,
-          bytes:arquivo&&arquivo.size,
-          gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
-          seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
-          endereco:location.protocol+'//'+location.hostname,
-          navegador:(navigator.userAgent||'').slice(0,150)
-        }
-      };
-      return true;
+      console.warn('[Veredas] falha ao iniciar navigator.share:',e);
+      this._envio={promessa:Promise.reject(e),contexto};
     }
+    return true;
   },
 
 
@@ -10457,7 +10310,7 @@ Object.assign(Backup,{
       const parse=e instanceof ParseError;
       await AppModal.alert({
         title:parse?e.message:'Não foi possível ler este arquivo',
-        message:parse?(e.hint||''):'Escolha o .zip gerado pelo Veredas Reader ou o .txt de backup recebido por outro aplicativo.',
+        message:parse?(e.hint||''):'Escolha o .zip salvo pelo Veredas ou o .txt recebido pelo compartilhamento.',
         icon:'alert-triangle'
       });
       return;
