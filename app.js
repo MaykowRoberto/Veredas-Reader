@@ -9886,7 +9886,11 @@ Object.assign(Backup,{
           <button class="soft-btn primary" id="backup-save"><i data-lucide="download"></i>Salvar backup</button>
           ${this.podeCompartilhar()?'<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>Enviar para outro app</button>':''}
         </div>
-        <div class="drag-tip">O arquivo guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si. Guarde-o onde quiser: nuvem, e-mail, cartão de memória.</div>
+        <div class="drag-tip">O arquivo guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si. Guarde-o onde quiser: nuvem, e-mail, cartão de memória.${
+          this.podeCompartilhar()?''
+          :(typeof isSecureContext!=='undefined'&&isSecureContext===false)
+            ?'<br><br>O envio direto para outro aplicativo não aparece porque esta página está aberta por um endereço <code>http://</code> comum. Navegadores só liberam esse recurso em endereços seguros (<code>https://</code>) ou em <code>localhost</code>.'
+            :'<br><br>Este navegador não oferece o envio direto para outro aplicativo. Salve o arquivo e anexe-o pelo aplicativo que preferir.'}</div>
       </div>
 
       <div class="setting-section">
@@ -10018,6 +10022,71 @@ Object.assign(Backup,{
     await this.registrarBackupFeito(pacote);
   },
 
+  /* O navegador recusou abrir a lista de aplicativos.
+
+     Isso não significa que o backup falhou: o arquivo foi salvo. Mas
+     "não deu" sozinho é inútil — nem a pessoa sabe o que fazer, nem
+     quem for consertar sabe por onde começar. Então o motivo técnico
+     aparece aqui, com um botão para copiá-lo, e o texto diz o que
+     ainda dá para fazer. */
+  async explicarRecusa(err,ctx){
+    const nome=(err&&err.name)||'';
+    const recado=(err&&err.message)||'';
+    /* Os motivos que realmente acontecem, em português. */
+    let causa='';
+    if(/NotAllowed/i.test(nome)){
+      causa='O navegador exige que o envio comece no exato momento do toque, e por algum motivo não reconheceu o seu. Tentar de novo costuma funcionar.';
+    }else if(/NotSupported|TypeError/i.test(nome)){
+      causa='Este navegador aceita compartilhar texto, mas não arquivos deste tipo.';
+    }else if(ctx&&ctx.seguro===false){
+      causa='O compartilhamento só funciona em endereços seguros. Este aplicativo está sendo aberto por um endereço http:// comum, e nesse caso o navegador bloqueia o envio para outros aplicativos.';
+    }else if(/Security|InvalidState/i.test(nome)){
+      causa='O navegador considerou a situação insegura para compartilhar.';
+    }else{
+      causa='O sistema não aceitou receber o arquivo.';
+    }
+    const detalhe=[nome,recado].filter(Boolean).join(': ')||'sem detalhes do navegador';
+    const linhaTipo=ctx?'\n'+[
+      ctx.tipo?`tipo: ${ctx.tipo}`:'',
+      ctx.bytes!=null?`tamanho: ${ctx.bytes} bytes`:'',
+      ctx.gesto!=null?`toque ainda ativo: ${ctx.gesto}`:'',
+      ctx.seguro!=null?`endereço seguro: ${ctx.seguro}`:'',
+      ctx.endereco?`origem: ${ctx.endereco}`:''
+    ].filter(Boolean).join('\n'):'';
+    let copiador=null;
+
+    await AppModal.custom({
+      title:'O aparelho recusou abrir a lista',
+      subtitle:'O backup foi salvo assim mesmo',
+      icon:'share-2',
+      confirmText:'Entendi',
+      confirmIcon:'check',
+      cancelText:'Copiar detalhes',
+      html:`
+        <p>${Utils.esc(causa)}</p>
+        <p><strong>O arquivo de backup foi salvo neste aparelho</strong>, nos downloads. Dá para enviá-lo agora mesmo: abra o WhatsApp, o e-mail, o Drive ou o que preferir, toque em anexar e escolha o arquivo.</p>
+        <div class="share-detalhe"><code>${Utils.esc(detalhe+linhaTipo)}</code></div>`,
+      aoAbrir:()=>{
+        /* O botão da esquerda copia em vez de fechar. O ouvinte entra
+           na fase de captura para chegar antes do "fechar" do modal, e
+           é retirado logo abaixo — se ficasse, o botão Cancelar de
+           TODAS as outras janelas pararia de funcionar. */
+        const x=AppModal.cancelBtn;
+        if(!x)return;
+        copiador=async ev=>{
+          ev.stopPropagation();ev.preventDefault();
+          try{
+            await navigator.clipboard.writeText(detalhe+linhaTipo);
+            x.textContent='Copiado';
+            setTimeout(()=>{if(x.isConnected)x.textContent='Copiar detalhes'},1600);
+          }catch(e){x.textContent='Não deu para copiar'}
+        };
+        x.addEventListener('click',copiador,true);
+      }
+    });
+    if(copiador&&AppModal.cancelBtn)AppModal.cancelBtn.removeEventListener('click',copiador,true);
+  },
+
   baixar(pacote){
     const url=URL.createObjectURL(pacote.blob);
     const a=document.createElement('a');
@@ -10076,7 +10145,7 @@ Object.assign(Backup,{
       .then(p=>{pacote=p;arquivo=new File([p.blob],p.nome,{type:'application/zip'})})
       .catch(e=>{console.error(e);falhou=e});
 
-    let tentativa=null;
+    let tentativa=null,tipoEnviado='',contexto=null;
     const confirmou=await AppModal.custom({
       title:'Enviar para outro app',
       subtitle:'Vale conferir o que vai no arquivo',
@@ -10131,11 +10200,24 @@ Object.assign(Backup,{
             const generico=new File([arquivo],arquivo.name,{type:'application/octet-stream'});
             if(navigator.canShare({files:[generico]}))enviar=generico;
           }
-          tentativa=navigator.share({
-            files:[enviar],
-            title:'Backup do Veredas Reader',
-            text:'Progresso e marcações da minha estante do Veredas Reader.'
-          });
+          /* Só os arquivos. Juntar `title` e `text` com `files` é
+             permitido pela especificação, mas é a combinação que mais
+             dá problema na prática: há versões do Android e destinos
+             de compartilhamento que recusam o conjunto e aceitam o
+             arquivo sozinho. Como o nome do arquivo já diz o que ele
+             é, não se perde nada. */
+          tentativa=navigator.share({files:[enviar]});
+          /* Fotografia do instante exato da chamada. Se um dia isto
+             falhar, é aqui que está a resposta: o toque ainda valia?
+             o endereço é seguro? que tipo foi ofertado? */
+          tipoEnviado=enviar.type;
+          contexto={
+            tipo:enviar.type,
+            bytes:enviar.size,
+            gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
+            seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
+            endereco:location.protocol+'//'+location.hostname
+          };
         }catch(e){console.warn(e);tentativa=Promise.reject(e)}
         return true;
       }
@@ -10153,11 +10235,7 @@ Object.assign(Backup,{
         return;
       }
       this.baixar(pacote);
-      await AppModal.alert({
-        title:'Seu aparelho não aceitou enviar este arquivo',
-        message:'O backup foi salvo aqui mesmo. Você pode enviá-lo abrindo o aplicativo de sua preferência e anexando o arquivo a partir dos downloads.',
-        icon:'download',confirmText:'Entendi'
-      });
+      await this.explicarRecusa(null,{tipo:'(nem chegou a tentar)',seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),endereco:location.protocol+'//'+location.hostname});
       await this.registrarBackupFeito(pacote);
       return;
     }
@@ -10166,9 +10244,12 @@ Object.assign(Backup,{
       await tentativa;
     }catch(err){
       if(err&&err.name==='AbortError')return;   /* fechou a folha: nada a dizer */
-      console.warn('Compartilhamento recusado; salvando o arquivo.',err);
+      /* O navegador recusou. Dizer só "não deu" deixa a pessoa (e
+         quem vai consertar) no escuro: o motivo real vai junto, na
+         tela e no console. */
+      console.warn('[Veredas] navigator.share recusou o envio:',err);
       if(pacote)this.baixar(pacote);
-      Utils.toast('Não deu para abrir a lista de aplicativos; o arquivo foi salvo.','download');
+      await this.explicarRecusa(err,contexto);
       if(pacote)await this.registrarBackupFeito(pacote);
       return;
     }
@@ -10336,7 +10417,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 11';
+const BUILD='2026-09-20 · 12';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
