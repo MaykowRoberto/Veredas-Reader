@@ -96,6 +96,20 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const Utils={
   id:()=>crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36),
   esc:s=>{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML},
+  /* Qual das oito capas desenhadas cabe a este livro.
+
+     Não é sorteio: é uma soma das letras do título. O mesmo livro
+     recebe sempre a mesma capa, em qualquer aparelho e depois de
+     qualquer restauração de backup, sem precisar guardar nada.
+     `<<5` antes de somar espalha títulos parecidos por tons
+     diferentes — sem isso, "Volume 1" e "Volume 2" cairiam na
+     mesma cor. O `|0` mantém a conta dentro de 32 bits. */
+  capa:texto=>{
+    const s=String(texto||'');
+    let h=0;
+    for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;
+    return 'capa-'+(Math.abs(h)%8);
+  },
   toast:(msg,icon='check',id=null)=>{
     if(id){
       const ex=document.getElementById(id);
@@ -579,7 +593,25 @@ class DBManager{
   async putRecord(obj){return this._exec('settings','readwrite',s=>s.put(obj))}
   async deleteRecord(id){return this._exec('settings','readwrite',s=>s.delete(id))}
   async getSettings(){
-    return this._exec('settings','readonly',s=>s.get('global')).then(s=>({...AppDefaults.settings,...(s||{})}));
+    return this._exec('settings','readonly',s=>s.get('global'))
+      .then(s=>DBManager.migrarFonte({...AppDefaults.settings,...(s||{})}));
+  }
+  /* Até a versão 14 o seletor de fontes do leitor oferecia
+     Merriweather, Lora e "Sans" — e nenhuma das três era carregada
+     de lugar nenhum, então o navegador caía em Georgia ou Times.
+     Agora as fontes vêm dentro do aplicativo, mas quem já usava
+     tem um desses nomes antigos guardado. Sem esta tradução o
+     leitor abriria numa fonte que não está em botão nenhum, e o
+     seletor apareceria sem nada marcado. */
+  static FONTES_ANTIGAS={
+    "'Merriweather',serif":"'Literata',Georgia,serif",
+    "'Lora',serif":"Georgia,'Times New Roman',serif",
+    "Inter,system-ui,sans-serif":"'Inter',system-ui,sans-serif",
+  };
+  static migrarFonte(s){
+    const nova=DBManager.FONTES_ANTIGAS[s&&s.fontFamily];
+    if(nova)s.fontFamily=nova;
+    return s;
   }
   async getPageCache(key){return this._exec('pagecache','readonly',s=>s.get(key))}
   async setPageCache(key,data){return this._exec('pagecache','readwrite',s=>s.put({key,...data,createdAt:Date.now()}))}
@@ -593,7 +625,7 @@ class DBManager{
 }
 
 const AppDefaults={settings:{
-  theme:'light',fontFamily:"'Merriweather',serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
+  theme:'light',fontFamily:"'Literata',Georgia,serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
   readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
@@ -7834,7 +7866,16 @@ class LibraryManager{
   renderHero(){
     const hero=document.getElementById('hero-area');
     const reading=[...this.allBooks].filter(b=>b.status==='reading').sort((a,c)=>(c.lastRead||0)-(a.lastRead||0));
-    const b=reading[0]||this.allBooks.find(x=>x.progress?.percentage>0);
+    /* Terceira tentativa, nova: quem tem livros mas nenhum começado
+       caía no cartão de boas-vindas — o mesmo que quem não tem livro
+       nenhum. A estante ficava com quatro livros e a primeira dobra
+       dizendo "adicione livros". Agora, havendo estante, o cartão
+       oferece o livro mais recente para começar. */
+    const naoComecado=this.allBooks.length
+      ?[...this.allBooks].sort((a,c)=>(c.addedAt||0)-(a.addedAt||0))[0]
+      :null;
+    const b=reading[0]||this.allBooks.find(x=>x.progress?.percentage>0)||naoComecado;
+    const comecar=!!b&&!reading.length&&!(b.progress?.percentage>0);
     const total=this.allBooks.length;
     const toRead=this.allBooks.filter(x=>x.status==='toread').length;
     const readingCount=this.allBooks.filter(x=>x.status==='reading').length;
@@ -7842,19 +7883,34 @@ class LibraryManager{
     const withProgress=this.allBooks.filter(x=>Number.isFinite(x.progress?.percentage));
     const avg=withProgress.length?Math.round(withProgress.reduce((n,x)=>n+Math.max(0,Math.min(100,Number(x.progress?.percentage)||0)),0)/withProgress.length):0;
 
-    const statCard=(icon,label,value,caption,filter='',progress=null)=>`
-      <button type="button" class="stat-card${filter?' stat-action':''}" ${filter?`data-stat-filter="${filter}"`:''}>
-        <div class="stat-top">
-          <span class="stat-icon"><i data-lucide="${icon}"></i></span>
-          ${filter?'<i class="stat-arrow" data-lucide="chevron-right"></i>':''}
-        </div>
-        <div>
-          <div class="k">${value}</div>
-          <div class="l">${label}</div>
-          <div class="stat-caption">${caption}</div>
-          ${progress!==null?`<div class="stat-progress"><span style="width:${progress}%"></span></div>`:''}
-        </div>
-      </button>`;
+    /* Os números da estante, agora numa linha só.
+
+       Eram quatro cartões grandes, e somados com o cartão de
+       destaque ocupavam a primeira tela inteira de um celular: quem
+       abria o aplicativo via estatística e nenhum livro. Num leitor,
+       as capas são a interface — são elas que têm de aparecer
+       primeiro. A informação continua toda aqui, e continua
+       clicável; só parou de gritar. */
+    const statChip=(icon,label,value,filter='')=>{
+      const tag=filter?'button':'span';
+      return `<${tag} class="stat-chip${filter?' stat-action':''}"${filter?` type="button" data-stat-filter="${filter}"`:''}>
+        <i data-lucide="${icon}"></i><strong>${value}</strong><span>${label}</span>
+      </${tag}>`;
+    };
+    const statRow=()=>`
+      <div class="stat-row">
+        ${statChip('library','livros',total,'all')}
+        ${statChip('bookmark-plus','para ler',toRead,'toread')}
+        ${statChip('book-open','lendo',readingCount,'reading')}
+        ${statChip('circle-check','lidos',finished,'read')}
+        ${statChip('gauge','no total',`${avg}%`)}
+      </div>`;
+    /* A capa de verdade no cartão de destaque. Quando o livro não
+       tem capa própria, entra a capa desenhada — a mesma da
+       estante, com a mesma cor, para a pessoa reconhecer o livro. */
+    const heroCapa=livro=>livro.cover
+      ?`<img src="${livro.cover}" alt="" aria-hidden="true">`
+      :`<div class="fallback ${Utils.capa(livro.title)}"><strong>${Utils.esc(livro.title)}</strong></div>`;
 
     if(!b){
       hero.innerHTML=`
@@ -7866,12 +7922,7 @@ class LibraryManager{
           </div>
           <button class="soft-btn" id="hero-import"><i data-lucide="plus"></i>Adicionar livro</button>
         </div>
-        <div class="stat-grid">
-          ${statCard('library','Livros',total,'Na sua biblioteca','all')}
-          ${statCard('bookmark-plus','Para ler',toRead,'Na fila de leitura','toread')}
-          ${statCard('book-open','Lendo agora',readingCount,readingCount===1?'Livro em andamento':'Livros em andamento','reading')}
-          ${statCard('gauge','Progresso médio',`${avg}%`,'Entre os livros com progresso',null,avg)}
-        </div>`;
+        ${total?statRow():''}`;
       lucide.createIcons({root:hero});
       const hb=document.getElementById('hero-import');
       if(hb)hb.onclick=()=>this.openImport();
@@ -7884,31 +7935,33 @@ class LibraryManager{
     const totalPages=b.progress?.totalPages||b.totalPages||'—';
     const isAudio=AudioFormats.isAudioBook(b);
     const verbo=AudioFormats.isVideoBook(b)?'assistindo':isAudio?'ouvindo':'lendo';
-    const chamada=AudioFormats.isVideoBook(b)?'Continue assistindo':isAudio?'Continue ouvindo':'Continue lendo';
-    const footLeft=isAudio
-      ?(pct>=100?'Concluído':`${AudioFmt.long(Math.max(0,(b.audio?.duration||0)-(b.progress?.position||0)))} restantes`)
-      :`Página ${page} de ${totalPages}`;
+    const chamada=comecar
+      ?(AudioFormats.isVideoBook(b)?'Comece a assistir':isAudio?'Comece a ouvir':'Comece por aqui')
+      :(AudioFormats.isVideoBook(b)?'Continue assistindo':isAudio?'Continue ouvindo':'Continue lendo');
+    const footLeft=comecar
+      ?(Number.isFinite(Number(totalPages))?`${totalPages} páginas`:'Ainda não começado')
+      :isAudio
+        ?(pct>=100?'Concluído':`${AudioFmt.long(Math.max(0,(b.audio?.duration||0)-(b.progress?.position||0)))} restantes`)
+        :`Página ${page} de ${totalPages}`;
     hero.innerHTML=`
-      <div class="hero-card" id="hero-continue" role="button" tabindex="0" aria-label="Continuar ${verbo} ${Utils.esc(b.title)}">
-        <div>
-          <div class="hero-label">${chamada}</div>
-          <div class="hero-title">${Utils.esc(b.title)}</div>
-          <div class="hero-meta">${Utils.esc(b.author||'Autor desconhecido')}</div>
-        </div>
-        <div>
-          <div class="hero-progress"><span style="width:${pct}%"></span></div>
-          <div class="hero-footer">
-            <span>${footLeft}</span>
-            <strong>${pct}%</strong>
+      <div class="hero-card com-capa" id="hero-continue" role="button" tabindex="0" aria-label="${comecar?'Abrir':'Continuar '+verbo} ${Utils.esc(b.title)}">
+        <div class="hero-cover">${heroCapa(b)}</div>
+        <div class="hero-body">
+          <div>
+            <div class="hero-label">${chamada}</div>
+            <div class="hero-title">${Utils.esc(b.title)}</div>
+            <div class="hero-meta">${Utils.esc(b.author||'Autor desconhecido')}</div>
+          </div>
+          <div>
+            ${comecar?'':`<div class="hero-progress"><span style="width:${pct}%"></span></div>`}
+            <div class="hero-footer">
+              <span>${footLeft}</span>
+              ${comecar?'':`<strong>${pct}%</strong>`}
+            </div>
           </div>
         </div>
       </div>
-      <div class="stat-grid">
-        ${statCard('library','Livros',total,'Na sua biblioteca','all')}
-        ${statCard('bookmark-plus','Para ler',toRead,'Na fila de leitura','toread')}
-        ${statCard('book-open','Lendo agora',readingCount,readingCount===1?'Livro em andamento':'Livros em andamento','reading')}
-        ${statCard('gauge','Progresso médio',`${avg}%`,'Entre os livros com progresso',null,avg)}
-      </div>`;
+      ${statRow()}`;
     lucide.createIcons({root:hero});
     const hc=document.getElementById('hero-continue');
     if(hc){
@@ -7951,7 +8004,7 @@ class LibraryManager{
     const subRight=media?this.audioSubText(book):(book.progress?.readPages?`p. ${book.progress.readPages}`:'');
     const cover=book.cover
       ?`<img src="${book.cover}" alt="${Utils.esc(book.title)}" loading="lazy">`
-      :`<div class="fallback${comIcone?' audio-fallback':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
+      :`<div class="fallback ${Utils.capa(book.title)}${comIcone?' audio-fallback':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}<strong>${Utils.esc(book.title)}</strong><small>${Utils.esc(book.author||'')}</small></div>`;
     /* Uma etiqueta só, montada a partir do formato: acrescentar um formato
        novo não exige mexer aqui de novo. */
     const badge=`<span class="badge fmt-badge ${fmt}-badge${media?' audio-badge':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}${BookFormats.label(fmt)}</span>`;
@@ -9713,7 +9766,7 @@ const Backup={
         backupSnoozeAt:App.state.settings.backupSnoozeAt,
         backupLembretes:App.state.settings.backupLembretes
       };
-      App.state.settings={...AppDefaults.settings,...dados.preferencias,...manter};
+      App.state.settings=DBManager.migrarFonte({...AppDefaults.settings,...dados.preferencias,...manter});
       try{await App.persistSettings()}catch(e){console.warn(e)}
       App.applySettings();
     }
@@ -10454,7 +10507,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 14';
+const BUILD='2026-09-20 · 17';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

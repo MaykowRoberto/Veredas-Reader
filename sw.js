@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-13';
+const VERSAO = 'veredas-2026-09-20-17';
 
 const ESSENCIAIS = [
   './',
@@ -44,7 +44,15 @@ const ESSENCIAIS = [
   './vendor/jszip/jszip.min.js',
   './vendor/pdfjs/pdf.min.js',
   './vendor/pdfjs/pdf.worker.min.js',
-  './vendor/mammoth/mammoth.browser.min.js'
+  './vendor/mammoth/mammoth.browser.min.js',
+
+  /* As fontes. Sem elas o aplicativo abre offline mas volta a
+     desenhar Roboto ou Segoe UI, e muda de cara justamente
+     quando a pessoa está sem internet. São 120 KB no total. */
+  './vendor/fontes/inter-variavel.woff2',
+  './vendor/fontes/literata-400.woff2',
+  './vendor/fontes/literata-400-italico.woff2',
+  './vendor/fontes/literata-700.woff2'
 
   /* vendor/libarchive/libarchive-embutido.js fica de fora de
      propósito: são 1,4 MB que só fazem falta para CBR, CB7 e CBT.

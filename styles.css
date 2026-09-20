@@ -1,14 +1,74 @@
 /* ============================================================
+   FONTES PRÓPRIAS
+   ------------------------------------------------------------
+   Antes daqui o CSS pedia "Inter" e "Merriweather" sem que
+   nenhuma das duas fosse carregada de lugar nenhum. O navegador
+   pulava para a fonte seguinte da lista e o aplicativo mudava de
+   cara em cada aparelho: Roboto no Android, Segoe UI no Windows,
+   Georgia no leitor. Agora as fontes viajam dentro do aplicativo
+   e são as mesmas em todo lugar, inclusive sem internet.
+
+   A Inter é variável: este arquivo único cobre todos os pesos de
+   100 a 900, por isso o `font-weight:850` que aparece mais abaixo
+   não baixa nada a mais.
+
+   A Literata foi desenhada pela Google para leitura prolongada em
+   tela — é a fonte do Google Play Livros. Procedência, licença e
+   impressão digital em vendor/fontes/PROCEDENCIA.txt.
+   ============================================================ */
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('vendor/fontes/inter-variavel.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Literata';font-style:normal;font-weight:400;font-display:swap;
+  src:url('vendor/fontes/literata-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Literata';font-style:italic;font-weight:400;font-display:swap;
+  src:url('vendor/fontes/literata-400-italico.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Literata';font-style:normal;font-weight:700;font-display:swap;
+  src:url('vendor/fontes/literata-700.woff2') format('woff2');
+}
+
+/* ============================================================
    TOKENS
+   ------------------------------------------------------------
+   Sobre as três cores de destaque, que antes eram uma só:
+
+     --accent        é a cor de TEXTO, ícone e filete. Precisa
+                     contrastar com o fundo da tela.
+     --accent-solid  é a cor de SUPERFÍCIE CHEIA (botão principal,
+                     cartão de destaque). Precisa contrastar com o
+                     que se escreve em cima dela.
+     --on-accent     é o que se escreve em cima da superfície cheia.
+
+   No tema claro as duas primeiras coincidem, e por isso dava para
+   viver com uma só. No escuro não: o destaque de texto tem de ser
+   claro (rosa pálido sobre preto lê bem, 10,8:1) e o de superfície
+   tem de ser escuro (branco sobre rosa pálido dava 1,61:1 — o
+   botão "Fazer backup" estava ilegível no tema escuro). Todos os
+   pares abaixo passam de 4,5:1.
    ============================================================ */
 :root{
   --bg:#f5f5f2;--surface:#ffffff;--surface-2:#fafaf8;--surface-hover:#f0f0ec;
-  --text:#171717;--muted:#71717a;--accent:#5f202c;--accent-2:#995d69;
+  --text:#171717;--muted:#6b6b74;
+  --accent:#5f202c;--accent-solid:#5f202c;--accent-2:#8d4f5c;--on-accent:#ffffff;
   --border:rgba(20,20,20,.08);
-  --shadow:0 12px 40px rgba(18,18,18,.08);
-  --shadow-sm:0 4px 16px rgba(18,18,18,.06);
-  --ui-font:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --reader-font:Merriweather,Georgia,serif;
+  /* Filete de luz no topo dos cartões. Só serve no escuro, onde
+     sombra não existe (preto sobre preto) e o relevo precisa vir
+     de outro lugar. */
+  --hairline:transparent;
+  /* Duas camadas: uma sombra curta de contato, que dá a espessura
+     do cartão, e uma larga e difusa, que dá a distância até o
+     fundo. Uma sombra só, larga, faz tudo parecer flutuando no
+     mesmo plano. */
+  --shadow:0 1px 2px rgba(18,18,18,.07),0 14px 34px -10px rgba(18,18,18,.16);
+  --shadow-sm:0 1px 2px rgba(18,18,18,.06),0 5px 14px -6px rgba(18,18,18,.12);
+  --ui-font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --reader-font:'Literata',Georgia,"Times New Roman",serif;
   --reader-size:18px;--reader-line:1.65;--reader-margin:6%;--reader-brightness:100%;
   --touch:44px;
   --app-bar-h:56px;--bottom-nav-h:62px;
@@ -22,18 +82,29 @@
 }
 [data-theme="sepia"]{
   --bg:#f2ead8;--surface:#fbf3e2;--surface-2:#f6ecd6;--surface-hover:#eee2ca;
-  --text:#3b3025;--muted:#84705a;--accent:#9a551f;--accent-2:#bb7a3a;
+  --text:#3b3025;--muted:#7a6650;
+  --accent:#9a551f;--accent-solid:#84491a;--accent-2:#9c5c22;--on-accent:#fff8ee;
   --border:rgba(70,50,30,.10);--theme-reader-bg:#fbf3e2;--theme-reader-text:#2d241a;
+  --shadow:0 1px 2px rgba(80,55,25,.08),0 14px 34px -10px rgba(80,55,25,.18);
+  --shadow-sm:0 1px 2px rgba(80,55,25,.07),0 5px 14px -6px rgba(80,55,25,.13);
 }
 [data-theme="dark"]{
   --bg:#121212;--surface:#1d1d1f;--surface-2:#181819;--surface-hover:#2b2b2d;
-  --text:#ededed;--muted:#a1a1aa;--accent:#e3c4ca;--accent-2:#c99ba6;
+  --text:#ededed;--muted:#a1a1aa;
+  --accent:#e8c7cd;--accent-solid:#a53d50;--accent-2:#7e2c3b;--on-accent:#ffffff;
   --border:rgba(255,255,255,.09);--theme-reader-bg:#151515;--theme-reader-text:#dedede;
+  --hairline:rgba(255,255,255,.055);
+  --shadow:0 1px 2px rgba(0,0,0,.6),0 16px 40px -12px rgba(0,0,0,.7);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5),0 6px 16px -6px rgba(0,0,0,.55);
 }
 [data-theme="ocean"]{
   --bg:#0f172a;--surface:#1e293b;--surface-2:#334155;--surface-hover:#475569;
-  --text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--accent-2:#7dd3fc;
+  --text:#f8fafc;--muted:#a7b6c9;
+  --accent:#38bdf8;--accent-solid:#0b6d9c;--accent-2:#075a80;--on-accent:#f0f9ff;
   --border:rgba(255,255,255,.1);--theme-reader-bg:#0f172a;--theme-reader-text:#e2e8f0;
+  --hairline:rgba(255,255,255,.06);
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 16px 40px -12px rgba(2,10,25,.7);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4),0 6px 16px -6px rgba(2,10,25,.55);
 }
 
 /* ============================================================
@@ -79,8 +150,8 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   flex-shrink:0;color:var(--text);transition:background .15s;
 }
 .bar-btn:hover,.bar-btn:focus-visible{background:var(--surface-hover)}
-.bar-btn.primary{background:var(--accent);color:#fff}
-.bar-btn.primary:hover{background:color-mix(in srgb,var(--accent) 88%,#000)}
+.bar-btn.primary{background:var(--accent-solid);color:var(--on-accent)}
+.bar-btn.primary:hover{background:color-mix(in srgb,var(--accent-solid) 88%,#000)}
 .bar-btn svg{width:20px;height:20px}
 
 .bar-brand{
@@ -192,7 +263,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
    ============================================================ */
 .hero{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:18px}
 .hero-card{
-  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 96%,#000),var(--accent-2));
+  background:linear-gradient(135deg,var(--accent-solid),var(--accent-2));
   color:#fff;border-radius:22px;padding:22px;
   min-height:170px;position:relative;overflow:hidden;
   box-shadow:var(--shadow);
@@ -220,28 +291,106 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .hero-card .soft-btn:hover{background:rgba(255,255,255,.24)}
 
-.stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.stat-card{
-  position:relative;background:var(--surface);border:1px solid var(--border);
-  border-radius:18px;padding:14px 14px 13px;box-shadow:var(--shadow-sm);
-  min-height:106px;display:flex;flex-direction:column;justify-content:space-between;
-  text-align:left;overflow:hidden;transition:transform .16s,box-shadow .16s,border-color .16s;
+/* ------------------------------------------------------------
+   O cartão de destaque nos temas escuros.
+
+   No tema claro o cartão é um bloco escuro sobre fundo claro: o
+   elemento mais pesado da tela é o destaque, e a hierarquia fica
+   certa. Aplicar a mesma regra no escuro invertia tudo — o cartão
+   virava o bloco MAIS CLARO da tela, e uma área grande de cor
+   clara lê como aviso, não como destaque.
+
+   Aqui ele volta a ser uma superfície escura. A cor de destaque
+   continua presente, mas em dose pequena: a etiqueta de cima, um
+   brilho no canto e a borda. É como os leitores que a gente usa
+   como referência tratam o tema escuro.
+   ------------------------------------------------------------ */
+[data-theme="dark"] .hero-card,
+[data-theme="ocean"] .hero-card{
+  background:
+    radial-gradient(120% 140% at 88% 8%,color-mix(in srgb,var(--accent-solid) 42%,transparent),transparent 60%),
+    var(--surface);
+  color:var(--text);
+  border:1px solid color-mix(in srgb,var(--accent) 16%,var(--border));
 }
-.stat-card.stat-action{cursor:pointer}
-.stat-card.stat-action:hover,.stat-card.stat-action:focus-visible{
-  transform:translateY(-2px);box-shadow:var(--shadow);
-  border-color:color-mix(in srgb,var(--accent) 24%,var(--border));
+[data-theme="dark"] .hero-card:after,
+[data-theme="ocean"] .hero-card:after{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+[data-theme="dark"] .hero-label,
+[data-theme="ocean"] .hero-label{color:var(--accent);opacity:1}
+[data-theme="dark"] .hero-progress,
+[data-theme="ocean"] .hero-progress{background:color-mix(in srgb,var(--text) 14%,transparent)}
+[data-theme="dark"] .hero-progress span,
+[data-theme="ocean"] .hero-progress span{background:var(--accent)}
+[data-theme="dark"] .hero-card .soft-btn,
+[data-theme="ocean"] .hero-card .soft-btn{
+  background:var(--accent-solid);color:var(--on-accent);border-color:transparent;
 }
-.stat-card .stat-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.stat-card .stat-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
-  color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
-.stat-card .stat-icon svg{width:16px;height:16px}
-.stat-card .stat-arrow{color:var(--muted);opacity:.7}
-.stat-card .k{font-size:25px;font-weight:850;letter-spacing:-1px;line-height:1}
-.stat-card .l{font-size:11px;color:var(--text);margin-top:6px;font-weight:800}
-.stat-card .stat-caption{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35}
-.stat-card .stat-progress{height:4px;margin-top:8px;background:var(--surface-hover);border-radius:99px;overflow:hidden}
-.stat-card .stat-progress span{display:block;height:100%;background:var(--accent);border-radius:99px}
+[data-theme="dark"] .hero-card .soft-btn:hover,
+[data-theme="ocean"] .hero-card .soft-btn:hover{background:color-mix(in srgb,var(--accent-solid) 88%,#fff)}
+
+/* ------------------------------------------------------------
+   O cartão de destaque com a capa do livro.
+
+   Mostrar a capa de verdade é o que transforma este bloco de
+   "faixa de propaganda no topo da minha própria estante" em
+   "continue de onde parou". É também o que faz as prateleiras
+   subirem uns 300px e aparecerem na primeira tela do celular.
+   ------------------------------------------------------------ */
+.hero-card.com-capa{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:stretch;min-height:0}
+.hero-body{display:flex;flex-direction:column;justify-content:space-between;min-width:0}
+.hero-cover{
+  width:82px;flex:none;aspect-ratio:2/3;border-radius:10px;overflow:hidden;position:relative;
+  background:rgba(0,0,0,.18);
+  /* A capa fica por cima do círculo decorativo do cartão. */
+  z-index:1;
+  box-shadow:0 10px 22px -8px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.14) inset;
+}
+.hero-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.hero-cover .fallback{padding:10px 9px 9px}
+.hero-cover .fallback strong{font-size:11.5px;-webkit-line-clamp:5;padding-top:7px}
+.hero-card.com-capa .hero-title{font-size:19px;-webkit-line-clamp:2}
+.hero-card.com-capa .hero-meta{margin-bottom:12px}
+
+/* ------------------------------------------------------------
+   Os números da estante, em linha.
+
+   Rolam de lado quando não cabem, em vez de quebrar em duas
+   fileiras: uma linha só deixa claro que isto é rodapé da seção,
+   não conteúdo principal.
+   ------------------------------------------------------------ */
+.stat-row{
+  display:flex;gap:7px;margin-top:12px;overflow-x:auto;padding-bottom:2px;
+  scrollbar-width:none;-ms-overflow-style:none;
+  /* O último número fica meio cortado quando a linha não cabe. Sem
+     este esmaecimento parece defeito de alinhamento; com ele, fica
+     claro que é só continuar arrastando. */
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent 100%);
+          mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent 100%);
+}
+/* Cabendo tudo, não há o que esmaecer. */
+@media (min-width:560px){
+  .stat-row{-webkit-mask-image:none;mask-image:none}
+}
+.stat-row::-webkit-scrollbar{display:none}
+.stat-chip{
+  flex:none;display:inline-flex;align-items:center;gap:6px;
+  min-height:34px;padding:0 12px;border-radius:999px;
+  border:1px solid var(--border);background:var(--surface);
+  font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;
+  box-shadow:var(--shadow-sm),inset 0 1px 0 var(--hairline);
+  transition:border-color .15s,color .15s,transform .1s;
+}
+.stat-chip svg{width:14px;height:14px;color:var(--accent);opacity:.85;flex:none}
+.stat-chip strong{font-size:13.5px;font-weight:800;color:var(--text);letter-spacing:-.2px;font-variant-numeric:tabular-nums}
+.stat-chip.stat-action{cursor:pointer}
+.stat-chip.stat-action:hover,.stat-chip.stat-action:focus-visible{
+  border-color:color-mix(in srgb,var(--accent) 34%,var(--border));color:var(--text);
+}
+.stat-chip.stat-action:active{transform:scale(.97)}
+
+/* Os quatro cartões grandes de estatística viviam aqui. Foram
+   substituídos pela linha de números acima; as regras saíram
+   junto para o arquivo não acumular CSS que não desenha nada. */
 
 /* ============================================================
    TOOLBAR
@@ -265,7 +414,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .soft-btn:active{transform:scale(.97)}
 .soft-btn svg{width:17px;height:17px}
-.soft-btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+.soft-btn.primary{background:var(--accent-solid);color:var(--on-accent);border-color:transparent}
 .soft-btn.danger{background:#b42336;color:#fff;border-color:transparent}
 /* Terceira opção de um grupo: existe para quem a procura, sem
    disputar atenção com as duas que importam. */
@@ -324,23 +473,84 @@ body.dnd-active .book-grid{touch-action:none}
   transform:translateY(-3px);box-shadow:var(--shadow);
 }
 .book-cover img{width:100%;height:100%;object-fit:cover;display:block}
+/* ------------------------------------------------------------
+   Capa desenhada, para o livro que não traz capa própria.
+
+   Antes daqui esse livro virava um retângulo cinza com o título
+   embaixo. Numa estante com EPUB e DOCX — que quase nunca trazem
+   capa — metade das prateleiras ficava cinza, e é isso que faz
+   uma estante parecer inacabada.
+
+   A cor não é sorteada: sai de uma soma das letras do título
+   (Estante.corDaCapa), então o mesmo livro tem sempre a mesma
+   capa, em qualquer aparelho, sem guardar nada. São oito tons de
+   encadernação, todos escuros o bastante para receber texto
+   claro nos quatro temas — por isso o texto aqui não usa os
+   tokens do tema.
+   ------------------------------------------------------------ */
 .fallback{
-  height:100%;padding:14px;display:flex;flex-direction:column;justify-content:flex-end;
-  background:linear-gradient(145deg,var(--surface-hover),color-mix(in srgb,var(--accent) 8%,var(--surface)));
+  height:100%;padding:16px 14px 14px;display:flex;flex-direction:column;justify-content:flex-end;
+  position:relative;overflow:hidden;color:#fff;
+  background:
+    linear-gradient(150deg,color-mix(in srgb,var(--capa) 82%,#fff) 0%,var(--capa) 46%,color-mix(in srgb,var(--capa) 78%,#000) 100%);
+  --capa:#3d3a38;
 }
+/* O grão do papel e a sombra da lombada. Os dois são quase
+   invisíveis de propósito: servem para a capa não parecer um
+   retângulo chapado de cor. */
+.fallback:before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:
+    repeating-linear-gradient(115deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(  5deg,rgba(0,0,0,.035) 0 1px,transparent 1px 4px);
+}
+.fallback:after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(0,0,0,.22) 0,rgba(0,0,0,.06) 7%,transparent 14%),
+    radial-gradient(120% 90% at 50% 0,rgba(255,255,255,.14),transparent 62%);
+}
+/* Um filete claro separando o título do resto, como numa capa de
+   coleção. */
 .fallback strong{
-  font-family:Georgia,serif;line-height:1.15;font-size:14px;font-weight:800;
+  position:relative;z-index:1;
+  font-family:var(--reader-font);line-height:1.18;font-size:14.5px;font-weight:700;
+  letter-spacing:-.01em;text-shadow:0 1px 3px rgba(0,0,0,.35);
+  padding-top:9px;border-top:1px solid rgba(255,255,255,.28);
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
 }
-.fallback small{margin-top:6px;color:var(--muted);font-size:10px}
+.fallback small{
+  position:relative;z-index:1;margin-top:6px;font-size:10px;font-weight:600;
+  color:rgba(255,255,255,.78);text-shadow:0 1px 2px rgba(0,0,0,.3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* Os oito tons de encadernação. */
+.fallback.capa-0{--capa:#5f202c}  /* vinho, a cor da casa  */
+.fallback.capa-1{--capa:#2f4739}  /* verde-cerrado         */
+.fallback.capa-2{--capa:#35405c}  /* azul-tinta            */
+.fallback.capa-3{--capa:#6b3a1f}  /* couro                 */
+.fallback.capa-4{--capa:#4a3357}  /* ameixa                */
+.fallback.capa-5{--capa:#1f4a4a}  /* verde-petróleo        */
+.fallback.capa-6{--capa:#5c4a1d}  /* ocre escuro           */
+.fallback.capa-7{--capa:#3d3a38}  /* grafite               */
 .cover-badges{position:absolute;top:7px;left:7px;display:flex;gap:4px;pointer-events:none;z-index:2}
 .cover-format-badge{position:absolute;top:7px;right:7px;display:flex;gap:4px;pointer-events:none;z-index:4}
 .cover-format-badge .badge{box-shadow:0 2px 8px rgba(0,0,0,.12)}
-.pdf-badge{background:color-mix(in srgb,#d94841 14%,#fff);color:#a92822}
-.epub-badge{background:color-mix(in srgb,#176b67 14%,#fff);color:#176b67}
-.docx-badge{background:color-mix(in srgb,#2563eb 14%,#fff);color:#1d4ed8}
-.mobi-badge{background:color-mix(in srgb,#7c3aed 14%,#fff);color:#6d28d9}
-.txt-badge{background:color-mix(in srgb,#64748b 14%,#fff);color:#475569}
+/* ------------------------------------------------------------
+   A etiqueta do formato.
+
+   Antes eram cinco cores estranhas à paleta — verde no EPUB,
+   vermelho no PDF, azul no DOCX, roxo no MOBI, teal no MD. Numa
+   estante de capas coloridas isso vira confete: cinco matizes
+   competindo com o vinho da casa e com as próprias capas, para
+   informar algo que quase ninguém procura (raramente alguém
+   escolhe um livro pelo formato).
+
+   Agora é uma só: a pastilha fosca clara que a regra .badge já
+   define, com texto quase preto. Ela continua legível sobre
+   qualquer capa, clara ou escura, e some da vista quando a
+   pessoa está olhando os livros — que é o que se quer.
+   ------------------------------------------------------------ */
 .badge{
   font-size:9px;padding:4px 7px;border-radius:999px;
   background:rgba(255,255,255,.92);color:#27272a;font-weight:800;
@@ -502,13 +712,38 @@ body.reader-open .search-bar{display:none!important}
 .page.next{ visibility:visible; transform:translateX(100%); z-index:2; }
 
 .page-content{min-height:100%;padding:var(--reader-margin);padding-bottom:38px;display:flex;flex-direction:column}
+/* ------------------------------------------------------------
+   Texto justificado precisa de hifenização.
+
+   Justificar sem hifenizar obriga o navegador a esticar os
+   espaços para fechar a linha. Em português, que tem palavras
+   longas ("consequentemente", "desenvolvimento"), isso abre
+   buracos brancos que se alinham de uma linha para a outra e
+   formam os "rios" que atravessam a página. É o defeito mais
+   visível de um leitor caseiro.
+
+   `hyphens:auto` depende do idioma declarado — funciona porque o
+   <html> tem lang="pt-BR". O limite de 6/3/3 diz: só hifena
+   palavra com 6 letras ou mais, e nunca deixa menos de 3 letras
+   de um lado. Sem isso o navegador quebra "pa-ra" e fica pior do
+   que estava.
+   ------------------------------------------------------------ */
 .page-text{
   flex:1;font-family:var(--reader-font);font-size:var(--reader-size);
   line-height:var(--reader-line);overflow:hidden;text-align:justify;
   user-select:text;-webkit-user-select:text;word-wrap:break-word;
+  hyphens:auto;-webkit-hyphens:auto;-ms-hyphens:auto;
+  hyphenate-limit-chars:6 3 3;-webkit-hyphenate-limit-chars:6 3 3;
+  font-kerning:normal;font-variant-ligatures:common-ligatures;
 }
 .page-text p{margin-bottom:1.15em;text-indent:1.5em}
-.page-text h1,.page-text h2,.page-text h3{font-family:var(--ui-font);text-indent:0;text-align:left;margin-bottom:1em}
+/* Nada de hífen em título: título curto hifenizado fica feio, e
+   quebrar bem uma linha só é trabalho do text-wrap:balance. */
+.page-text h1,.page-text h2,.page-text h3{
+  font-family:var(--reader-font);font-weight:700;
+  text-indent:0;text-align:left;margin-bottom:1em;
+  hyphens:none;-webkit-hyphens:none;text-wrap:balance;letter-spacing:-.01em;
+}
 .page-text img{max-width:100%;max-height:78vh;height:auto;display:block;margin:1em auto;object-fit:contain}
 .page-text table{max-width:100%;border-collapse:collapse;font-size:.92em;text-indent:0}
 .page-text td,.page-text th{border:1px solid var(--border);padding:4px 6px;text-align:left}
@@ -762,12 +997,12 @@ body.reader-open .search-bar{display:none!important}
 .reader-icon:hover{background:var(--surface-hover)}
 .reader-icon svg{width:19px;height:19px}
 .reader-center-actions{display:flex;gap:2px}
-.reader-icon.is-playing{background:var(--accent);color:#fff}
+.reader-icon.is-playing{background:var(--accent-solid);color:var(--on-accent)}
 
 .tts-now-playing{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;background:var(--surface-2);margin-bottom:14px}
 .tts-now-playing i{color:var(--accent);width:24px;height:24px;flex:none}.tts-now-playing strong,.tts-now-playing small{display:block}.tts-now-playing small{font-size:11px;color:var(--muted);margin-top:3px}
 .tts-play-row{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px;margin:12px 0}.tts-play-row .reader-icon{border:1px solid var(--border);background:var(--surface)}
-.tts-play-row .reader-icon.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tts-play-row .reader-icon.primary{background:var(--accent-solid);color:var(--on-accent);border-color:var(--accent-solid)}
 
 /* ============================================================
    SELECTION POPUP
@@ -903,7 +1138,7 @@ body.reader-open .search-bar{display:none!important}
   content:"";position:absolute;width:22px;height:22px;left:2px;top:2px;
   border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.18);transition:.2s;
 }
-.toggle input:checked+span{background:var(--accent);border-color:var(--accent)}
+.toggle input:checked+span{background:var(--accent-solid);border-color:var(--accent-solid)}
 .toggle input:checked+span:after{transform:translateX(20px)}
 
 .setting-section{padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}
@@ -1024,13 +1259,17 @@ body.reader-open .search-bar{display:none!important}
 @media (min-width:480px){
   .book-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 14px}
   .hero-title{font-size:24px}
+  .hero-card.com-capa .hero-title{font-size:21px}
+  .hero-cover{width:96px}
 }
 @media (min-width:720px){
   :root{--app-bar-h:60px}
   .app-shell{padding:20px 20px 30px}
-  .hero{grid-template-columns:1.3fr .7fr;gap:16px}
+  .hero{grid-template-columns:1fr;gap:14px}
   .hero-title{font-size:26px}
-  .stat-grid{grid-template-columns:1fr 1fr}
+  .hero-card.com-capa .hero-title{font-size:24px}
+  .hero-cover{width:118px}
+  .hero-card.com-capa{gap:22px}
   .toolbar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}
   .toolbar-right{width:auto}
   .select{min-width:170px;flex:0 1 auto}
@@ -1071,23 +1310,16 @@ body.reader-open .search-bar{display:none!important}
 }
 @media (max-width:360px){
   .book-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px}
-  .stat-card{padding:12px;min-height:100px}
-  .stat-card .k{font-size:22px}
   .hero-title{font-size:19px}
+  .hero-card.com-capa{gap:12px;padding:18px}
+  .hero-card.com-capa .hero-title{font-size:17px}
+  .hero-cover{width:70px}
   .bottom-nav button span{font-size:9.5px}
 }
 
 /* ============================================================
    PDF -> EPUB CONVERSION
    ============================================================ */
-.pdf-badge{
-  background:color-mix(in srgb,#d94841 14%,#fff);
-  color:#a92822;
-}
-.docx-badge{background:color-mix(in srgb,#2563eb 13%,#fff);color:#1d4ed8;}
-.mobi-badge{background:color-mix(in srgb,#ea580c 13%,#fff);color:#c2410c;}
-.epub-badge{background:color-mix(in srgb,#059669 12%,#fff);color:#047857;}
-.txt-badge{background:color-mix(in srgb,#64748b 12%,#fff);color:#475569;}
 .share-btn{background:var(--surface)!important;color:var(--accent)!important;border:1px solid var(--border);opacity:1!important}.share-btn svg{stroke:currentColor!important;opacity:1!important}.share-btn:hover{background:color-mix(in srgb,var(--accent) 9%,var(--surface))!important;color:var(--accent)!important}.share-btn:active{background:var(--surface)!important;color:var(--accent)!important}[data-theme="dark"] .share-btn,[data-theme="ocean"] .share-btn{background:#fff!important;color:var(--accent)!important;border-color:rgba(255,255,255,.8)}
 .convert-btn{
   color:var(--accent);
@@ -1284,7 +1516,7 @@ body.reader-open .search-bar{display:none!important}
 @keyframes onbUp{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
 .onb-hero{
   padding:calc(22px + var(--safe-top)) 22px 18px;color:#fff;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 96%,#000),var(--accent-2));
+  background:linear-gradient(135deg,var(--accent-solid),var(--accent-2));
 }
 .onb-logo{
   width:52px;height:52px;border-radius:16px;overflow:hidden;margin-bottom:12px;
@@ -1316,7 +1548,7 @@ body.reader-open .search-bar{display:none!important}
   display:grid;place-items:center;margin-top:1px;transition:.16s;color:#fff;
 }
 .consent-box svg{width:13px;height:13px;opacity:0;transition:.16s;stroke-width:3.4}
-.consent-check.checked .consent-box,.scan-item.on .consent-box{background:var(--accent);border-color:var(--accent)}
+.consent-check.checked .consent-box,.scan-item.on .consent-box{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
 .consent-check.checked .consent-box svg,.scan-item.on .consent-box svg{opacity:1}
 .onb-foot{display:flex;gap:8px;padding:14px 20px calc(16px + var(--safe-bottom));border-top:1px solid var(--border);background:var(--surface)}
 .onb-foot .soft-btn{flex:1;justify-content:center;min-height:48px}
@@ -1334,12 +1566,13 @@ body.app-locked{overflow:hidden}
    ------------------------------------------------------------
    Tudo aqui usa os tokens do tema (--bg, --surface, --accent…),
    então Claro, Sépia, Escuro e Oceano funcionam sem exceções.
-   --on-accent garante contraste do ícone sobre o botão principal
-   nos temas em que o acento é claro (Escuro e Oceano).
+   O botão de tocar usa --accent-solid e --on-accent, os mesmos
+   tokens do botão principal do resto do aplicativo. Antes daqui
+   havia uma exceção local só para o player, porque o acento do
+   tema escuro era claro demais para receber ícone branco; com a
+   separação entre cor de texto e cor de superfície a exceção
+   deixou de fazer falta.
    ============================================================ */
-.audio-player,.mini-player{--on-accent:#fff}
-[data-theme="dark"] .audio-player,[data-theme="dark"] .mini-player{--on-accent:#2a1216}
-[data-theme="ocean"] .audio-player,[data-theme="ocean"] .mini-player{--on-accent:#04222f}
 .audio-player [hidden],.mini-player[hidden]{display:none!important}
 .audio-player button:focus-visible,.mini-player button:focus-visible,
 .audio-player input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -1347,8 +1580,6 @@ body.app-locked{overflow:hidden}
 /* ---------- estante: selos, duração e capa quadrada ---------- */
 .badge.audio-badge{display:inline-flex;align-items:center;gap:3px;padding-left:6px}
 .badge.audio-badge svg{width:10px;height:10px;stroke-width:2.6}
-.mp3-badge{background:color-mix(in srgb,#0e7490 13%,#fff);color:#0e7490}
-.m4b-badge{background:color-mix(in srgb,#a21caf 12%,#fff);color:#a21caf}
 .book-cover.is-audio .cover-blur{
   position:absolute;inset:-16px;background-size:cover;background-position:center;
   filter:blur(18px) saturate(1.25) brightness(.9);transform:scale(1.1);
@@ -1361,14 +1592,20 @@ body.app-locked{overflow:hidden}
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-variant-numeric:tabular-nums;
 }
 .cover-duration svg{width:10px;height:10px;stroke-width:2.6}
-.fallback.audio-fallback svg{width:26px;height:26px;color:var(--accent);opacity:.8;margin-bottom:auto}
+.fallback.audio-fallback svg{
+  position:relative;z-index:1;width:26px;height:26px;margin-bottom:auto;
+  /* A capa desenhada é escura nos quatro temas, então o ícone tem
+     de ser claro sempre — usar var(--accent) aqui deixava um
+     desenho vinho escuro em cima de fundo vinho escuro. */
+  color:rgba(255,255,255,.85);
+}
 .fallback.audio-fallback{padding-bottom:36px}
 
 /* equalizador: só aparece na capa que está tocando */
 .cover-eq,.ap-ch-eq{display:none;align-items:flex-end;gap:2px;height:14px}
 .cover-eq i,.ap-ch-eq i{display:block;width:3px;height:45%;border-radius:2px;background:currentColor}
 .cover-eq{position:absolute;right:7px;bottom:7px;z-index:4;pointer-events:none;
-  padding:6px 7px;border-radius:999px;background:var(--accent);color:var(--on-accent,#fff);height:auto;box-sizing:content-box}
+  padding:6px 7px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent);height:auto;box-sizing:content-box}
 .cover-eq i{height:10px;transform-origin:bottom;transform:scaleY(.45)}
 .book-card.is-playing .cover-eq{display:flex}
 .book-card.is-playing .cover-eq i,.audio-player.is-playing .ap-ch.current .ap-ch-eq i{animation:apEq 1s ease-in-out infinite}
@@ -1376,9 +1613,6 @@ body.app-locked{overflow:hidden}
 .cover-eq i:nth-child(3),.ap-ch-eq i:nth-child(3){animation-delay:-.7s!important}
 @keyframes apEq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
 .ap-ch-eq i{height:14px;transform-origin:bottom;transform:scaleY(.5)}
-.book-card.is-playing .cover-eq{--on-accent:#fff}
-[data-theme="dark"] .book-card.is-playing .cover-eq{--on-accent:#2a1216}
-[data-theme="ocean"] .book-card.is-playing .cover-eq{--on-accent:#04222f}
 
 /* ---------- player em tela cheia ---------- */
 .audio-player{
@@ -1489,11 +1723,11 @@ body.app-locked{overflow:hidden}
 .ap-skip:active{transform:scale(.9)}
 .ap-play{
   position:relative;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;flex:none;
-  background:var(--accent);color:var(--on-accent);
-  box-shadow:0 16px 32px -12px color-mix(in srgb,var(--accent) 75%,#000);
+  background:var(--accent-solid);color:var(--on-accent);
+  box-shadow:0 16px 32px -12px color-mix(in srgb,var(--accent-solid) 75%,#000);
   transition:transform .12s,box-shadow .2s;
 }
-.ap-play:hover{box-shadow:0 18px 38px -10px color-mix(in srgb,var(--accent) 80%,#000)}
+.ap-play:hover{box-shadow:0 18px 38px -10px color-mix(in srgb,var(--accent-solid) 80%,#000)}
 .ap-play:active{transform:scale(.93)}
 .ap-play svg{grid-area:1/1;width:32px;height:32px}
 .ap-play .i-pause,.mini-play .i-pause{display:none}
@@ -1634,8 +1868,8 @@ body.reader-open .mini-player,body.audio-open .mini-player{display:none}
 .mini-btn:active{transform:scale(.92)}
 .mini-btn svg{width:20px;height:20px}
 .mini-back svg{width:26px;height:26px}
-.mini-play{background:var(--accent);color:var(--on-accent);margin:0 4px}
-.mini-play:hover{background:color-mix(in srgb,var(--accent) 88%,#000)}
+.mini-play{background:var(--accent-solid);color:var(--on-accent);margin:0 4px}
+.mini-play:hover{background:color-mix(in srgb,var(--accent-solid) 88%,#000)}
 .mini-play svg{width:20px;height:20px;grid-area:1/1}
 .mini-player.is-busy .mini-play{animation:miniBusy 1s ease-in-out infinite}
 @keyframes miniBusy{50%{opacity:.6}}
@@ -1689,8 +1923,6 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .loader-meta.visible{display:block}
 
 /* ---------- etiquetas dos formatos novos ---------- */
-.md-badge{background:color-mix(in srgb,#0f766e 13%,#fff);color:#0f766e}
-.mp4-badge{background:color-mix(in srgb,#b91c1c 13%,#fff);color:#b91c1c}
 .badge.fmt-badge{display:inline-flex;align-items:center;gap:3px}
 .badge.fmt-badge svg{width:10px;height:10px;stroke-width:2.6}
 
@@ -1833,7 +2065,7 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .backup-mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
 .backup-mode .rec{
   font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;
-  padding:2px 6px;border-radius:999px;background:var(--accent);color:#fff;
+  padding:2px 6px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent);
 }
 
 /* Lembrete na estante: presente, mas sem gritar. */
@@ -1861,4 +2093,25 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
   .backup-stat:only-child{grid-column:1/-1}
   .backup-reminder-actions{width:100%}
   .backup-reminder-actions .soft-btn{flex:1 1 auto;justify-content:center}
+}
+
+/* ============================================================
+   RELEVO NOS TEMAS ESCUROS
+   ------------------------------------------------------------
+   Sombra não existe no escuro: preto sobre preto não aparece.
+   Sem nada no lugar, todo cartão fica colado no fundo e a tela
+   vira uma mancha só. O que dá a borda de cima de um objeto real
+   é a luz batendo nela — um filete de um pixel, quase invisível,
+   no topo de cada superfície. É pouco de propósito: se der para
+   notar, está forte demais.
+
+   --hairline é transparente nos temas claros, então este bloco
+   não faz nada lá.
+   ============================================================ */
+.soft-btn,.icon-btn,.select,.book-cover,.stat-chip,
+.seg button.active,.backup-stat,.panel-card{
+  box-shadow:var(--shadow-sm),inset 0 1px 0 var(--hairline);
+}
+.hero-card,.app-modal-box,.sheet,.audio-player{
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hairline);
 }

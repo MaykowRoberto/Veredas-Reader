@@ -1,0 +1,59 @@
+Fontes do aplicativo — Inter e Literata
+=======================================
+
+Para que servem aqui:
+  Inter    — toda a interface (menus, botões, a estante).
+  Literata — o texto dos livros no leitor. Foi desenhada pela Google
+             especificamente para leitura prolongada em tela; é a fonte
+             padrão do Google Play Livros.
+
+Antes desta mudança o CSS pedia "Inter" e "Merriweather" mas nenhuma
+das duas era carregada de lugar nenhum. Na prática o aplicativo
+desenhava Roboto no Android, Segoe UI no Windows e Georgia/Times no
+leitor — ou seja, mudava de cara em cada aparelho. Agora as fontes
+viajam junto com o aplicativo e funcionam offline.
+
+Licença: SIL Open Font License 1.1 — as duas.
+         (texto completo em licencas/LICENSE-Inter.txt e
+          licencas/LICENSE-Literata.txt)
+         A OFL permite uso comercial, inclusive embutido em aplicativo
+         pago, desde que as fontes não sejam vendidas isoladamente e o
+         aviso de licença seja mantido. É por isso que os dois arquivos
+         de licença ficam na pasta licencas/.
+
+Sites dos projetos:
+  https://rsms.me/inter/
+  https://github.com/googlefonts/literata
+
+De onde vieram:
+  @fontsource-variable/inter@5.3.0  (npm) — recorte "latin", eixo wght
+  @fontsource/literata@5.3.0        (npm) — recorte "latin"
+
+Só o recorte "latin" foi trazido. Ele cobre o português inteiro
+(á é í ó ú â ê ô ã õ ç à ü) e o espanhol, o francês e o alemão. O
+recorte "latin-ext", que só acrescenta o leste europeu, ficou de fora
+para não carregar 40 KB que ninguém aqui vai usar.
+
+Arquivos e impressão digital (md5):
+  inter-variavel.woff2
+    md5 260c81a4759baf163c025001c4f27872   48.256 bytes
+    Fonte variável: este arquivo único cobre TODOS os pesos de 100 a
+    900. É por isso que o CSS pode pedir font-weight:850 sem baixar
+    nada a mais.
+  literata-400.woff2
+    md5 a1e47c1196a712cf2edfe88fcc6a200c   20.420 bytes
+  literata-400-italico.woff2
+    md5 eec593fa1065ada1dd2bba3dcc15b2b3   21.148 bytes
+  literata-700.woff2
+    md5 8d83af4a6b4f7d578d119f33c3a982cb   22.004 bytes
+
+  Total: 120 KB. Menos do que o logo do aplicativo.
+
+O negrito-itálico da Literata não foi trazido de propósito: em livro
+ele aparece muito pouco, e o navegador sabe inclinar o negrito sozinho
+com um resultado aceitável. Se um dia fizer falta, o arquivo é
+literata-latin-700-italic.woff2 no mesmo pacote do npm.
+
+Para atualizar um dia: baixe a versão nova, troque os arquivos,
+atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste com a
+internet desligada antes de publicar.
