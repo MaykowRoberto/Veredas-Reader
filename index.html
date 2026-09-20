@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260920-13">
+<link rel="stylesheet" href="styles.css?v=20260920-14">
 
 <!-- ============================================================
      DEPENDÊNCIAS
@@ -23,10 +23,10 @@
      arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
      versão, de onde veio e a impressão digital do arquivo.
      ============================================================ -->
-<script src="vendor/lucide/lucide.min.js?v=20260920-13"></script>
-<script src="vendor/jszip/jszip.min.js?v=20260920-13"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=20260920-13"></script>
-<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-13"></script>
+<script src="vendor/lucide/lucide.min.js?v=20260920-14"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260920-14"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260920-14"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-14"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -51,7 +51,7 @@
     <!-- entrada usada para vasculhar uma pasta inteira do dispositivo -->
     <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
     <!-- entrada usada para restaurar um arquivo de backup -->
-    <input type="file" id="backup-input" accept=".zip,application/zip" hidden>
+    <input type="file" id="backup-input" accept=".zip,.txt,application/zip,text/plain" hidden>
   </header>
 
   <!-- SEARCH OVERLAY -->
@@ -753,8 +753,8 @@
 
 
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260920-13"></script>
+<script src="epub-pdf-converter.js?v=20260920-14"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260920-13"></script>
+<script src="app.js?v=20260920-15"></script>
 </body>
 </html>
