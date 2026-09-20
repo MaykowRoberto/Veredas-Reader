@@ -9371,6 +9371,8 @@ const Backup={
   VERSAO:1,
   NOME_JSON:'biblioteca.json',
   LEMBRETE_DIAS:14,
+  /* Acima disto, vale ter uma versão sem capas à mão. */
+  LEVE_ACIMA_DE:2*1024*1024,
   SONECA_DIAS:7,
   PENDENTES_ID:'restauracao-pendente',
 
@@ -9421,7 +9423,13 @@ const Backup={
     return{livros:livros.length,grifos,citacoes,notas,marcadores,
       marcacoes:grifos+citacoes+notas+marcadores};
   },
-  async gerar({onStatus}={}){
+  /* `capas:false` monta a mesma coisa sem as miniaturas. O arquivo
+     encolhe muitas vezes — numa estante grande, as capas são quase
+     todo o peso — e nada essencial se perde: progresso e marcações
+     continuam lá, e a capa de cada livro volta sozinha assim que o
+     arquivo dele for importado de novo. Serve para enviar por
+     WhatsApp ou e-mail sem incomodar ninguém. */
+  async gerar({onStatus,capas:comCapas=true}={}){
     const aviso=onStatus||(()=>{});
     aviso('Reunindo a sua estante...');
     const livros=(App.library&&App.library.allBooks&&App.library.allBooks.length)
@@ -9433,7 +9441,7 @@ const Backup={
     for(let i=0;i<livros.length;i++){
       const b=livros[i];
       const reg=this.camposDoLivro(b);
-      const capa=this.capaParaBytes(b.cover);
+      const capa=comCapas?this.capaParaBytes(b.cover):null;
       if(capa){
         const nome=`${b.id}.${capa.ext}`;
         capas.file(nome,capa.bytes);
@@ -10140,12 +10148,24 @@ Object.assign(Backup,{
       return;
     }
 
+    /* O arquivo começa a ser montado agora, enquanto a pessoa lê o
+       aviso. Quando ela tocar em "Escolher o app", ele já existe — e
+       é isso que permite chamar o compartilhamento dentro do toque. */
     let arquivo=null,pacote=null,falhou=null;
+    let leve=null,pacoteLeve=null;
     const preparo=this.gerar()
-      .then(p=>{pacote=p;arquivo=new File([p.blob],p.nome,{type:'application/zip'})})
+      .then(p=>{
+        pacote=p;arquivo=new File([p.blob],p.nome,{type:'application/zip'});
+        /* Estante grande: a versão sem capas fica pronta desde já, de
+           graça, para o caso de o envio do arquivo cheio não passar. */
+        if(p.blob.size>Backup.LEVE_ACIMA_DE){
+          return this.gerar({capas:false}).then(q=>{
+            pacoteLeve=q;leve=new File([q.blob],q.nome,{type:'application/zip'});
+          }).catch(e=>console.warn('versão leve não pôde ser montada',e));
+        }
+      })
       .catch(e=>{console.error(e);falhou=e});
 
-    let tentativa=null,tipoEnviado='',contexto=null;
     const confirmou=await AppModal.custom({
       title:'Enviar para outro app',
       subtitle:'Vale conferir o que vai no arquivo',
@@ -10187,74 +10207,141 @@ Object.assign(Backup,{
           lucide.createIcons({root:aviso});
         });
       },
-      /* Chamado de dentro do clique: é exatamente esta a janela em
-         que o navegador aceita abrir a folha de compartilhamento. */
+      /* Chamado de dentro do clique. Nada de pesado aqui: quanto menos
+         acontecer entre o toque e a chamada, melhor. */
       aoConfirmar:()=>{
         if(!arquivo)return false;
-        /* Se o aparelho torcer o nariz para `application/zip`, ainda
-           vale tentar como arquivo genérico: alguns aceitam. Tudo
-           aqui dentro, sem `await`, para não perder o toque. */
-        let enviar=arquivo;
-        try{
-          if(navigator.canShare&&!navigator.canShare({files:[enviar]})){
-            const generico=new File([arquivo],arquivo.name,{type:'application/octet-stream'});
-            if(navigator.canShare({files:[generico]}))enviar=generico;
-          }
-          /* Só os arquivos. Juntar `title` e `text` com `files` é
-             permitido pela especificação, mas é a combinação que mais
-             dá problema na prática: há versões do Android e destinos
-             de compartilhamento que recusam o conjunto e aceitam o
-             arquivo sozinho. Como o nome do arquivo já diz o que ele
-             é, não se perde nada. */
-          tentativa=navigator.share({files:[enviar]});
-          /* Fotografia do instante exato da chamada. Se um dia isto
-             falhar, é aqui que está a resposta: o toque ainda valia?
-             o endereço é seguro? que tipo foi ofertado? */
-          tipoEnviado=enviar.type;
-          contexto={
-            tipo:enviar.type,
-            bytes:enviar.size,
-            gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
-            seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
-            endereco:location.protocol+'//'+location.hostname
-          };
-        }catch(e){console.warn(e);tentativa=Promise.reject(e)}
-        return true;
+        return this.dispararEnvio(arquivo);
       }
     });
     if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
 
-    if(!confirmou)return;               /* cancelou */
+    if(!confirmou)return;                       /* cancelou */
+    if(!pacote||falhou){
+      Utils.toast('Não foi possível montar o arquivo de backup.','alert-triangle');
+      return;
+    }
 
-    /* Confirmou mas o envio nem chegou a sair: ou o arquivo não ficou
-       pronto, ou o aparelho recusou o tipo. Em vez de não acontecer
-       nada — que é o pior desfecho possível — salva e diz por quê. */
-    if(!tentativa){
-      if(falhou||!pacote){
-        Utils.toast('Não foi possível montar o arquivo de backup.','alert-triangle');
-        return;
-      }
+    let r=this._envio;
+    this._envio=null;
+
+    /* Nem chegou a tentar (o tipo do arquivo foi recusado). */
+    if(!r||!r.promessa){
       this.baixar(pacote);
-      await this.explicarRecusa(null,{tipo:'(nem chegou a tentar)',seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),endereco:location.protocol+'//'+location.hostname});
+      await this.explicarRecusa(null,{tipo:'(o aparelho recusou o tipo do arquivo)',
+        seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
+        endereco:location.protocol+'//'+location.hostname});
       await this.registrarBackupFeito(pacote);
       return;
     }
 
-    try{
-      await tentativa;
-    }catch(err){
-      if(err&&err.name==='AbortError')return;   /* fechou a folha: nada a dizer */
-      /* O navegador recusou. Dizer só "não deu" deixa a pessoa (e
-         quem vai consertar) no escuro: o motivo real vai junto, na
-         tela e no console. */
-      console.warn('[Veredas] navigator.share recusou o envio:',err);
-      if(pacote)this.baixar(pacote);
-      await this.explicarRecusa(err,contexto);
-      if(pacote)await this.registrarBackupFeito(pacote);
-      return;
+    let erro=await r.promessa.then(()=>null,e=>e);
+    if(!erro){await this.registrarBackupFeito(pacote);return}
+    if(erro.name==='AbortError')return;          /* fechou a folha */
+
+    console.warn('[Veredas] navigator.share recusou o envio:',erro,r.contexto);
+
+    /* Uma segunda chance, e ela não é teimosia.
+
+       Quando o navegador responde "Permission denied", ele quase
+       sempre está dizendo que não reconheceu o toque como recente o
+       bastante. Isso acontece com mais frequência do que deveria
+       quando algo pesado rodou pouco antes — montar um backup de
+       vários megabytes, por exemplo.
+
+       Aqui o arquivo JÁ está pronto e na memória. A nova tentativa
+       sai de um toque limpo, sem absolutamente nada acontecendo entre
+       o dedo e a chamada. É a condição mais favorável possível, e na
+       prática costuma passar. */
+    if(/NotAllowed|Security/i.test(erro.name||'')){
+      const tentou=await AppModal.custom({
+        title:'O navegador não reconheceu o toque',
+        subtitle:'Costuma funcionar na segunda vez',
+        icon:'share-2',
+        confirmText:'Abrir a lista de apps',
+        confirmIcon:'share-2',
+        cancelText:'Salvar o arquivo',
+        html:`
+          <p>O arquivo já está pronto aqui — <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>. Faltou só o navegador aceitar o toque.</p>
+          <p>Toque no botão abaixo: desta vez nada acontece antes da abertura da lista, que é a condição de que ele precisa.</p>`,
+        aoConfirmar:()=>this.dispararEnvio(arquivo)
+      });
+      if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
+      if(tentou){
+        const r2=this._envio;this._envio=null;
+        if(r2&&r2.promessa){
+          const erro2=await r2.promessa.then(()=>null,e=>e);
+          if(!erro2){await this.registrarBackupFeito(pacote);return}
+          if(erro2.name==='AbortError')return;
+          console.warn('[Veredas] segunda tentativa também recusada:',erro2,r2.contexto);
+          erro=erro2;r=r2;
+        }
+      }
     }
-    if(pacote)await this.registrarBackupFeito(pacote);
+
+    /* Ainda recusou. Se a estante é grande, o tamanho é a suspeita
+       seguinte — e a versão sem capas já está pronta aqui. */
+    if(leve&&leve.size<arquivo.size){
+      const tentouLeve=await AppModal.custom({
+        title:'Tentar enviar uma versão mais leve?',
+        subtitle:'Sem as capas dos livros',
+        icon:'feather',
+        confirmText:'Enviar a versão leve',
+        confirmIcon:'share-2',
+        cancelText:'Salvar o arquivo completo',
+        html:`
+          <p>O arquivo completo tem <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>, quase tudo capas. Sem elas ele fica com <strong>${Utils.esc(Utils.fmtBytes(leve.size))}</strong>.</p>
+          <p>O que importa continua lá: progresso, grifos, citações, notas, marcadores e a organização da estante. <strong>As capas voltam sozinhas</strong> assim que cada livro for importado de novo.</p>`,
+        aoConfirmar:()=>this.dispararEnvio(leve)
+      });
+      if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
+      if(tentouLeve){
+        const r3=this._envio;this._envio=null;
+        if(r3&&r3.promessa){
+          const erro3=await r3.promessa.then(()=>null,e=>e);
+          if(!erro3){await this.registrarBackupFeito(pacoteLeve||pacote);return}
+          if(erro3.name==='AbortError')return;
+          console.warn('[Veredas] versão leve também recusada:',erro3,r3.contexto);
+          erro=erro3;r=r3;
+        }
+      }
+    }
+
+    this.baixar(pacote);
+    await this.explicarRecusa(erro,r.contexto);
+    await this.registrarBackupFeito(pacote);
   },
+
+  /* Dispara o compartilhamento e guarda a promessa em `this._envio`.
+
+     Tudo o que esta função faz acontece na mesma tarefa do clique, e
+     na ordem certa: a leitura do estado do toque vem ANTES da
+     chamada, porque `navigator.share()` consome a ativação — medir
+     depois sempre daria "false" e não diria nada. Foi esse o erro do
+     diagnóstico anterior. */
+  dispararEnvio(arquivo){
+    let enviar=arquivo;
+    try{
+      if(navigator.canShare&&!navigator.canShare({files:[enviar]})){
+        const generico=new File([arquivo],arquivo.name,{type:'application/octet-stream'});
+        if(!navigator.canShare({files:[generico]}))return false;
+        enviar=generico;
+      }
+      const contexto={
+        tipo:enviar.type,
+        bytes:enviar.size,
+        gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
+        seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
+        endereco:location.protocol+'//'+location.hostname
+      };
+      this._envio={promessa:navigator.share({files:[enviar]}),contexto};
+    }catch(e){
+      console.warn(e);
+      this._envio={promessa:Promise.reject(e),contexto:{tipo:enviar&&enviar.type,bytes:enviar&&enviar.size}};
+    }
+    return true;
+  },
+
 
   /* ---------- restaurar ---------- */
   escolherArquivo(){
@@ -10417,7 +10504,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 12';
+const BUILD='2026-09-20 · 13';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
