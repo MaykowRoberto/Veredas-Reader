@@ -1,3 +1,17 @@
+JSZip — versão 3.10.1
+Copyright (c) 2009-2016 Stuart Knightley e colaboradores
+
+O JSZip pode ser usado sob a licença MIT OU sob a GPLv3, à escolha de
+quem o utiliza. O Veredas Reader o utiliza sob a LICENÇA MIT. O texto
+oficial abaixo traz as duas, como o projeto o publica.
+
+O aplicativo distribui o arquivo vendor/jszip/jszip.min.js sem
+modificação alguma.
+
+Projeto: https://stuk.github.io/jszip/
+
+--------------------------------------------------------------------
+
 JSZip is dual licensed. At your choice you may use it under the MIT license *or* the GPLv3
 license.
 

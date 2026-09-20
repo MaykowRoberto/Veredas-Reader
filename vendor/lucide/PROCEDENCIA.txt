@@ -1,0 +1,18 @@
+Lucide 0.544.0
+==============
+
+Para que serve aqui: Todos os ícones da interface.
+Licença: ISC (texto completo em licencas/)
+Site do projeto: https://lucide.dev/
+
+De onde veio: lucide@0.544.0 (npm, pacote UMD)
+Conferido byte a byte contra o arquivo que o app carregava
+do CDN antes desta mudança — é exatamente o mesmo código.
+
+Arquivos e impressão digital (md5):
+  lucide.min.js
+    md5 ad570c4081bb0db8b1c9fe3459b2905a   373.553 bytes
+
+Para atualizar um dia: baixe a versão nova, troque o arquivo,
+atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste
+com a internet desligada antes de publicar.

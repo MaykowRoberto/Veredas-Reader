@@ -11,13 +11,22 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260919-6">
+<link rel="stylesheet" href="styles.css?v=20260920-10">
 
-<!-- DEPENDÊNCIAS -->
-<script src="https://unpkg.com/lucide@latest"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<!-- ============================================================
+     DEPENDÊNCIAS
+     ------------------------------------------------------------
+     Todas moram aqui dentro, em vendor/. Nada é buscado na
+     internet: o aplicativo abre igual com ou sem rede, não quebra
+     se um servidor de terceiros sair do ar ou mudar de endereço,
+     e a versão de cada biblioteca só muda quando nós trocarmos o
+     arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
+     versão, de onde veio e a impressão digital do arquivo.
+     ============================================================ -->
+<script src="vendor/lucide/lucide.min.js?v=20260920-10"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260920-10"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260920-10"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-10"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -41,6 +50,8 @@
     <input type="file" id="file-input" accept=".epub,.pdf,.txt,.md,.markdown,.docx,.mobi,.prc,.cbz,.cbr,.cb7,.cbt,.mp3,.m4b,.mp4,text/markdown,application/vnd.comicbook+zip,application/vnd.comicbook-rar,audio/mpeg,audio/mp4,audio/x-m4b,video/mp4" multiple hidden>
     <!-- entrada usada para vasculhar uma pasta inteira do dispositivo -->
     <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
+    <!-- entrada usada para restaurar um arquivo de backup -->
+    <input type="file" id="backup-input" accept=".zip,application/zip" hidden>
   </header>
 
   <!-- SEARCH OVERLAY -->
@@ -95,6 +106,7 @@
 
             <div class="nav-title">Sistema</div>
             <button class="nav-item" id="nav-scan"><i data-lucide="folder-search"></i>Buscar livros no dispositivo</button>
+            <button class="nav-item" id="nav-backup"><i data-lucide="archive"></i>Backup e restauração</button>
             <button class="nav-item" id="nav-settings"><i data-lucide="settings-2"></i>Configurações</button>
 
             <button class="nav-item" id="nav-sobre-group" aria-expanded="false" aria-controls="nav-sobre-content">
@@ -133,6 +145,23 @@
                 <i data-lucide="list-filter"></i>
                 <span>Agrupar</span>
               </button>
+            </div>
+          </div>
+
+          <!-- Lembrete de backup: aparece sozinho quando faz tempo demais -->
+          <div class="backup-reminder" id="backup-reminder" hidden>
+            <i data-lucide="shield-alert"></i>
+            <div class="backup-reminder-text">
+              <strong id="backup-reminder-title">Sua estante não tem cópia de segurança</strong>
+              <small id="backup-reminder-sub">Se este aparelho se perder, o progresso e as marcações vão junto.</small>
+            </div>
+            <div class="backup-reminder-actions">
+              <button class="soft-btn primary" id="backup-reminder-go"><i data-lucide="download"></i>Fazer backup</button>
+              <button class="soft-btn" id="backup-reminder-later">Agora não</button>
+              <!-- Quem quer se livrar do aviso procura o desligamento
+                   aqui, no próprio aviso, e não num painel que ainda
+                   nem sabe que existe. Leva ao mesmo alerta. -->
+              <button class="soft-btn ghost" id="backup-reminder-never">Não avisar mais</button>
             </div>
           </div>
 
@@ -498,6 +527,14 @@
   </div>
 </section>
 
+<section class="panel" id="panel-backup">
+  <div class="panel-head">
+    <div><h3>Backup e restauração</h3><p>Sua estante, seu progresso e suas marcações num arquivo só.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+  </div>
+  <div class="panel-body" id="backup-body"></div>
+</section>
+
 <section class="panel" id="panel-library-filter">
   <div class="panel-head">
     <div><h3 id="filter-panel-title">Organização</h3><p>Escolha uma dimensão para explorar sua biblioteca.</p></div>
@@ -716,8 +753,8 @@
 
 
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260919-6"></script>
+<script src="epub-pdf-converter.js?v=20260920-10"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260919-6"></script>
+<script src="app.js?v=20260920-10"></script>
 </body>
 </html>

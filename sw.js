@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-19-6';
+const VERSAO = 'veredas-2026-09-20-10';
 
 const ESSENCIAIS = [
   './',
@@ -34,7 +34,22 @@ const ESSENCIAIS = [
   './manifest.json',
   './logo.png',
   './icon-192x192.png',
-  './icon-512x512.png'
+  './icon-512x512.png',
+
+  /* As bibliotecas agora moram aqui dentro. Sem estas linhas o
+     aplicativo abriria offline mas não conseguiria desenhar um
+     ícone, abrir um PDF nem ler um EPUB — que é o que acontecia
+     quando elas vinham de um servidor de terceiros. */
+  './vendor/lucide/lucide.min.js',
+  './vendor/jszip/jszip.min.js',
+  './vendor/pdfjs/pdf.min.js',
+  './vendor/pdfjs/pdf.worker.min.js',
+  './vendor/mammoth/mammoth.browser.min.js'
+
+  /* vendor/libarchive/libarchive-embutido.js fica de fora de
+     propósito: são 1,4 MB que só fazem falta para CBR, CB7 e CBT.
+     É buscado na primeira vez que alguém abre um desses e, a
+     partir daí, o próprio tratador de `fetch` abaixo o guarda. */
 ];
 
 self.addEventListener('install', evento => {

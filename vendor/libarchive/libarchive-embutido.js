@@ -4207,8 +4207,15 @@ var fabricaLibarchive = (() => {
     var tick = typeof op.tick === "function" ? op.tick : null;
     var progresso = typeof op.onProgress === "function" ? op.onProgress : null;
     var mime = typeof op.mime === "function" ? op.mime : function () { return "application/octet-stream"; };
+    /* Quando `aoExtrair` é passado, cada página é entregue assim que
+       sai e NÃO é acumulada aqui dentro. É o que permite descompactar
+       um quadrinho de 300 páginas gravando uma a uma, em vez de
+       segurar as 300 na memória até o fim. Pode devolver uma promessa:
+       a extração espera antes de seguir para a próxima. */
+    var aoExtrair = typeof op.aoExtrair === "function" ? op.aoExtrair : null;
     var total = quero.size;
     var res = new Map();
+    var feitas = 0;
     self._abrirPassagem();
 
     function passo() {
@@ -4228,9 +4235,22 @@ var fabricaLibarchive = (() => {
            cresce sozinha e a referência antiga fica inválida. */
         var copia = self._M.HEAPU8.slice(p, p + tam);
         self._M._free(p);
-        res.set(caminho, new Blob([copia], { type: mime(caminho) }));
+        var blob = new Blob([copia], { type: mime(caminho) });
         copia = null;
-        if (progresso) progresso(res.size, total, caminho);
+        feitas++;
+        if (aoExtrair) {
+          var entregue = aoExtrair(caminho, blob, feitas, total);
+          blob = null;
+          if (progresso) progresso(feitas, total, caminho);
+          /* Entrega assíncrona: devolve o controle antes de
+             descompactar a próxima, senão as páginas se acumulariam
+             à espera da gravação. */
+          return Promise.resolve(entregue)
+            .then(function () { return tick ? tick() : null; })
+            .then(passo);
+        }
+        res.set(caminho, blob);
+        if (progresso) progresso(feitas, total, caminho);
       }
       return (tick ? Promise.resolve(tick()) : Promise.resolve()).then(passo);
     }
@@ -4281,6 +4301,45 @@ var fabricaLibarchive = (() => {
         ctx.Module.HEAPU8.set(bytes, ptr);
         return new Leitor(ctx, ptr, bytes.length);
       });
+    },
+    /* Igual ao `abrir`, mas partindo de um Blob e copiando aos
+       poucos. A diferença é de memória: `abrir` exige o arquivo
+       inteiro já montado em Uint8Array, ou seja, duas cópias vivas ao
+       mesmo tempo (a do JavaScript e a do WebAssembly). Aqui o
+       JavaScript nunca segura mais do que um naco. */
+    abrirBlob: function (blob) {
+      var NACO = 4 * 1024 * 1024;
+      return this.carregar().then(function (ctx) {
+        var ptr = ctx.rc.malloc(blob.size);
+        if (!ptr) throw new Error("Memória insuficiente para abrir este arquivo.");
+        var pos = 0;
+        function proximo() {
+          if (pos >= blob.size) return new Leitor(ctx, ptr, blob.size);
+          var fim = Math.min(pos + NACO, blob.size);
+          var inicio = pos;
+          return blob.slice(inicio, fim).arrayBuffer().then(function (buf) {
+            /* HEAPU8 é relido a cada volta: a memória do WebAssembly
+               pode ter crescido e a referência antiga fica inválida. */
+            ctx.Module.HEAPU8.set(new Uint8Array(buf), ptr + inicio);
+            pos = fim;
+            return proximo();
+          });
+        }
+        return proximo();
+      });
+    },
+    /* Devolve ao navegador a memória do WebAssembly.
+
+       O Emscripten nunca encolhe o espaço que usa: depois de abrir um
+       quadrinho de 90 MB, esses 90 MB continuam reservados até a
+       página ser recarregada. Como o aplicativo só precisa do
+       libarchive na hora de descompactar, e isso acontece uma vez por
+       quadrinho, vale a pena descartar o módulo inteiro no fim e
+       montá-lo de novo se outro CBR aparecer (custa menos de meio
+       segundo). */
+    descartar: function () {
+      this._ctx = null;
+      this._carregando = null;
     }
   };
 

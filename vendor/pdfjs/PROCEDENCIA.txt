@@ -1,0 +1,20 @@
+PDF.js 2.16.105
+===============
+
+Para que serve aqui: Abrir e desenhar arquivos PDF.
+Licença: Apache License 2.0 (texto completo em licencas/)
+Site do projeto: https://mozilla.github.io/pdf.js/
+
+De onde veio: pdfjs-dist@2.16.105 (npm)
+Conferido byte a byte contra o arquivo que o app carregava
+do CDN antes desta mudança — é exatamente o mesmo código.
+
+Arquivos e impressão digital (md5):
+  pdf.min.js
+    md5 e2f5e1f9451c8a897484861679857823   286.899 bytes
+  pdf.worker.min.js
+    md5 1b21a52673403baa815d90e3c9347714   1.066.087 bytes
+
+Para atualizar um dia: baixe a versão nova, troque o arquivo,
+atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste
+com a internet desligada antes de publicar.

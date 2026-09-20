@@ -1,3 +1,13 @@
+Mammoth.js — versão 1.6.0
+Licença BSD de 2 cláusulas
+
+O aplicativo distribui o arquivo
+vendor/mammoth/mammoth.browser.min.js sem modificação alguma.
+
+Projeto: https://github.com/mwilliamson/mammoth.js
+
+--------------------------------------------------------------------
+
 Copyright (c) 2013, Michael Williamson
 All rights reserved.
 

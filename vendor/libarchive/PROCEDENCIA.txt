@@ -1,0 +1,32 @@
+libarchive (compilado para WebAssembly)
+=======================================
+
+Para que serve aqui: abrir quadrinhos em CBR, CB7 e CBT.
+Licença: BSD de 2 cláusulas (texto completo em licencas/)
+Site do projeto: https://libarchive.org/
+
+O QUE É ESTE ARQUIVO
+Diferente das outras pastas de vendor/, este não é um arquivo baixado
+sem modificação. Ele junta três coisas num único script comum:
+
+  1. o libarchive compilado para WebAssembly;
+  2. o binário .wasm embutido em base64, para o leitor de CBR
+     funcionar também com o aplicativo aberto direto do disco
+     (file://), onde o navegador proíbe buscar arquivos vizinhos;
+  3. uma camada em português escrita para este aplicativo
+     (VeredasLibArchive), com as funções abrir, abrirBlob, listar,
+     extrair, fechar e descartar.
+
+A parte 3 é código nosso, e é onde ficam as decisões de memória:
+abrirBlob copia o pacote para dentro do WebAssembly aos poucos, em
+vez de montá-lo inteiro em JavaScript antes; extrair entrega cada
+página assim que ela sai, para que a importação não precise segurar
+todas de uma vez; e descartar devolve ao aparelho a memória
+reservada pelo módulo quando ele não é mais necessário.
+
+Arquivo e impressão digital (md5):
+  libarchive-embutido.js
+    md5 2b94f7682589edb9f07b6de16f71340a   1.480.821 bytes
+
+Por isso este arquivo NÃO pode ser trocado por um download novo do
+libarchive sem refazer as partes 2 e 3.

@@ -267,6 +267,13 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 .soft-btn svg{width:17px;height:17px}
 .soft-btn.primary{background:var(--accent);color:#fff;border-color:transparent}
 .soft-btn.danger{background:#b42336;color:#fff;border-color:transparent}
+/* Terceira opção de um grupo: existe para quem a procura, sem
+   disputar atenção com as duas que importam. */
+.soft-btn.ghost{
+  background:transparent;border-color:transparent;box-shadow:none;
+  color:var(--muted);font-weight:600;text-decoration:underline;
+  text-underline-offset:3px;text-decoration-thickness:1px;
+}
 .icon-btn{
   width:42px;height:42px;border:1px solid var(--border);border-radius:12px;
   background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow-sm);
@@ -1229,6 +1236,13 @@ body.reader-open .search-bar{display:none!important}
   background:var(--surface-2);border:1px solid var(--border);font-size:12.5px;font-weight:700;
 }
 .doc-dep svg{width:16px;height:16px;color:var(--accent);flex:0 0 16px}
+/* Número da versão, logo depois do nome da biblioteca. A etiqueta da
+   licença continua encostada na direita por causa do margin-left:auto
+   dela, então este fica no meio, discreto. */
+.doc-dep-ver{
+  font-size:10.5px;font-weight:600;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
 @media(max-width:520px){.doc-dialog{border-radius:20px}}
 
 /* ============================================================
@@ -1733,4 +1747,89 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .page-text blockquote{
   margin:1em 0;padding:.2em 0 .2em 1em;text-indent:0;
   border-left:3px solid color-mix(in srgb,var(--accent) 55%,transparent);color:var(--muted);
+}
+
+/* ============================================================
+   BACKUP E RESTAURAÇÃO
+   ------------------------------------------------------------
+   Tudo aqui segue os componentes que o aplicativo já usa
+   (.soft-btn, .setting-section, .drag-tip) — a tela nova precisa
+   parecer parte da casa, não um puxadinho.
+   ============================================================ */
+.backup-stats,.backup-preview{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;
+}
+.backup-stat{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:14px;
+  padding:12px 8px;text-align:center;min-width:0;
+}
+.backup-stat strong{display:block;font-size:22px;line-height:1.1;letter-spacing:-.5px}
+.backup-stat small{display:block;margin-top:4px;color:var(--muted);font-size:10.5px;line-height:1.3}
+
+.backup-status{
+  display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:12px 14px;
+  border-radius:14px;border:1px solid var(--border);background:var(--surface-2);
+  font-size:12.5px;line-height:1.5;
+}
+.backup-status svg{width:20px;height:20px;flex:0 0 auto}
+.backup-status.ok svg{color:#2e9e63}
+.backup-status.alerta{border-color:color-mix(in srgb,#e0a341 45%,var(--border))}
+.backup-status.alerta svg{color:#d08a1f}
+
+.backup-actions{display:flex;flex-wrap:wrap;gap:8px}
+.backup-actions .soft-btn{flex:1 1 auto;justify-content:center;min-width:150px}
+
+.backup-waiting{
+  display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;
+  background:var(--surface-2);border:1px solid var(--border);font-size:12.5px;line-height:1.5;
+}
+.backup-waiting svg{width:20px;height:20px;flex:0 0 auto;color:var(--accent)}
+.backup-waiting-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.backup-chip{
+  padding:4px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);
+  font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.backup-chip.mais{font-weight:800;color:var(--muted)}
+
+/* Escolha entre juntar e substituir. O recomendado vem marcado,
+   e o outro exige um toque de propósito. */
+.backup-modes{display:grid;gap:8px}
+.backup-mode{
+  text-align:left;padding:12px 14px;border-radius:14px;cursor:pointer;
+  border:1.5px solid var(--border);background:var(--surface);
+  transition:border-color .15s,background .15s;
+}
+.backup-mode strong{display:block;font-size:13px;margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.backup-mode small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45}
+.backup-mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.backup-mode .rec{
+  font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;
+  padding:2px 6px;border-radius:999px;background:var(--accent);color:#fff;
+}
+
+/* Lembrete na estante: presente, mas sem gritar. */
+.backup-reminder{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin:0 0 16px;padding:14px 16px;border-radius:16px;
+  border:1px solid color-mix(in srgb,#e0a341 45%,var(--border));
+  background:color-mix(in srgb,#e0a341 9%,var(--surface));
+}
+.backup-reminder[hidden]{display:none!important}
+.backup-reminder>svg{width:22px;height:22px;flex:0 0 auto;color:#d08a1f}
+.backup-reminder-text{flex:1 1 220px;min-width:0}
+.backup-reminder-text strong{display:block;font-size:13px;margin-bottom:2px}
+.backup-reminder-text small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45}
+.backup-reminder-actions{display:flex;gap:8px;flex-wrap:wrap}
+.backup-reminder-actions .soft-btn{font-size:12px;padding:8px 12px}
+
+@media (max-width:520px){
+  /* Três colunas continuam cabendo num celular: os números são curtos e
+     assim não sobra um cartão solto ocupando meia linha. */
+  .backup-stat{padding:11px 5px;border-radius:12px}
+  .backup-stat strong{font-size:20px}
+  .backup-stat small{font-size:9.5px;margin-top:3px}
+  .backup-stats,.backup-preview{gap:6px}
+  .backup-stat:only-child{grid-column:1/-1}
+  .backup-reminder-actions{width:100%}
+  .backup-reminder-actions .soft-btn{flex:1 1 auto;justify-content:center}
 }

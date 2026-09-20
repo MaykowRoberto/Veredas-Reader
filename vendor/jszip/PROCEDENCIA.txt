@@ -1,0 +1,18 @@
+JSZip 3.10.1
+============
+
+Para que serve aqui: Ler EPUB e CBZ, e montar o arquivo .zip de backup.
+Licença: MIT (ou GPLv3, à escolha de quem usa) (texto completo em licencas/)
+Site do projeto: https://stuk.github.io/jszip/
+
+De onde veio: jszip@3.10.1 (npm)
+Conferido byte a byte contra o arquivo que o app carregava
+do CDN antes desta mudança — é exatamente o mesmo código.
+
+Arquivos e impressão digital (md5):
+  jszip.min.js
+    md5 b5d02b3f0bf3ae026451909419df07bb   97.630 bytes
+
+Para atualizar um dia: baixe a versão nova, troque o arquivo,
+atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste
+com a internet desligada antes de publicar.

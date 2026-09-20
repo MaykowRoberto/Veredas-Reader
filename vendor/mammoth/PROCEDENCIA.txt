@@ -1,0 +1,18 @@
+Mammoth.js 1.6.0
+================
+
+Para que serve aqui: Converter documentos DOCX em HTML para leitura.
+Licença: BSD 2-Clause (texto completo em licencas/)
+Site do projeto: https://github.com/mwilliamson/mammoth.js
+
+De onde veio: mammoth@1.6.0 (npm)
+Conferido byte a byte contra o arquivo que o app carregava
+do CDN antes desta mudança — é exatamente o mesmo código.
+
+Arquivos e impressão digital (md5):
+  mammoth.browser.min.js
+    md5 bfaf513f3b23745fdf12ed5e96d92c34   642.759 bytes
+
+Para atualizar um dia: baixe a versão nova, troque o arquivo,
+atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste
+com a internet desligada antes de publicar.

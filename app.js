@@ -34,7 +34,19 @@ if ('serviceWorker' in navigator) {
    DEPENDÊNCIAS
    ============================================================ */
 lucide.createIcons();
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+/* O "trabalhador" do PDF.js (pdf.worker) também mora em vendor/.
+   O caminho é resolvido a partir do endereço da própria página, e
+   não fixo na raiz, para o aplicativo continuar funcionando se um
+   dia for publicado dentro de uma subpasta (meusite.com/leitor/).
+
+   Sob file:// o navegador não deixa criar Worker nenhum. O PDF.js
+   percebe isso sozinho e passa a trabalhar na própria página — mais
+   lento, porém funciona. Deixamos o caminho configurado mesmo assim:
+   é ele que vale quando o app roda por um endereço de verdade, que é
+   o caso do celular. */
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  new URL('vendor/pdfjs/pdf.worker.min.js', document.baseURI).href;
 
 /* ============================================================
    UTILS
@@ -117,6 +129,23 @@ const Utils={
      (e um quadro seja realmente pintado) durante tarefas longas. */
   yieldToUI:()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0))),
   isAbort:e=>!!e&&(e.name==='AbortError'||e.message==='__abort__'),
+  /* Cancela um evento de toque só quando o navegador ainda permite.
+
+     Depois que o navegador decide que um gesto é rolagem, ele assume o
+     controle e marca os eventos seguintes como `cancelable:false` —
+     rolagem em andamento não se interrompe no meio. Chamar
+     `preventDefault()` aí não faz absolutamente nada, mas rende um
+     aviso no console a cada evento. Virando páginas de um quadrinho
+     isso vira mil avisos por minuto, e some o que interessa ver ali.
+
+     Conferir antes não muda comportamento nenhum: o que era ignorado
+     continua sendo ignorado, só que em silêncio. Devolve `true`
+     quando o cancelamento valeu, para quem quiser saber. */
+  cancelar:e=>{
+    if(!e||!e.cancelable)return false;
+    e.preventDefault();
+    return true;
+  },
   fmtBytes:n=>{
     if(!Number.isFinite(n))return '';
     const u=['B','KB','MB','GB'];let i=0;
@@ -281,7 +310,7 @@ class TransferMeter{
    DB
    ============================================================ */
 class DBManager{
-  constructor(){this.dbName='LuminaEngineDB';this.version=3}
+  constructor(){this.dbName='LuminaEngineDB';this.version=4}
   async init(){
     return new Promise((resolve,reject)=>{
       const r=indexedDB.open(this.dbName,this.version);
@@ -291,9 +320,69 @@ class DBManager{
         if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id'});
         if(!db.objectStoreNames.contains('settings'))db.createObjectStore('settings',{keyPath:'id'});
         if(!db.objectStoreNames.contains('pagecache'))db.createObjectStore('pagecache',{keyPath:'key'});
+        /* Páginas de quadrinho, uma por registro.
+           Antes, abrir um CBR descompactava as 240 páginas de uma vez
+           e segurava todas na memória enquanto o livro estivesse
+           aberto. Agora a descompactação acontece uma única vez, na
+           importação, e a leitura busca uma página de cada vez.
+           A chave é `id-do-livro|000123`, com o número preenchido com
+           zeros para a ordem alfabética coincidir com a numérica — é
+           o que permite apagar um livro inteiro por faixa de chaves,
+           sem precisar de índice. */
+        if(!db.objectStoreNames.contains('comicpages'))db.createObjectStore('comicpages',{keyPath:'key'});
       };
       r.onsuccess=e=>{this.db=e.target.result;resolve()};
       r.onerror=e=>reject(e.target.error);
+    });
+  }
+  /* --------------------------------------------------------
+     Páginas de quadrinho
+     -------------------------------------------------------- */
+  static comicKey(bookId,i){return `${bookId}|${String(i).padStart(6,'0')}`}
+  static comicRange(bookId){
+    return IDBKeyRange.bound(`${bookId}|`,`${bookId}|￿`);
+  }
+  /* Grava um lote de páginas numa transação só. Uma transação por
+     página deixaria a importação lenta; lotes grandes demais voltam
+     a segurar memória. */
+  saveComicPages(bookId,itens){
+    return new Promise((resolve,reject)=>{
+      const tx=this.db.transaction('comicpages','readwrite');
+      const st=tx.objectStore('comicpages');
+      for(const it of itens){
+        st.put({key:DBManager.comicKey(bookId,it.i),i:it.i,blob:it.blob,name:it.name||''});
+      }
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+    });
+  }
+  async getComicPage(bookId,i){
+    const r=await this._exec('comicpages','readonly',s=>s.get(DBManager.comicKey(bookId,i)));
+    return r?r.blob:null;
+  }
+  /* Quantas páginas deste livro já estão gravadas. Serve para saber
+     se a descompactação terminou e para conferir a estante. */
+  async countComicPages(bookId){
+    return this._exec('comicpages','readonly',s=>s.count(DBManager.comicRange(bookId)));
+  }
+  async deleteComicPages(bookId){
+    return this._exec('comicpages','readwrite',s=>s.delete(DBManager.comicRange(bookId)));
+  }
+  /* Espaço ocupado pelas páginas de um livro (ou de todos). */
+  async comicPagesBytes(bookId=null){
+    return new Promise((resolve,reject)=>{
+      const tx=this.db.transaction('comicpages','readonly');
+      const req=tx.objectStore('comicpages')
+        .openCursor(bookId?DBManager.comicRange(bookId):null);
+      let total=0;
+      req.onsuccess=()=>{
+        const c=req.result;
+        if(!c)return resolve(total);
+        total+=(c.value&&c.value.blob&&c.value.blob.size)||0;
+        c.continue();
+      };
+      req.onerror=()=>reject(req.error);
     });
   }
   _exec(storeName,mode,cb){
@@ -305,9 +394,34 @@ class DBManager{
       req.onerror=()=>reject(req.error);
     });
   }
-  async saveBook(meta,buffer){
+  /* O arquivo do livro é gravado como Blob, e não como ArrayBuffer.
+     A diferença importa: um ArrayBuffer lido do banco desembarca
+     inteiro na memória do JavaScript e só sai de lá quando o coletor
+     de lixo quiser; um Blob fica sob a guarda do navegador, que o
+     mantém em disco e só materializa os bytes quando alguém pede.
+     Num PDF de 90 MB isso é a diferença entre carregar 90 MB e não
+     carregar nada até precisar.
+
+     `dados` pode ser Blob ou ArrayBuffer — quem chama não precisa
+     saber. Livros gravados nas versões anteriores continuam como
+     ArrayBuffer e são lidos normalmente (ver `fileBlob`). */
+  async saveBook(meta,dados){
+    const blob=dados instanceof Blob?dados:new Blob([dados]);
     await this._exec('books','readwrite',s=>s.put(Utils.normalizeBook(meta)));
-    await this._exec('files','readwrite',s=>s.put({id:meta.id,buffer}));
+    await this._exec('files','readwrite',s=>s.put({id:meta.id,blob}));
+  }
+  /* Os três jeitos de pedir o arquivo de um livro, aceitando tanto o
+     formato novo (blob) quanto o antigo (buffer). */
+  static recordBlob(rec){
+    if(!rec)return null;
+    if(rec.blob instanceof Blob)return rec.blob;
+    if(rec.buffer)return new Blob([rec.buffer]);
+    return null;
+  }
+  async fileBlob(id){return DBManager.recordBlob(await this.getFile(id))}
+  async fileBuffer(id){
+    const b=await this.fileBlob(id);
+    return b?b.arrayBuffer():null;
   }
   /* Audiolivro: o arquivo entra como Blobs (não como ArrayBuffer) e o livro
      e o arquivo são gravados na MESMA transação — ou entra tudo, ou nada. */
@@ -321,15 +435,16 @@ class DBManager{
       tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
     });
   }
-  /* Quadrinho: o pacote de imagens é grande demais para virar um
-     ArrayBuffer na memória a cada abertura, então ele é guardado como
-     Blob (o navegador cuida de mantê-lo em disco) — livro e arquivo
-     na MESMA transação, como no audiolivro. */
-  async saveComicBook(meta,blob){
+  /* Quadrinho: as páginas já foram gravadas uma a uma durante a
+     descompactação, então aqui só entra o livro. Se vier um `blob`
+     (caminho antigo, ainda usado por algum ponto do código), ele é
+     guardado como antes. */
+  async saveComicBook(meta,blob=null){
     return new Promise((resolve,reject)=>{
       const tx=this.db.transaction(['books','files'],'readwrite');
       tx.objectStore('books').put(Utils.normalizeBook(meta));
-      tx.objectStore('files').put({id:meta.id,kind:'comic',blob});
+      if(blob)tx.objectStore('files').put({id:meta.id,kind:'comic',blob});
+      else tx.objectStore('files').delete(meta.id);
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
       tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
@@ -405,14 +520,22 @@ class DBManager{
   }
   async deleteBook(id){
     return new Promise((resolve,reject)=>{
-      const tx=this.db.transaction(['books','files','pagecache'],'readwrite');
+      const tx=this.db.transaction(['books','files','pagecache','comicpages'],'readwrite');
       tx.objectStore('books').delete(id);
       tx.objectStore('files').delete(id);
+      /* As páginas descompactadas saem junto — senão um quadrinho
+         apagado continuaria ocupando o espaço dele no aparelho. */
+      tx.objectStore('comicpages').delete(DBManager.comicRange(id));
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
   }
   async saveSettings(s){return this._exec('settings','readwrite',st=>st.put({...s,id:'global'}))}
+  /* Registros avulsos na mesma store de configurações (a restauração
+     pendente mora aqui). Não conflitam com o 'global'. */
+  async getRecord(id){return this._exec('settings','readonly',s=>s.get(id))}
+  async putRecord(obj){return this._exec('settings','readwrite',s=>s.put(obj))}
+  async deleteRecord(id){return this._exec('settings','readwrite',s=>s.delete(id))}
   async getSettings(){
     return this._exec('settings','readonly',s=>s.get('global')).then(s=>({...AppDefaults.settings,...(s||{})}));
   }
@@ -433,6 +556,7 @@ const AppDefaults={settings:{
   readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
   comicFit:'page',comicSpread:true,comicRtl:false,
+  lastBackupAt:0,backupSnoozeAt:0,backupLembretes:true,
   consent:null,scanInvited:false,scrollPerBook:false
 }};
 
@@ -1243,10 +1367,100 @@ class EPUBParser{
 /* ============================================================
    PDF PARSER
    ============================================================ */
+/* ============================================================
+   LEITURA DE PDF POR PEDAÇOS
+   ------------------------------------------------------------
+   O jeito comum de abrir um PDF é entregar o arquivo inteiro ao
+   pdf.js. Funciona, e é o que o aplicativo fazia — mas um PDF de
+   300 MB vira 300 MB de memória antes da primeira página aparecer,
+   e no celular isso é o fim do aplicativo.
+
+   O pdf.js sabe trabalhar de outro jeito: em vez do arquivo, recebe
+   alguém que saiba entregar "os bytes de tal posição até tal outra".
+   É para isso que serve esta classe. Como o arquivo está guardado
+   como Blob, cada pedaço sai de `blob.slice()`, que o navegador lê
+   direto do disco sem trazer o resto junto.
+
+   Na prática: abrir um PDF passa a custar alguns megabytes em vez do
+   tamanho do arquivo, e ler a página 300 não custa mais do que ler a
+   página 1.
+   ============================================================ */
+/* A classe é montada na primeira vez que é usada, e não aqui em
+   cima: ela herda de algo que vem do pdf.js, e se um dia essa peça
+   não existir (versão diferente, carregamento que falhou) é melhor o
+   leitor abrir o PDF do jeito antigo do que o aplicativo inteiro não
+   subir por causa de um `extends undefined`. */
+let _BlobRange=null;
+function montarBlobRange(){
+  if(_BlobRange!==null)return _BlobRange;
+  const Base=(typeof pdfjsLib!=='undefined')&&pdfjsLib.PDFDataRangeTransport;
+  if(typeof Base!=='function'){_BlobRange=false;return false}
+  _BlobRange=class extends Base{
+    constructor(blob,inicial){
+      super(blob.size,inicial);
+      this.blob=blob;
+      this._fechado=false;
+    }
+    requestDataRange(inicio,fim){
+      /* O pdf.js chama isto de dentro do processamento dele e espera
+         a resposta por `onDataRange`, quando ela chegar. */
+      this.blob.slice(inicio,fim).arrayBuffer()
+        .then(buf=>{
+          if(this._fechado)return;
+          this.onDataRange(inicio,new Uint8Array(buf));
+        })
+        .catch(err=>console.warn('Falha ao ler um trecho do PDF',err));
+    }
+    abort(){this._fechado=true}
+  };
+  return _BlobRange;
+}
+
 class PDFParser{
+  /* Quanto se lê de cara. O pdf.js precisa do fim do arquivo (onde
+     ficam o índice e o trailer) e costuma querer o começo; com um
+     naco inicial generoso, PDFs pequenos são resolvidos numa tacada
+     só e os grandes pedem o resto conforme a leitura avança. */
+  static INICIAL=Math.round(1.5*1024*1024);
+  /* Abaixo deste tamanho não compensa a conversa por pedaços: o
+     arquivo inteiro já é pequeno o bastante. */
+  static LIMITE_INTEIRO=8*1024*1024;
+
   static async parse(buffer){
     const pdf=await pdfjsLib.getDocument({data:buffer}).promise;
     return{pdf,numPages:pdf.numPages};
+  }
+
+  /* Abre a partir de um Blob, lendo por pedaços quando vale a pena.
+     Devolve também o transporte, para o leitor poder encerrá-lo. */
+  static async parseBlob(blob){
+    if(!blob)throw new Error('PDF indisponível.');
+    const Transporte=montarBlobRange();
+    if(blob.size<=PDFParser.LIMITE_INTEIRO||!Transporte){
+      const pdf=await pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
+      return{pdf,numPages:pdf.numPages,transporte:null};
+    }
+    const inicial=new Uint8Array(await blob.slice(0,Math.min(PDFParser.INICIAL,blob.size)).arrayBuffer());
+    const transporte=new Transporte(blob,inicial);
+    try{
+      const pdf=await pdfjsLib.getDocument({
+        range:transporte,
+        /* Sem estes dois, o pdf.js busca o arquivo todo em segundo
+           plano assim que abre — o que anularia a economia. */
+        disableAutoFetch:true,
+        disableStream:true
+      }).promise;
+      return{pdf,numPages:pdf.numPages,transporte};
+    }catch(err){
+      /* Qualquer PDF que não se dê bem com leitura por pedaços
+         (arquivo remendado, índice quebrado que exige varrer tudo)
+         é aberto do jeito antigo. Ninguém fica sem ler por causa
+         de uma otimização. */
+      console.warn('Leitura por pedaços falhou; abrindo o PDF inteiro.',err);
+      try{transporte.abort()}catch(e){}
+      const pdf=await pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
+      return{pdf,numPages:pdf.numPages,transporte:null};
+    }
   }
   static async renderPageToContainer(pdf, pageNumber, wrapNode, maxW, maxH, zoom=1) {
     try {
@@ -1633,6 +1847,11 @@ const ComicSupport={
    apenas CBZ nunca paga esse custo. */
 const LibArchiveLoader={
   _promise:null,
+  /* O <script> já carregado continua onde está — o que se descarta é
+     o módulo WebAssembly montado por ele, que é quem ocupa memória.
+     A próxima chamada a `load()` reencontra o `window.VeredasLibArchive`
+     e monta um módulo novo. */
+  esquecer(){this._promise=null},
   base(){
     /* app.js mora na raiz do aplicativo; o vendor fica ao lado dele. */
     try{
@@ -1678,104 +1897,283 @@ const LibArchiveLoader={
   }
 };
 
-class ComicArchive{
-  constructor(){
-    this.pages=[];        /* [{name,path,size}] na ordem de leitura */
-    this.info=null;       /* ComicInfo.xml, quando existe */
-    this.kind='zip';
-    this._zip=null;       /* JSZip, quando o pacote é ZIP */
-    this._blobs=null;     /* páginas já extraídas (RAR/7z/TAR) */
-    this._urls=new Map(); /* cache de object URLs em uso */
-    this._order=[];
-    this._closed=false;
-  }
-  get length(){return this.pages.length}
+/* ============================================================
+   DESCOMPACTAÇÃO DE QUADRINHOS
+   ------------------------------------------------------------
+   Antes, um CBR era guardado como veio e descompactado inteiro toda
+   vez que o livro era aberto: as 240 páginas saíam de uma vez e
+   ficavam na memória enquanto a leitura durasse. Um arquivo de 90 MB
+   custava uns 330 MB, e o custo se repetia a cada abertura.
 
-  /* --------------------------------------------------------
-     Abertura
-     `source` pode ser Blob/File (caminho normal) ou ArrayBuffer
-     (livros antigos, gravados antes desta versão).
-     -------------------------------------------------------- */
-  static async open(source,opts={}){
-    const onStatus=opts.onStatus||(()=>{});
-    const signal=opts.signal||null;
-    const blob=source instanceof Blob?source:new Blob([source]);
-    const archive=new ComicArchive();
-    const nome=opts.name||'quadrinho';
+   Agora a descompactação acontece UMA vez, na importação, e cada
+   página é gravada no banco assim que sai — a anterior já foi solta
+   quando a seguinte nasce. Depois disso o arquivo original não serve
+   mais para nada e é descartado, então o espaço em disco também não
+   dobra.
+
+   Ler passa a ser buscar uma página no banco: custo fixo, não
+   importa se o quadrinho tem 30 ou 3000 páginas.
+   ============================================================ */
+/* ============================================================
+   LEITURA DE ZIP POR PEDAÇOS
+   ------------------------------------------------------------
+   O JSZip é ótimo, mas para abrir um pacote ele lê o arquivo
+   inteiro: um CBZ de 90 MB vira 90 MB de memória antes da primeira
+   página sair. Num EPUB isso não incomoda; num quadrinho, sim.
+
+   Um ZIP, porém, é feito justamente para não precisar disso: no fim
+   do arquivo existe um índice dizendo onde cada item começa. Lendo
+   só esse índice e depois fatiando o Blob no ponto certo, dá para
+   tirar uma página de cada vez sem nunca ter o pacote todo na mão.
+
+   A descompactação usa o `DecompressionStream` do próprio navegador
+   — não é biblioteca nova, é parte da plataforma. Onde ele não
+   existir, ou num pacote fora do comum (ZIP64, itens cifrados), o
+   caminho antigo com JSZip continua valendo.
+   ============================================================ */
+const ZipStream={
+  disponivel(){return typeof DecompressionStream==='function'},
+
+  async _u32(blob,pos){
+    const b=new DataView(await blob.slice(pos,pos+4).arrayBuffer());
+    return b.getUint32(0,true);
+  },
+
+  /* Lê o índice central do ZIP. Devolve null quando o pacote não é
+     do feitio simples que sabemos tratar — aí quem chamou usa o
+     JSZip. */
+  async index(blob){
+    if(!this.disponivel())return null;
+    try{
+      /* O índice final fica nos últimos bytes; o comentário do
+         pacote, quando existe, empurra a posição para trás. */
+      const cauda=Math.min(66*1024,blob.size);
+      const fim=new Uint8Array(await blob.slice(blob.size-cauda,blob.size).arrayBuffer());
+      let eocd=-1;
+      for(let i=fim.length-22;i>=0;i--){
+        if(fim[i]===0x50&&fim[i+1]===0x4b&&fim[i+2]===0x05&&fim[i+3]===0x06){eocd=i;break}
+      }
+      if(eocd<0)return null;
+      const dv=new DataView(fim.buffer,fim.byteOffset+eocd,22);
+      const quantos=dv.getUint16(10,true);
+      const tamCD=dv.getUint32(12,true);
+      const inicioCD=dv.getUint32(16,true);
+      /* 0xFFFFFFFF significa ZIP64: pacote gigante, formato
+         estendido. Não é o caso de um quadrinho; deixa para o JSZip. */
+      if(quantos===0xFFFF||tamCD===0xFFFFFFFF||inicioCD===0xFFFFFFFF)return null;
+      if(!quantos||inicioCD+tamCD>blob.size)return null;
+
+      const cd=new DataView(await blob.slice(inicioCD,inicioCD+tamCD).arrayBuffer());
+      const nomes=new TextDecoder('utf-8');
+      const itens=[];
+      let p=0;
+      for(let n=0;n<quantos;n++){
+        if(p+46>cd.byteLength)return null;
+        if(cd.getUint32(p,true)!==0x02014b50)return null;
+        const flags=cd.getUint16(p+8,true);
+        const metodo=cd.getUint16(p+10,true);
+        const compresso=cd.getUint32(p+20,true);
+        const cru=cd.getUint32(p+24,true);
+        const nomeLen=cd.getUint16(p+28,true);
+        const extraLen=cd.getUint16(p+30,true);
+        const comentLen=cd.getUint16(p+32,true);
+        const offset=cd.getUint32(p+42,true);
+        /* Item cifrado, ZIP64 ou método que não seja "guardado" nem
+           "deflate": fora do que tratamos aqui. */
+        if((flags&0x1)||compresso===0xFFFFFFFF||cru===0xFFFFFFFF||offset===0xFFFFFFFF)return null;
+        if(metodo!==0&&metodo!==8)return null;
+        const nome=nomes.decode(new Uint8Array(cd.buffer,cd.byteOffset+p+46,nomeLen));
+        itens.push({nome,metodo,compresso,cru,offset});
+        p+=46+nomeLen+extraLen+comentLen;
+      }
+      return itens;
+    }catch(e){
+      console.warn('Índice do ZIP ilegível; usando o caminho comum.',e);
+      return null;
+    }
+  },
+
+  /* Os bytes de um item, lidos direto da posição dele no arquivo. */
+  async lerItem(blob,item,tipo){
+    /* O cabeçalho local repete o nome e pode trazer campos extras de
+       tamanho diferente do índice; é dele que sai o começo dos dados. */
+    const cab=new DataView(await blob.slice(item.offset,item.offset+30).arrayBuffer());
+    if(cab.getUint32(0,true)!==0x04034b50)throw new Error('Cabeçalho de item inválido.');
+    const inicio=item.offset+30+cab.getUint16(26,true)+cab.getUint16(28,true);
+    const fatia=blob.slice(inicio,inicio+item.compresso);
+    if(item.metodo===0)return new Blob([fatia],{type:tipo||''});
+    const fluxo=fatia.stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(fluxo).blob().then(b=>tipo?new Blob([b],{type:tipo}):b);
+  }
+};
+
+const ComicUnpacker={
+  /* Quantas páginas por transação. Uma por vez deixaria a gravação
+     lenta; muitas de uma vez traria de volta o problema que estamos
+     resolvendo. */
+  LOTE:6,
+
+  /* Descompactar grava as páginas, que juntas ocupam mais ou menos o
+     mesmo que o pacote. Sem espaço, a gravação falharia no meio. */
+  async conferirEspaco(bytes){
+    try{
+      if(!(navigator.storage&&navigator.storage.estimate))return;
+      const {quota,usage}=await navigator.storage.estimate();
+      if(quota&&usage!=null&&quota-usage<bytes*1.15){
+        throw new ParseError(
+          'Não há espaço suficiente no aparelho para este quadrinho.',
+          `Ele ocupa cerca de ${Utils.fmtBytes(bytes)} e restam por volta de ${Utils.fmtBytes(Math.max(0,quota-usage))}. Libere espaço ou exclua livros da biblioteca.`
+        );
+      }
+    }catch(e){if(e instanceof ParseError)throw e}
+  },
+
+  /* Descompacta `blob` para as páginas do livro `bookId`.
+     Devolve {paginas,info,capa} — a capa como Blob, para quem quiser
+     gerar a miniatura. */
+  async unpack(bookId,blob,{nome='quadrinho',signal=null,onStatus=()=>{},onProgress=null,db=null}={}){
+    const banco=db||App.db;
+    const abortou=()=>{if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError')};
     let kind=await ComicSupport.sniffBlob(blob);
     if(!kind){
-      /* Sem assinatura conhecida: confia na extensão como último recurso. */
       const ext=BookFormats.normalize(nome);
       kind=ext==='cbr'?'rar':ext==='cb7'?'7z':ext==='cbt'?'tar':'zip';
     }
-    archive.kind=kind;
-    if(kind==='zip')await archive._openZip(blob,{onStatus,signal});
-    else await archive._openLibArchive(blob,{onStatus,signal,coverOnly:opts.coverOnly});
-    if(!archive.pages.length){
+    /* Começa do zero: uma tentativa anterior interrompida no meio não
+       pode deixar páginas soltas misturadas com as novas. */
+    await banco.deleteComicPages(bookId);
+
+    const estado={info:null,paginas:0,capa:null};
+    let lote=[];
+    const descarregar=async()=>{
+      if(!lote.length)return;
+      const atual=lote;lote=[];
+      await banco.saveComicPages(bookId,atual);
+    };
+    const guardar=async(i,nomePagina,pagina)=>{
+      if(i===0)estado.capa=pagina;
+      lote.push({i,name:nomePagina,blob:pagina});
+      if(lote.length>=ComicUnpacker.LOTE)await descarregar();
+    };
+
+    if(kind==='zip')await this._doZip(blob,estado,guardar,{abortou,onStatus,onProgress});
+    else await this._doLibArchive(blob,estado,guardar,{abortou,onStatus,onProgress,nome});
+
+    await descarregar();
+    abortou();
+    if(!estado.paginas){
       throw new ParseError('Não encontramos páginas dentro deste quadrinho.',
         'O arquivo precisa conter imagens (JPG, PNG, WEBP ou GIF).');
     }
-    return archive;
-  }
+    return estado;
+  },
 
-  async _openZip(blob,{onStatus}){
+  async _doZip(blob,estado,guardar,opcoes){
+    /* Caminho preferido: lê o índice do ZIP e fatia o arquivo. */
+    const itens=await ZipStream.index(blob);
+    if(itens)return this._doZipFatiado(blob,itens,estado,guardar,opcoes);
+    return this._doZipJSZip(blob,estado,guardar,opcoes);
+  },
+
+  async _doZipFatiado(blob,itens,estado,guardar,{abortou,onStatus,onProgress}){
+    onStatus('Lendo o índice do quadrinho...');
+    const info=itens.find(e=>/comicinfo\.xml$/i.test(e.nome)&&!ComicSupport.isJunk(e.nome));
+    if(info){
+      try{
+        const b=await ZipStream.lerItem(blob,info,'text/xml');
+        estado.info=ComicSupport.parseComicInfo(await b.text());
+      }catch(e){console.warn(e)}
+    }
+    const imagens=itens.filter(e=>ComicSupport.isImage(e.nome))
+      .sort((a,b)=>ComicSupport.naturalCompare(a.nome,b.nome));
+    const total=imagens.length;
+    onStatus(`Preparando ${total} página(s)...`);
+    let ultimo=0;
+    for(let i=0;i<total;i++){
+      abortou();
+      const e=imagens[i];
+      /* Só os bytes desta página saem do disco. A anterior já foi
+         gravada e não existe mais em lugar nenhum. */
+      const pagina=await ZipStream.lerItem(blob,e,ComicSupport.mime(e.nome));
+      await guardar(i,e.nome.split('/').pop(),pagina);
+      estado.paginas=i+1;
+      const agora=Date.now();
+      if(agora-ultimo>120||i===total-1){
+        ultimo=agora;
+        onStatus(`Preparando as páginas (${i+1} de ${total})...`);
+        onProgress&&onProgress(i+1,total);
+        await Utils.yieldToUI();
+      }
+    }
+  },
+
+  async _doZipJSZip(blob,estado,guardar,{abortou,onStatus,onProgress}){
     onStatus('Lendo o índice do quadrinho...');
     let zip;
-    try{
-      zip=await JSZip.loadAsync(blob);
-    }catch(e){
+    try{zip=await JSZip.loadAsync(blob)}
+    catch(e){
       throw new ParseError('Não foi possível ler este quadrinho.',
         'O arquivo pode estar incompleto, protegido por senha ou corrompido.');
     }
-    this._zip=zip;
-    const entries=[];
-    zip.forEach((path,file)=>{
-      if(file.dir)return;
-      if(/comicinfo\.xml$/i.test(path)&&!ComicSupport.isJunk(path)){
-        entries.push({path,info:true,file});
-        return;
-      }
-      if(!ComicSupport.isImage(path))return;
-      entries.push({path,file,size:file._data?file._data.uncompressedSize:0});
+    const entradas=[];
+    let infoEntry=null;
+    zip.forEach((path,f)=>{
+      if(f.dir)return;
+      if(/comicinfo\.xml$/i.test(path)&&!ComicSupport.isJunk(path)){infoEntry=f;return}
+      if(ComicSupport.isImage(path))entradas.push({path,f});
     });
-    const infoEntry=entries.find(e=>e.info);
     if(infoEntry){
-      try{this.info=ComicSupport.parseComicInfo(await infoEntry.file.async('text'))}
+      try{estado.info=ComicSupport.parseComicInfo(await infoEntry.async('text'))}
       catch(e){console.warn(e)}
     }
-    this.pages=entries.filter(e=>!e.info)
-      .sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path))
-      .map(e=>({name:e.path.split('/').pop(),path:e.path,size:e.size||0}));
-  }
+    entradas.sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path));
+    const total=entradas.length;
+    onStatus(`Preparando ${total} página(s)...`);
+    let ultimo=0;
+    for(let i=0;i<entradas.length;i++){
+      abortou();
+      const e=entradas[i];
+      /* Uma página de cada vez sai do ZIP; a anterior já foi gravada
+         e solta. */
+      const pagina=await e.f.async('blob');
+      await guardar(i,e.path.split('/').pop(),
+        pagina.type?pagina:new Blob([pagina],{type:ComicSupport.mime(e.path)}));
+      estado.paginas=i+1;
+      const agora=Date.now();
+      if(agora-ultimo>120||i===total-1){
+        ultimo=agora;
+        onStatus(`Preparando as páginas (${i+1} de ${total})...`);
+        onProgress&&onProgress(i+1,total);
+        await Utils.yieldToUI();
+      }
+    }
+    /* O JSZip segura o pacote inteiro enquanto o objeto viver. */
+    zip=null;
+  },
 
-  async _openLibArchive(blob,{onStatus,signal,coverOnly}){
-    const abortou=()=>{
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
-    };
+  async _doLibArchive(blob,estado,guardar,{abortou,onStatus,onProgress,nome}){
     onStatus('Preparando o leitor de CBR...');
     const LA=await LibArchiveLoader.load();
     abortou();
     onStatus('Lendo o arquivo...');
-    const bytes=new Uint8Array(await blob.arrayBuffer());
-    abortou();
     let leitor;
     try{
-      leitor=await LA.abrir(bytes);
+      /* Os bytes são copiados aos poucos para dentro do WebAssembly.
+         Montar o arquivo inteiro num Uint8Array antes (que é o que o
+         `abrir` faz) significaria duas cópias vivas ao mesmo tempo. */
+      leitor=await LA.abrirBlob(blob);
     }catch(e){
       console.error(e);
       throw new ParseError('Não foi possível abrir este quadrinho.',
         'O arquivo pode ser grande demais para a memória deste aparelho. Dividir o quadrinho em partes menores costuma resolver.');
     }
+    await Utils.yieldToUI();
     try{
       onStatus('Lendo o índice do quadrinho...');
-      await Utils.yieldToUI();
       let entradas=[];
       try{entradas=leitor.listar()}catch(e){console.warn(e)}
       const arquivos=entradas.filter(e=>e&&e.path&&!e.dir);
       if(!arquivos.length){
-        /* Nem um arquivo sequer: ou o pacote está cifrado, ou não foi
-           reconhecido (RAR muito antigo, truncado, ou dividido em
-           partes .r00/.r01). */
         const cifrado=leitor.temSenha();
         throw new ParseError(
           cifrado?'Este quadrinho está protegido por senha.'
@@ -1783,62 +2181,90 @@ class ComicArchive{
           cifrado?'Remova a senha do arquivo e importe de novo.'
                  :'Ele pode estar incompleto, dividido em várias partes ou em uma variação de RAR que o aplicativo não reconhece. Converter para CBZ resolve.');
       }
-
       const infoEntrada=arquivos.find(e=>/comicinfo\.xml$/i.test(e.path));
       const imagens=arquivos.filter(e=>ComicSupport.isImage(e.path))
         .sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path));
-      this.pages=imagens.map(e=>({name:e.path.split('/').pop(),path:e.path,size:e.size||0}));
-
-      /* Na importação basta a capa; na leitura, tudo. Formatos
-         sequenciais como RAR cobram caro por página avulsa, então a
-         extração acontece numa passagem só — e devolve o controle ao
-         navegador entre as páginas, para a tela não congelar. */
-      const querer=new Set();
+      const ordem=new Map(imagens.map((e,i)=>[e.path,i]));
+      const querer=new Set(imagens.map(e=>e.path));
       if(infoEntrada)querer.add(infoEntrada.path);
-      if(coverOnly){if(imagens.length)querer.add(imagens[0].path)}
-      else imagens.forEach(e=>querer.add(e.path));
 
       const total=imagens.length;
-      onStatus(coverOnly?'Lendo a capa...':`Descompactando ${total} página(s)...`);
+      onStatus(`Preparando ${total} página(s)...`);
       await Utils.yieldToUI();
-      let ultimo=0;
-      const extraidos=await leitor.extrair(querer,{
+      let ultimo=0,vistas=0;
+      /* `aoExtrair` recebe cada página assim que ela sai e a grava na
+         hora. Sem isso, as 240 voltariam juntas no fim. */
+      await leitor.extrair(querer,{
         mime:caminho=>ComicSupport.mime(caminho),
         tick:()=>{abortou();return Utils.yieldToUI()},
-        onProgress:(feitas)=>{
-          if(coverOnly)return;
+        aoExtrair:async(caminho,pagina)=>{
+          abortou();
+          if(infoEntrada&&caminho===infoEntrada.path){
+            try{estado.info=ComicSupport.parseComicInfo(await pagina.text())}
+            catch(e){console.warn(e)}
+            return;
+          }
+          const i=ordem.get(caminho);
+          if(i==null)return;
+          await guardar(i,caminho.split('/').pop(),pagina);
+          vistas++;
           const agora=Date.now();
-          if(agora-ultimo<120&&feitas<total)return;
-          ultimo=agora;
-          onStatus(`Descompactando as páginas (${Math.min(feitas,total)} de ${total})...`);
+          if(agora-ultimo>120||vistas===total){
+            ultimo=agora;
+            onStatus(`Preparando as páginas (${vistas} de ${total})...`);
+            onProgress&&onProgress(vistas,total);
+          }
         }
       });
-      abortou();
-
-      if(infoEntrada&&extraidos.has(infoEntrada.path)){
-        try{this.info=ComicSupport.parseComicInfo(await extraidos.get(infoEntrada.path).text())}
-        catch(e){console.warn(e)}
-      }
-
-      this._blobs=new Map();
-      if(coverOnly){
-        const capa=imagens.length?extraidos.get(imagens[0].path):null;
-        if(capa)this._blobs.set(0,capa);
-        return;
-      }
-      /* Páginas que não voltaram da extração saem da lista para não
-         virarem buracos silenciosos no meio da leitura. */
-      const validas=[];
-      imagens.forEach(e=>{
-        const b=extraidos.get(e.path);
-        if(!b)return;
-        this._blobs.set(validas.length,b);
-        validas.push({name:e.path.split('/').pop(),path:e.path,size:e.size||0});
-      });
-      this.pages=validas;
+      /* A numeração segue a ordem de leitura (o nome do arquivo), não
+         a ordem em que o pacote foi montado. Se alguma página não
+         puder ser descompactada, o lugar dela continua existindo e só
+         aquela página fica faltando — o resto do quadrinho se lê
+         normalmente. */
+      estado.paginas=total;
+      estado.faltando=total-vistas;
     }finally{
       try{leitor.fechar()}catch(e){}
+      /* Descompactado o quadrinho, o libarchive não tem mais o que
+         fazer. Descartá-lo devolve ao aparelho a memória que ele
+         reservou — que é do tamanho do arquivo e, de outro modo,
+         ficaria presa até o aplicativo ser recarregado. */
+      try{LA.descartar&&LA.descartar()}catch(e){}
+      LibArchiveLoader.esquecer();
     }
+  }
+};
+
+class ComicArchive{
+  /* Quantas páginas ficam lembradas. Poucas o bastante para não pesar
+     (são as imagens já compactadas, não as decodificadas) e muitas o
+     bastante para cobrir o vaivém normal de quem lê. */
+  static LEMBRAR=8;
+  constructor(){
+    this.pages=[];        /* [{name,path,size}] na ordem de leitura */
+    this.info=null;       /* ComicInfo.xml, quando existe */
+    this.kind='store';    /* as páginas vêm do banco, uma a uma */
+    this.bookId=null;
+    this._urls=new Map(); /* cache de object URLs em uso */
+    this._cache=new Map();/* últimas páginas lidas (ver LEMBRAR) */
+    this._closed=false;
+  }
+  get length(){return this.pages.length}
+
+  /* --------------------------------------------------------
+     Quadrinho já descompactado: as páginas estão no banco, uma a
+     uma. Não há pacote para abrir, nem índice para ler, nem nada
+     para manter na memória — só ir buscar a página pedida.
+     -------------------------------------------------------- */
+  static fromStore(bookId,total,info=null,nomes=null){
+    const a=new ComicArchive();
+    a.kind='store';
+    a.bookId=bookId;
+    a.info=info;
+    a.pages=Array.from({length:total},(_,i)=>({
+      name:(nomes&&nomes[i])||`${i+1}`,path:'',size:0
+    }));
+    return a;
   }
 
   /* Blob da página `i` — o formato decide de onde ele vem. */
@@ -1846,15 +2272,23 @@ class ComicArchive{
     if(this._closed)throw new Error('Quadrinho fechado.');
     const page=this.pages[i];
     if(!page)return null;
-    if(this._blobs){
-      const b=this._blobs.get(i);
+    if(this.kind==='store'){
+      /* Uma lembrança curta das últimas páginas lidas. Quem volta uma
+         página — que é o que mais se faz lendo — recebe exatamente o
+         mesmo Blob de antes, e o navegador aproveita a imagem que já
+         tinha decodificado em vez de decodificar tudo de novo. */
+      const guardado=this._cache.get(i);
+      if(guardado){
+        this._cache.delete(i);this._cache.set(i,guardado);
+        return guardado;
+      }
+      const b=await App.db.getComicPage(this.bookId,i);
       if(!b)throw new ParseError('Esta página não pôde ser descompactada.','');
+      this._cache.set(i,b);
+      while(this._cache.size>ComicArchive.LEMBRAR)this._cache.delete(this._cache.keys().next().value);
       return b;
     }
-    const entry=this._zip&&this._zip.file(page.path);
-    if(!entry)throw new ParseError('Esta página não está mais dentro do arquivo.','');
-    const u8=await entry.async('uint8array');
-    return new Blob([u8],{type:ComicSupport.mime(page.path)});
+    throw new ParseError('Esta página não está disponível.','');
   }
 
   /* Endereço temporário da imagem. O leitor devolve o que não usa
@@ -1880,8 +2314,7 @@ class ComicArchive{
   close(){
     this._closed=true;
     this.release([]);
-    this._zip=null;
-    this._blobs=null;
+    this._cache.clear();
     this.pages=[];
   }
 
@@ -4916,11 +5349,22 @@ class ReaderEngine{
     try{
       const isComic=ehQuadrinho;
       const file=await this.db.getFile(book.id);
-      /* Quadrinhos entram como Blob; os demais, como ArrayBuffer. Livros
-         importados em versões antigas podem estar no outro formato, então
-         os dois caminhos são aceitos. */
-      const fonte=isComic?(file&&(file.blob||file.buffer)):(file&&file.buffer);
-      if(!fonte)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
+      /* Tudo é guardado como Blob. Livros importados em versões
+         antigas estão como ArrayBuffer, e `recordBlob` aceita os dois
+         sem que o resto do código precise saber a diferença. */
+      const fonte=DBManager.recordBlob(file);
+      /* Quadrinho já descompactado não tem mais arquivo guardado: as
+         páginas é que estão no banco. */
+      const paginasProntas=isComic?await this.db.countComicPages(book.id):0;
+      if(!fonte&&!paginasProntas)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
+      /* Livro guardado como ArrayBuffer (versões anteriores) passa a
+         ficar como Blob. É uma troca só, silenciosa, e a partir dela
+         o arquivo deixa de desembarcar inteiro na memória a cada
+         abertura — no caso do PDF, é o que destrava a leitura por
+         pedaços. */
+      if(fonte&&!isComic&&file&&!(file.blob instanceof Blob)){
+        this.db.saveBook(book,fonte).catch(e=>console.warn('Não foi possível converter o arquivo deste livro',e));
+      }
       this.destroy();
       document.getElementById('reader-title').textContent=book.title||'Livro';
       this.pdfMode=this.readingMode;
@@ -4932,19 +5376,16 @@ class ReaderEngine{
       
       const signal=ctrl.signal;
       if(isComic){
-        start=await this.openComic(fonte,book,start,signal);
+        start=await this.openComic(fonte,book,start,signal,paginasProntas);
       }else if(book.format==='pdf'){
-        start=await this.openPdf(file.buffer,book,start);
-      }else if(book.format==='docx'){
-        start=await this.openDocx(file.buffer,book,w,h,start,signal);
-      }else if(book.format==='mobi'){
-        start=await this.openMobi(file.buffer,book,w,h,start,signal);
-      }else if(book.format==='md'){
-        start=await this.openMd(file.buffer,book,w,h,start,signal);
-      }else if(book.format==='txt'){
-        start=await this.openTxt(file.buffer,book,w,h,start,signal);
+        start=await this.openPdf(fonte,book,start);
       }else{
-        start=await this.openEpub(file.buffer,book,w,h,start,signal);
+        const buffer=await fonte.arrayBuffer();
+        if(book.format==='docx')     start=await this.openDocx(buffer,book,w,h,start,signal);
+        else if(book.format==='mobi')start=await this.openMobi(buffer,book,w,h,start,signal);
+        else if(book.format==='md')  start=await this.openMd(buffer,book,w,h,start,signal);
+        else if(book.format==='txt') start=await this.openTxt(buffer,book,w,h,start,signal);
+        else                         start=await this.openEpub(buffer,book,w,h,start,signal);
       }
       
       if(!this.pagesData.length){
@@ -5057,9 +5498,10 @@ class ReaderEngine{
       return true;
     }catch(e){console.warn('Cache de páginas não salvo:',e);return false}
   }
-  async openPdf(buffer,book,start){
-    const{pdf,numPages}=await PDFParser.parse(buffer);
+  async openPdf(blob,book,start){
+    const{pdf,numPages,transporte}=await PDFParser.parseBlob(blob);
     this.pdfDoc=pdf;
+    this.pdfTransporte=transporte;
     this.totalChapters=numPages;
     this.chapterTitles=Array.from({length:numPages},(_,i)=>`Página ${i+1}`);
     this.chapterStarts=Array.from({length:numPages},(_,i)=>i);
@@ -5078,13 +5520,55 @@ class ReaderEngine{
      lidas conforme aparecem. O que vai para a tela é uma "vista":
      uma página sozinha ou, no modo revista aberta, duas lado a lado.
      ============================================================ */
-  async openComic(source,book,start,signal){
+  async openComic(source,book,start,signal,paginasProntas=0){
     Utils.setLoaderProgress(8,'Abrindo o quadrinho...');
-    const arquivo=await ComicArchive.open(source,{
-      name:book.sourceFileName||`${book.title||'quadrinho'}.${book.format}`,
-      signal,
-      onStatus:texto=>Utils.setLoaderText(null,texto)
-    });
+    const nome=book.sourceFileName||`${book.title||'quadrinho'}.${book.format}`;
+    let arquivo;
+
+    if(paginasProntas>0){
+      /* Caminho normal: o quadrinho já está descompactado. Abrir é
+         instantâneo e não custa memória — as páginas são buscadas uma
+         a uma, conforme a leitura chega nelas. */
+      arquivo=ComicArchive.fromStore(book.id,
+        Math.max(paginasProntas,Number(book.totalPages)||0),
+        book.comicInfo||null);
+    }else{
+      /* Quadrinho importado numa versão anterior: ainda está guardado
+         como pacote. É descompactado agora, uma vez só, e a partir da
+         próxima abertura entra pelo caminho de cima. O usuário vê a
+         mesma barra de progresso da importação. */
+      Utils.setLoaderText('Preparando o quadrinho','Isto acontece só desta vez.');
+      const resultado=await ComicUnpacker.unpack(book.id,source,{
+        nome,signal,db:this.db,
+        onStatus:texto=>Utils.setLoaderText(null,texto),
+        onProgress:(feitas,total)=>Utils.setLoaderProgress(
+          total?Math.round(feitas/total*90):0,`${feitas} de ${total}`)
+      });
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      /* Agora que as páginas estão gravadas, o pacote original só
+         ocupa espaço. Sai, e o livro passa a ser do tipo novo. */
+      try{
+        const atualizado=await this.db.patchBook(book.id,b=>{
+          b.comicUnpacked=true;
+          b.totalPages=resultado.paginas;
+          if(resultado.info){
+            b.comicInfo=resultado.info;
+            if(!b.series&&resultado.info.series)b.series=resultado.info.series;
+            if(b.comicRtl==null)b.comicRtl=!!resultado.info.rtl;
+          }
+          return b;
+        });
+        if(atualizado){
+          Object.assign(this.currentBook,atualizado);
+          book=atualizado;
+        }
+        await this.db.saveComicBook(await this.db.getBook(book.id));
+        const naEstante=App.library.allBooks.find(x=>x.id===book.id);
+        if(naEstante)Object.assign(naEstante,{comicUnpacked:true,totalPages:resultado.paginas});
+      }catch(e){console.warn('Não foi possível concluir a conversão do quadrinho',e)}
+      arquivo=ComicArchive.fromStore(book.id,resultado.paginas,resultado.info);
+    }
+
     if(signal&&signal.aborted){arquivo.close();throw new DOMException('Cancelado','AbortError')}
     this.comic=arquivo;
     const s=this.state.settings;
@@ -5600,7 +6084,7 @@ class ReaderEngine{
     },{passive:true});
 
     /* Enquanto a folha está na mão, nada mais rola ou dá zoom. */
-    c.addEventListener('touchmove',e=>{if(mode==='drag')e.preventDefault()},{passive:false});
+    c.addEventListener('touchmove',e=>{if(mode==='drag')Utils.cancelar(e)},{passive:false});
 
     const zonaDeToque=(x,largura)=>{
       if(x<largura*0.28)return this.rtl?1:-1;
@@ -5828,7 +6312,7 @@ class ReaderEngine{
 
     c.addEventListener('wheel',e=>{
       if(!e.ctrlKey)return;
-      e.preventDefault();
+      if(!Utils.cancelar(e))return;
       this.setComicWideZoom((this.comicWideZoom||1)*(e.deltaY<0?1.12:1/1.12),e.clientX,e.clientY);
     },{passive:false});
   }
@@ -6110,7 +6594,7 @@ class ReaderEngine{
 
     c.addEventListener('touchmove',e=>{
       if(pincando&&e.touches.length===2){
-        e.preventDefault();
+        Utils.cancelar(e);
         const escala=Utils.clamp(s0*(dist(e.touches)/d0),1,5);
         const k=escala/s0;
         /* O ponto entre os dedos fica parado enquanto a imagem cresce. */
@@ -6125,7 +6609,7 @@ class ReaderEngine{
         /* Confere o zoom AGORA, não o que valia quando o dedo encostou:
            um estado velho não pode sequestrar a rolagem da página. */
         if(this.comicZoom.scale<=1.02){arrastando=false;return}
-        e.preventDefault();
+        Utils.cancelar(e);
         this.comicZoom.x=px+(e.touches[0].clientX-ax);
         this.comicZoom.y=py+(e.touches[0].clientY-ay);
         this.clampComicPan();
@@ -6153,7 +6637,7 @@ class ReaderEngine{
     /* No computador: roda do mouse com Ctrl amplia. */
     c.addEventListener('wheel',e=>{
       if(!e.ctrlKey)return;
-      e.preventDefault();
+      if(!Utils.cancelar(e))return;
       const rect=c.getBoundingClientRect();
       const anterior=this.comicZoom.scale;
       const escala=Utils.clamp(anterior*(e.deltaY<0?1.12:1/1.12),1,5);
@@ -6203,7 +6687,7 @@ class ReaderEngine{
     },{passive:true});
     this.container.addEventListener('touchmove',e=>{
       if(!pinching||e.touches.length!==2)return;
-      e.preventDefault();
+      Utils.cancelar(e);
       preview=Utils.clamp(startZoom*(distance(e.touches)/startDistance),.75,3);
       const el=badge();if(el)el.textContent=`${Math.round(preview*100)}%`;
       
@@ -6585,6 +7069,9 @@ class ReaderEngine{
     this.destroySliderOnly();
     this.pdfDoc?.destroy?.();
     this.pdfDoc=null;
+    /* Encerra a leitura por pedaços: qualquer trecho ainda a caminho
+       é descartado em vez de virar lixo na memória. */
+    if(this.pdfTransporte){try{this.pdfTransporte.abort()}catch(e){}this.pdfTransporte=null}
     /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
     if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
     this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;
@@ -6860,7 +7347,7 @@ class ShelfSorter{
       this.pressTimer=setTimeout(()=>this.begin(this.startX,this.startY),320);
     }
   }
-  blockTouch(e){if(this.dragging)e.preventDefault()}
+  blockTouch(e){if(this.dragging)Utils.cancelar(e)}
   clearPress(){if(this.pressTimer){clearTimeout(this.pressTimer);this.pressTimer=null}}
   onMove(e){
     if(this.pointerId===null||e.pointerId!==this.pointerId)return;
@@ -6874,7 +7361,7 @@ class ShelfSorter{
       }
       return;
     }
-    e.preventDefault();
+    Utils.cancelar(e);
     this.lastPoint={x:e.clientX,y:e.clientY};
     this.moveGhost(e.clientX,e.clientY);
     this.updateTarget(e.clientX,e.clientY);
@@ -7067,6 +7554,7 @@ class LibraryManager{
     this.allBooks.forEach((b,i)=>{if(!Number.isFinite(b.order))b.order=i});
     this.updateCounts();
     this.renderView();
+    if(typeof Backup!=='undefined'&&Backup.verificarLembrete)Backup.verificarLembrete();
   }
   updateCounts(){
     const c={
@@ -7113,6 +7601,9 @@ class LibraryManager{
 
     const scan=document.getElementById('nav-scan');
     if(scan)scan.onclick=()=>{App.closeDrawer();DeviceScan.start()};
+
+    const bkp=document.getElementById('nav-backup');
+    if(bkp)bkp.onclick=()=>{App.closeDrawer();Backup.abrir()};
 
     /* Menu Sobre: acordeão — o botão de cabeçalho mostra/esconde o grupo;
        cada item dentro do grupo abre o documento correspondente em modal. */
@@ -7510,11 +8001,12 @@ async shareBook(book){
   }
   try{
     const rec=await this.db.getFile(book.id);
-    if(!rec?.buffer)throw new Error('A cópia deste livro não está disponível na biblioteca.');
+    const origem=DBManager.recordBlob(rec);
+    if(!origem)throw new Error('A cópia deste livro não está disponível na biblioteca.');
     const mime=BookFormats.mime(book.format);
     const safeTitle=(book.title||'livro').replace(/[\\/:*?"<>|]+/g,'-').trim()||'livro';
     const name=book.sourceFileName||`${safeTitle}.${book.format}`;
-    const file=new File([rec.buffer],name,{type:mime});
+    const file=new File([origem],name,{type:mime});
 
     if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
       await navigator.share({
@@ -7555,10 +8047,11 @@ async convertPdf(book){
 
   try{
     const rec=await this.db.getFile(book.id);
-    if(!rec?.buffer)throw new Error('A cópia do PDF não está disponível na biblioteca.');
+    const origem=DBManager.recordBlob(rec);
+    if(!origem)throw new Error('A cópia do PDF não está disponível na biblioteca.');
 
     const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
-    const sourceFile=new File([rec.buffer],sourceName,{type:'application/pdf'});
+    const sourceFile=new File([origem],sourceName,{type:'application/pdf'});
     const result=await VeredasPDFToEPUB.convert(sourceFile,{
       title:book.title||sourceName.replace(/\.pdf$/i,''),
       author:book.author||'',
@@ -8161,13 +8654,24 @@ downloadConvertedEpub(result,outputName){
         confirmText:'Importar mesmo assim',
         confirmIcon:'plus'
       });
-      if(!seguir)return;
+      const ehQuadrinho=!!(result.pending&&(result.pending.comicPages||result.pending.comicBlob));
+      if(!seguir){
+        /* O quadrinho já foi descompactado antes de a pergunta
+           aparecer — se o usuário desiste, as páginas vão embora
+           agora, senão ficariam ocupando o aparelho sem nenhum livro
+           apontando para elas. */
+        if(result.pending&&result.pending.comicPages){
+          try{await this.db.deleteComicPages(result.pending.meta.id)}catch(e){console.warn(e)}
+        }
+        return;
+      }
       Utils.showLoader('Importando livro','Salvando na sua estante...');
       try{
-        if(result.pending.comicBlob)await this.db.saveComicBook(result.pending.meta,result.pending.comicBlob);
+        if(result.pending.comicPages)await this.db.saveComicBook(result.pending.meta);
+        else if(result.pending.comicBlob)await this.db.saveComicBook(result.pending.meta,result.pending.comicBlob);
         else if(result.pending.blobs)await AudioImport.save(this.db,result.pending.meta,result.pending.blobs);
-        else await this.db.saveBook(result.pending.meta,result.pending.buffer);
-        Utils.toast(result.pending.comicBlob?'Quadrinho importado e salvo no dispositivo.'
+        else await this.db.saveBook(result.pending.meta,result.pending.blob||result.pending.buffer);
+        Utils.toast(ehQuadrinho?'Quadrinho importado e salvo no dispositivo.'
           :result.pending.blobs?'Audiolivro importado e salvo no dispositivo.'
           :'Livro importado e salvo no dispositivo.','check');
         await this.render();
@@ -8197,6 +8701,23 @@ downloadConvertedEpub(result,outputName){
       if(!quiet)Utils.toast('Formato não suportado.','alert-triangle');
       return {status:'error',message:'Formato não suportado.'};
     }
+
+    /* ------------------------------------------------------------
+       PDF entra por um caminho próprio.
+
+       O caminho comum lê o arquivo inteiro para um ArrayBuffer, e o
+       PDF cobrava isso três vezes: o buffer original, uma cópia feita
+       só para o pdf.js (que se apropria do que recebe, por isso a
+       cópia existia) e a cópia interna dele. Num arquivo de 90 MB
+       eram quase 300 MB no pico — só para descobrir o título e
+       desenhar a capa.
+
+       Agora o arquivo fica sendo o Blob que já veio do aparelho, e a
+       memória é usada em um de cada vez: um buffer para a assinatura,
+       solto em seguida; outro para a capa, solto logo depois. O que é
+       gravado é o Blob, sem cópia nenhuma.
+       ------------------------------------------------------------ */
+    if(ext==='pdf')return this.importPdfFile(file,{quiet,meter,signal});
 
     let buffer;
     try{
@@ -8233,15 +8754,6 @@ downloadConvertedEpub(result,outputName){
         meta.title=parsed.metadata.title;
         meta.author=parsed.metadata.author;
         meta.cover=parsed.metadata.cover;
-      }else if(ext==='pdf'){
-        try{
-          const{pdf}=await PDFParser.parse(buffer.slice(0));
-          const t=await PDFParser.getTitle(pdf);
-          if(t)meta.title=t;
-          meta.cover=await PDFParser.renderPageToDataURL(pdf,1,300,450,.7);
-          meta.totalPages=pdf.numPages;
-          pdf.destroy();
-        }catch(err){console.warn(err)}
       }else if(ext==='mobi'){
         if(!MobiFile.isMobi(buffer)){
           throw new ParseError('Este arquivo não é um MOBI válido.','Confira se a extensão corresponde ao conteúdo ou converta o livro para EPUB.');
@@ -8272,6 +8784,10 @@ downloadConvertedEpub(result,outputName){
       return {status:'error',message:err?.message||'Falha ao processar o arquivo.',error:err};
     }
 
+    /* Se este livro já esteve aqui e o backup guardou o progresso
+       dele, tudo volta para o lugar antes de entrar na estante. */
+    try{await Backup.casarPendente(meta)}catch(e){console.warn(e)}
+
     const parecido=this.findSimilar(meta);
     if(parecido)return {status:'duplicate',book:parecido,exact:false,pending:{meta,buffer}};
 
@@ -8288,14 +8804,97 @@ downloadConvertedEpub(result,outputName){
   }
 
   /* ------------------------------------------------------------
+     PDF
+     Um PDF de 90 MB é um arquivo de 90 MB. Não há como fugir disso
+     na hora de ler o conteúdo — o pdf.js precisa dos bytes. O que dá
+     para evitar é ter 90 MB em três lugares ao mesmo tempo, que era
+     o que acontecia.
+
+     Aqui cada leitura acontece isolada e o buffer é solto antes da
+     próxima começar. O que fica guardado é o Blob que veio do
+     aparelho, sem cópia.
+     ------------------------------------------------------------ */
+  async importPdfFile(file,{quiet=false,meter=null,signal=null}={}){
+    let arquivo=file;
+    let meta=null;
+    try{
+      /* Arquivo ainda na nuvem (Drive, OneDrive): é trazido de uma vez,
+         com barra de progresso, antes de qualquer outra coisa. */
+      if(file.size<=FileTransfer.MAX_LOCAL_COPY&&await FileTransfer.looksRemote(file)){
+        arquivo=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
+        meter?.finish();
+      }
+      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+
+      Utils.setLoaderText(null,'Lendo o PDF...');
+      const fileHash=await FileFingerprint.hashOf(arquivo);
+      await Utils.yieldToUI();
+      const identico=await this.findByHash(fileHash,arquivo.size);
+      if(identico)return {status:'duplicate',book:identico,exact:true};
+
+      meta={
+        id:Utils.id(),
+        title:file.name.replace(/\.[^/.]+$/,''),
+        author:'Autor Desconhecido',
+        format:'pdf',
+        sourceFileName:file.name,
+        addedAt:Date.now(),
+        cover:null,progress:null,status:'toread',favorite:false,
+        tags:[],collections:[],series:'',folder:'',bookmarks:[],annotations:[],
+        order:Date.now(),manualOrder:false,
+        fileHash,fileSize:arquivo.size
+      };
+
+      /* Título, número de páginas e capa — por pedaços, que é tudo o
+         que a primeira página exige. */
+      let pdf=null,transporte=null;
+      try{
+        ({pdf,transporte}=await PDFParser.parseBlob(arquivo));
+        const t=await PDFParser.getTitle(pdf);
+        if(t)meta.title=t;
+        meta.cover=await PDFParser.renderPageToDataURL(pdf,1,300,450,.7);
+        meta.totalPages=pdf.numPages;
+      }catch(err){
+        console.warn(err);
+      }finally{
+        try{pdf&&pdf.destroy()}catch(e){}
+        try{transporte&&transporte.abort()}catch(e){}
+      }
+      await Utils.yieldToUI();
+    }catch(err){
+      if(Utils.isAbort(err))return {status:'cancelled'};
+      console.error(err);
+      return {status:'error',message:err?.message||'Não foi possível ler o PDF.',error:err};
+    }
+
+    try{await Backup.casarPendente(meta)}catch(e){console.warn(e)}
+    const parecido=this.findSimilar(meta);
+    if(parecido)return {status:'duplicate',book:parecido,exact:false,pending:{meta,blob:arquivo}};
+
+    try{
+      await this.db.saveBook(meta,arquivo);
+    }catch(err){
+      console.error(err);
+      return {status:'error',message:'Não foi possível salvar o livro na biblioteca.',error:err};
+    }
+    this.allBooks.push(Utils.normalizeBook(meta));
+    return {status:'ok',book:meta};
+  }
+
+  /* ------------------------------------------------------------
      QUADRINHOS
-     O arquivo é guardado como Blob (igual ao audiolivro): um CBZ de
-     300 MB não pode virar ArrayBuffer na memória a cada abertura.
-     Da importação sai só o essencial para a estante — capa, título,
-     autor e número de páginas — lendo apenas a primeira imagem.
+     A importação descompacta o pacote uma única vez, gravando página
+     por página. O arquivo original não é guardado: depois de
+     descompactado ele não serve para mais nada, e manter os dois
+     dobraria o espaço ocupado no aparelho.
+
+     A conta de memória passa a ser: uma página de cada vez, mais o
+     pacote enquanto ele está sendo lido. Antes eram todas as páginas
+     ao mesmo tempo, e a cada abertura.
      ------------------------------------------------------------ */
   async importComicFile(file,{quiet=false,meter=null,signal=null}={}){
     const ext=BookFormats.normalize(file.name);
+    const id=Utils.id();
     let construido=null;
     try{
       let arquivo=file;
@@ -8306,24 +8905,31 @@ downloadConvertedEpub(result,outputName){
         meter?.finish();
       }
       if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      /* Descompactar precisa de espaço livre do tamanho do quadrinho.
+         Melhor avisar agora do que na página 150. */
+      await ComicUnpacker.conferirEspaco(arquivo.size);
+      /* A assinatura lê ~1,5 MB do arquivo, não o arquivo todo: um
+         quadrinho já duplicado é reconhecido sem descompactar nada. */
       const impressao=await FileFingerprint.hashBlob(arquivo);
       const identico=await this.findByHash(impressao,arquivo.size);
       if(identico)return {status:'duplicate',book:identico,exact:true};
+
       Utils.setLoaderText(null,'Lendo o quadrinho...');
-      const pacote=await ComicArchive.open(arquivo,{
-        name:file.name,coverOnly:true,signal,
-        onStatus:texto=>Utils.setLoaderText(null,texto)
+      const resultado=await ComicUnpacker.unpack(id,arquivo,{
+        nome:file.name,signal,db:this.db,
+        onStatus:texto=>Utils.setLoaderText(null,texto),
+        onProgress:(feitas,total)=>Utils.setLoaderProgress(
+          total?Math.round(feitas/total*100):0,`${feitas} de ${total}`)
       });
       let capa=null;
-      try{capa=await pacote.coverDataURL()}catch(e){console.warn(e)}
-      const info=pacote.info;
-      const paginas=pacote.length;
-      pacote.close();
+      try{
+        if(resultado.capa)capa=await ComicArchive.shrinkToDataURL(resultado.capa,320,480,.78);
+      }catch(e){console.warn(e)}
+      const info=resultado.info;
       const base=file.name.replace(/\.[^/.]+$/,'');
       construido={
-        blob:arquivo,
         meta:{
-          id:Utils.id(),
+          id,
           title:ComicSupport.buildTitle(info,base)||base,
           author:(info&&info.author)||'Autor Desconhecido',
           format:ext,
@@ -8334,24 +8940,37 @@ downloadConvertedEpub(result,outputName){
           bookmarks:[],annotations:[],
           order:Date.now(),manualOrder:false,
           fileHash:impressao,fileSize:arquivo.size,
-          totalPages:paginas,
+          totalPages:resultado.paginas,
+          /* A marca de que este livro já está descompactado. Sem ela,
+             a abertura procuraria um arquivo que não existe mais. */
+          comicUnpacked:true,
+          /* O ComicInfo.xml vinha dentro do pacote, que não é mais
+             guardado — então o que ele dizia fica aqui. */
+          comicInfo:info||null,
           comicRtl:!!(info&&info.rtl)
         }
       };
     }catch(err){
+      /* Deu errado no meio: as páginas já gravadas saem, senão
+         ficariam ocupando espaço sem livro nenhum apontando para elas. */
+      try{await this.db.deleteComicPages(id)}catch(e){}
       if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
       return {status:'error',message:err?.message||'Falha ao processar o quadrinho.',error:err};
     }
+    try{await Backup.casarPendente(construido.meta)}catch(e){console.warn(e)}
     const parecido=this.findSimilar(construido.meta);
+    /* Já descompactado, mas ainda não é um livro da estante: se o
+       usuário desistir, as páginas são apagadas (ver o tratamento de
+       `pending` mais acima). */
     if(parecido)return {status:'duplicate',book:parecido,exact:false,
-      pending:{meta:construido.meta,comicBlob:construido.blob}};
+      pending:{meta:construido.meta,comicPages:true}};
     return this.saveComicResult(construido);
   }
-  async saveComicResult({meta,blob}){
+  async saveComicResult({meta}){
     try{
-      Utils.setLoaderText('Salvando na sua estante','Quadrinhos grandes podem levar alguns instantes...');
-      await this.db.saveComicBook(meta,blob);
+      Utils.setLoaderText('Salvando na sua estante','Quase lá...');
+      await this.db.saveComicBook(meta);
     }catch(err){
       console.error(err);
       return {status:'error',message:err?.message||'Não foi possível salvar o quadrinho.',error:err};
@@ -8390,6 +9009,7 @@ downloadConvertedEpub(result,outputName){
       console.error(err);
       return {status:'error',message:err?.message||'Falha ao processar o arquivo.',error:err};
     }
+    try{await Backup.casarPendente(built.meta)}catch(e){console.warn(e)}
     const parecido=this.findSimilar(built.meta);
     if(parecido)return {status:'duplicate',book:parecido,exact:false,pending:{meta:built.meta,blobs:built.blobs}};
     return this.saveAudioResult(built);
@@ -8433,28 +9053,53 @@ downloadConvertedEpub(result,outputName){
     return AudioGroupDialog.ask(plan);
   }
 
-  /* Arquivo exatamente igual a algum que ja esta guardado. Livros antigos
-     ainda sem assinatura recebem a sua na primeira comparacao. */
+  /* Arquivo exatamente igual a algum que ja esta guardado.
+
+     Existem dois estilos de assinatura: a completa (arquivos até
+     8 MB) e a por amostragem (acima disso, para não carregar o
+     arquivo inteiro na memória). Livros da estante podem ter sido
+     assinados no estilo antigo, e livros bem antigos podem não ter
+     assinatura nenhuma. As três situações são resolvidas aqui, e o
+     resultado fica gravado para a próxima vez. */
+  static estiloHash(h){return h&&h.startsWith('audio-')?'amostra':'completo'}
+
   async findByHash(hash,size){
     if(!hash)return null;
+    const estilo=LibraryManager.estiloHash(hash);
     const books=this.allBooks.length?this.allBooks:await this.db.getBooks();
     const direto=books.find(b=>b.fileHash&&b.fileHash===hash);
     if(direto)return direto;
+    /* Mesma assinatura, guardada da última vez que um estilo
+       diferente precisou ser calculado. */
+    const alternativo=books.find(b=>b.fileHashAlt&&b.fileHashAlt===hash);
+    if(alternativo)return alternativo;
+
     for(const book of books){
-      if(book.fileHash)continue;
+      /* Já conferido acima, e no estilo certo: não há o que fazer. */
+      if(book.fileHash&&LibraryManager.estiloHash(book.fileHash)===estilo&&book.fileHashAlt)continue;
+      /* Tamanho diferente já descarta o livro sem ler byte nenhum. */
       if(Number.isFinite(book.fileSize)&&book.fileSize!==size)continue;
       let rec=null;
       try{rec=await this.db.getFile(book.id)}catch(e){continue}
-      const buffer=rec&&rec.buffer;
-      if(!buffer||typeof buffer.byteLength!=='number')continue;
-      book.fileSize=buffer.byteLength;
-      if(buffer.byteLength!==size){
+      const origem=DBManager.recordBlob(rec);
+      if(!origem)continue;
+      book.fileSize=origem.size;
+      if(origem.size!==size){
         try{await this.db.updateBook(book)}catch(e){}
         continue;
       }
-      book.fileHash=await FileFingerprint.hash(buffer);
+      /* Só agora, com o tamanho batendo, vale a pena ler o arquivo —
+         e no mesmo estilo do que se está procurando. */
+      let calculado;
+      try{
+        calculado=estilo==='amostra'
+          ? await FileFingerprint.hashBlob(origem)
+          : await FileFingerprint.hash(await origem.arrayBuffer());
+      }catch(e){continue}
+      if(!book.fileHash)book.fileHash=calculado;
+      else if(book.fileHash!==calculado)book.fileHashAlt=calculado;
       try{await this.db.updateBook(book)}catch(e){}
-      if(book.fileHash===hash)return book;
+      if(calculado===hash)return book;
     }
     return null;
   }
@@ -8515,7 +9160,11 @@ const AppModal={
       c.addEventListener('click',finish,{once:true});
     });
   },
-  confirm({title='Confirmação',subtitle='',message='',confirmText='Confirmar',confirmIcon='check',danger=false}={}){
+  /* `cancelText` e `icon` são opcionais: quando a recusa é a escolha
+     sensata, "Cancelar" diz menos do que dizer o que vai acontecer
+     ("Manter ligado"), e o ícone certo prepara a pessoa para o
+     assunto antes de ela ler uma linha. */
+  confirm({title='Confirmação',subtitle='',message='',confirmText='Confirmar',confirmIcon='check',cancelText='Cancelar',icon='',danger=false}={}){
     if(!this.el)this.init();
     this.close(false);
     this.title.textContent=title;this.subtitle.textContent=subtitle;
@@ -8523,8 +9172,8 @@ const AppModal={
     this.confirmBtn.className=`soft-btn ${danger?'danger':'primary'}`;
     this.confirmBtn.innerHTML=`<i data-lucide="${confirmIcon}"></i>${Utils.esc(confirmText)}`;
     this.cancelBtn.style.display='';
-    this.cancelBtn.textContent='Cancelar';this.cancelBtn.className='soft-btn';
-    this.icon.innerHTML=`<i data-lucide="${danger?'triangle-alert':'circle-alert'}"></i>`;
+    this.cancelBtn.textContent=cancelText;this.cancelBtn.className='soft-btn';
+    this.icon.innerHTML=`<i data-lucide="${icon||(danger?'triangle-alert':'circle-alert')}"></i>`;
     this.el.classList.add('show');document.body.classList.add('modal-open');
     lucide.createIcons({root:this.el});
     return new Promise(resolve=>{
@@ -8532,6 +9181,40 @@ const AppModal={
       const cleanup=()=>{c.removeEventListener('click',onC);x.removeEventListener('click',onX);this.cleanup=null};
       const onC=()=>{cleanup();this.resolve=null;this.el.classList.remove('show');document.body.classList.remove('modal-open');resolve(true)};
       const onX=()=>{cleanup();this.resolve=null;this.el.classList.remove('show');document.body.classList.remove('modal-open');resolve(false)};
+      this.resolve=resolve;this.cleanup=cleanup;
+      c.addEventListener('click',onC,{once:true});x.addEventListener('click',onX,{once:true});
+    });
+  },
+  /* Um confirmar com corpo próprio: serve quando a pergunta não
+     cabe numa frase e o usuário precisa escolher algo antes de
+     responder. Devolve o que `aoConfirmar` ler da tela, ou false. */
+  custom({title='Confirmação',subtitle='',html='',confirmText='Confirmar',confirmIcon='check',
+          cancelText='Cancelar',icon='circle-alert',danger=false,aoAbrir=null,aoConfirmar=null}={}){
+    if(!this.el)this.init();
+    this.close(false);
+    this.title.textContent=title;
+    this.subtitle.textContent=subtitle;
+    this.body.innerHTML=html;
+    this.confirmBtn.className=`soft-btn ${danger?'danger':'primary'}`;
+    this.confirmBtn.innerHTML=`<i data-lucide="${confirmIcon}"></i>${Utils.esc(confirmText)}`;
+    this.cancelBtn.style.display='';
+    this.cancelBtn.textContent=cancelText;this.cancelBtn.className='soft-btn';
+    this.icon.innerHTML=`<i data-lucide="${danger?'triangle-alert':icon}"></i>`;
+    this.el.classList.add('show');document.body.classList.add('modal-open');
+    lucide.createIcons({root:this.el});
+    if(typeof aoAbrir==='function'){try{aoAbrir(this.body)}catch(e){console.warn(e)}}
+    return new Promise(resolve=>{
+      const c=this.confirmBtn,x=this.cancelBtn;
+      const cleanup=()=>{c.removeEventListener('click',onC);x.removeEventListener('click',onX);this.cleanup=null};
+      const fechar=()=>{this.el.classList.remove('show');document.body.classList.remove('modal-open')};
+      const onC=()=>{
+        let valor=true;
+        if(typeof aoConfirmar==='function'){
+          try{valor=aoConfirmar(this.body)}catch(e){console.warn(e);valor=true}
+        }
+        cleanup();this.resolve=null;fechar();resolve(valor||true);
+      };
+      const onX=()=>{cleanup();this.resolve=null;fechar();resolve(false)};
       this.resolve=resolve;this.cleanup=cleanup;
       c.addEventListener('click',onC,{once:true});x.addEventListener('click',onX,{once:true});
     });
@@ -8586,6 +9269,18 @@ const FileFingerprint={
     buffers.forEach(b=>{joined.set(new Uint8Array(b),o);o+=b.byteLength});
     return 'audio-'+await this.hash(joined.buffer);
   },
+  /* Acima deste tamanho, a assinatura passa a ser por amostragem.
+     SHA-256 não se calcula aos pedaços, então assinar um arquivo de
+     300 MB exigiria os 300 MB na memória de uma vez — justamente o
+     que se quer evitar. A amostra lê ~1,5 MB (começo, meio e fim) e
+     inclui o tamanho exato, o que é de sobra para dizer se dois
+     arquivos são o mesmo livro. */
+  GRANDE:8*1024*1024,
+  /* Assinatura de um Blob, escolhendo o método pelo tamanho. */
+  async hashOf(blob){
+    if(blob.size>this.GRANDE)return this.hashBlob(blob);
+    return this.hash(await blob.arrayBuffer());
+  },
   async hashList(hashes){
     const u8=new TextEncoder().encode(hashes.join('|'));
     return 'group-'+await this.hash(u8.buffer.slice(u8.byteOffset,u8.byteOffset+u8.byteLength));
@@ -8598,6 +9293,841 @@ const FileFingerprint={
 };
 
 /* ============================================================
+   BACKUP E RESTAURAÇÃO
+   ------------------------------------------------------------
+   O que este arquivo guarda — e, principalmente, o que ele NÃO
+   guarda.
+
+   Ele guarda o que não pode ser refeito: por onde você parou em
+   cada livro, os grifos, as citações, as notas, os marcadores, as
+   tags, as coleções, as séries, os favoritos, a ordem da estante e
+   as suas preferências de leitura. Tudo isso somado costuma dar
+   alguns poucos megabytes.
+
+   Ele NÃO guarda os livros. Um EPUB você baixa de novo; trinta
+   grifos feitos ao longo de um mês, não. Colocar os arquivos aqui
+   dentro transformaria o backup em algo grande demais para ser
+   feito com frequência — e backup que dá trabalho não é feito.
+
+   Daí a parte mais importante do desenho: quando um livro do
+   backup não está mais na estante, os dados dele NÃO são
+   descartados. Ficam guardados à espera. No dia em que o mesmo
+   arquivo for importado de novo — reconhecido pela assinatura, não
+   pelo nome — o progresso e as marcações voltam sozinhos para o
+   lugar. O leitor não precisa saber que isso existe: simplesmente
+   reencontra o livro como deixou.
+
+   O arquivo é um .zip comum:
+     biblioteca.json   tudo, em texto legível
+     capas/<id>.jpg    as capas, fora do JSON (senão ele incha)
+     LEIA-ME.txt       explicação para quem abrir o zip no braço
+   ============================================================ */
+const Backup={
+  VERSAO:1,
+  NOME_JSON:'biblioteca.json',
+  LEMBRETE_DIAS:14,
+  SONECA_DIAS:7,
+  PENDENTES_ID:'restauracao-pendente',
+
+  /* ------------------------------------------------------------
+     GERAR
+     ------------------------------------------------------------ */
+  camposDoLivro(b){
+    const campos=['id','title','author','format','sourceFileName','fileHash','fileSize',
+      'totalPages','addedAt','lastRead','status','favorite','tags','collections','series',
+      'folder','order','manualOrder','progress','bookmarks','annotations',
+      'readingMode','comicRtl','comicFit','comicSpread'];
+    const out={};
+    campos.forEach(k=>{if(b[k]!==undefined)out[k]=b[k]});
+    /* Do áudio guardamos só o que descreve o livro, não o arquivo. */
+    if(b.audio){
+      out.audio={
+        duration:b.audio.duration,
+        narrator:b.audio.narrator,
+        chapters:Array.isArray(b.audio.chapters)?b.audio.chapters:undefined
+      };
+    }
+    return out;
+  },
+  /* data:image/jpeg;base64,XXXX -> bytes + extensão */
+  capaParaBytes(dataUrl){
+    try{
+      const m=/^data:([^;,]+)(;base64)?,(.*)$/s.exec(String(dataUrl||''));
+      if(!m)return null;
+      const mime=m[1]||'image/jpeg';
+      const ext=/png/i.test(mime)?'png':/webp/i.test(mime)?'webp':/gif/i.test(mime)?'gif':'jpg';
+      if(!m[2])return null;
+      const bin=atob(m[3]);
+      const bytes=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+      return{bytes,ext,mime};
+    }catch(e){return null}
+  },
+  resumo(livros){
+    let grifos=0,citacoes=0,notas=0,marcadores=0;
+    livros.forEach(b=>{
+      (b.annotations||[]).forEach(a=>{
+        if(a.type==='highlight')grifos++;
+        else if(a.type==='quote')citacoes++;
+        else if(a.type==='note')notas++;
+      });
+      marcadores+=(b.bookmarks||[]).length;
+    });
+    return{livros:livros.length,grifos,citacoes,notas,marcadores,
+      marcacoes:grifos+citacoes+notas+marcadores};
+  },
+  async gerar({onStatus}={}){
+    const aviso=onStatus||(()=>{});
+    aviso('Reunindo a sua estante...');
+    const livros=(App.library&&App.library.allBooks&&App.library.allBooks.length)
+      ? App.library.allBooks
+      : await App.db.getBooks();
+    const zip=new JSZip();
+    const capas=zip.folder('capas');
+    const registros=[];
+    for(let i=0;i<livros.length;i++){
+      const b=livros[i];
+      const reg=this.camposDoLivro(b);
+      const capa=this.capaParaBytes(b.cover);
+      if(capa){
+        const nome=`${b.id}.${capa.ext}`;
+        capas.file(nome,capa.bytes);
+        reg.capa=`capas/${nome}`;
+      }
+      registros.push(reg);
+      if(i%20===0){
+        aviso(`Reunindo a sua estante (${i+1} de ${livros.length})...`);
+        await Utils.yieldToUI();
+      }
+    }
+    /* O aceite de política é deste aparelho, não viaja no backup. */
+    const preferencias={...App.state.settings};
+    delete preferencias.consent;
+    delete preferencias.lastBackupAt;
+    delete preferencias.backupSnoozeAt;
+    /* Se a pessoa desligou os lembretes neste aparelho, restaurar um
+       backup antigo não pode religá-los pelas costas dela. */
+    delete preferencias.backupLembretes;
+
+    const conta=this.resumo(livros);
+    const dados={
+      app:'Veredas Reader',
+      tipo:'backup-biblioteca',
+      versao:this.VERSAO,
+      versaoDoApp:(typeof BUILD!=='undefined'?BUILD:''),
+      criadoEm:new Date().toISOString(),
+      resumo:conta,
+      preferencias,
+      livros:registros
+    };
+    zip.file(this.NOME_JSON,JSON.stringify(dados,null,1));
+    zip.file('LEIA-ME.txt',[
+      'Backup do Veredas Reader',
+      '========================',
+      '',
+      `Criado em ${new Date().toLocaleString('pt-BR')}`,
+      `${conta.livros} livro(s) · ${conta.marcacoes} marcação(ões)`,
+      '',
+      'Este arquivo guarda o seu progresso de leitura, os grifos, as citações,',
+      'as notas, os marcadores e a organização da sua estante.',
+      '',
+      'Ele NAO contem os arquivos dos livros. Para restaurar por completo,',
+      'importe os livros normalmente no aplicativo: ao reconhecer cada arquivo,',
+      'o Veredas devolve sozinho as marcacoes e o ponto onde voce parou.',
+      '',
+      'Para restaurar: menu lateral > Backup e restauracao > Restaurar backup.'
+    ].join('\n'));
+
+    aviso('Compactando...');
+    const blob=await zip.generateAsync(
+      {type:'blob',compression:'DEFLATE',compressionOptions:{level:6}},
+      meta=>{if(meta&&meta.percent!=null)Utils.setLoaderProgress(meta.percent,'Compactando...')}
+    );
+    const dia=new Date().toISOString().slice(0,10);
+    return{blob,nome:`Veredas Reader - backup ${dia}.zip`,resumo:conta};
+  },
+
+  /* ------------------------------------------------------------
+     LER UM ARQUIVO DE BACKUP
+     ------------------------------------------------------------ */
+  async ler(file){
+    let zip;
+    try{
+      zip=await JSZip.loadAsync(file);
+    }catch(e){
+      throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
+        'Escolha o arquivo .zip gerado pelo próprio aplicativo.');
+    }
+    const entrada=zip.file(this.NOME_JSON)||zip.file(new RegExp(`${this.NOME_JSON}$`))[0];
+    if(!entrada){
+      throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
+        'Falta o arquivo biblioteca.json lá dentro.');
+    }
+    let dados;
+    try{
+      dados=JSON.parse(await entrada.async('text'));
+    }catch(e){
+      throw new ParseError('O backup está corrompido.','O conteúdo interno não pôde ser lido.');
+    }
+    if(!dados||dados.tipo!=='backup-biblioteca'||!Array.isArray(dados.livros)){
+      throw new ParseError('Este arquivo não é um backup de biblioteca do Veredas.','');
+    }
+    if(Number(dados.versao)>this.VERSAO){
+      throw new ParseError('Este backup foi feito numa versão mais nova do aplicativo.',
+        'Atualize o Veredas Reader e tente de novo.');
+    }
+    return{dados,zip};
+  },
+  async capaDoZip(zip,caminho){
+    if(!caminho)return null;
+    const f=zip.file(caminho);
+    if(!f)return null;
+    try{
+      const b64=await f.async('base64');
+      const ext=(caminho.split('.').pop()||'jpg').toLowerCase();
+      const mime=ext==='png'?'image/png':ext==='webp'?'image/webp':ext==='gif'?'image/gif':'image/jpeg';
+      return `data:${mime};base64,${b64}`;
+    }catch(e){return null}
+  },
+
+  /* ------------------------------------------------------------
+     JUNTAR O QUE VEIO COM O QUE JÁ EXISTE
+     ------------------------------------------------------------ */
+  unir(a,b){
+    const vistos=new Set();
+    return [...(a||[]),...(b||[])].filter(x=>{
+      const k=String(x==null?'':x).trim().toLowerCase();
+      if(!k||vistos.has(k))return false;
+      vistos.add(k);return true;
+    });
+  },
+  /* Duas listas de marcações viram uma só, sem repetir. A chave
+     evita tanto o mesmo id duas vezes quanto o mesmo trecho
+     marcado duas vezes. */
+  unirMarcacoes(atuais,doBackup){
+    const chave=a=>a.id?`id:${a.id}`
+      :`${a.type||''}|${a.pageIndex??''}|${a.start??''}|${a.end??''}|${(a.text||'').slice(0,40)}`;
+    const mapa=new Map();
+    (atuais||[]).forEach(a=>mapa.set(chave(a),a));
+    (doBackup||[]).forEach(a=>{if(!mapa.has(chave(a)))mapa.set(chave(a),a)});
+    return [...mapa.values()];
+  },
+  unirMarcadores(atuais,doBackup){
+    const chave=m=>m.globalPage!=null?`g:${m.globalPage}`:`c:${m.chapter}:${m.pageIndex}`;
+    const mapa=new Map();
+    (atuais||[]).forEach(m=>mapa.set(chave(m),m));
+    (doBackup||[]).forEach(m=>{if(!mapa.has(chave(m)))mapa.set(chave(m),m)});
+    return [...mapa.values()];
+  },
+  /* O progresso vem de outro aparelho, onde o livro pode ter sido
+     paginado com outra fonte e outra tela. A porcentagem é o que
+     sobrevive a isso; a página é recalculada a partir dela. */
+  ajustarProgresso(progresso,totalAqui){
+    if(!progresso)return null;
+    const p={...progresso};
+    if(Number.isFinite(totalAqui)&&totalAqui>0&&p.totalPages!==totalAqui){
+      const pct=Number(p.percentage);
+      if(Number.isFinite(pct)&&pct>0){
+        p.globalPage=Utils.clamp(Math.round((pct/100)*totalAqui)-1,0,totalAqui-1);
+        p.readPages=p.globalPage+1;
+        p.totalPages=totalAqui;
+      }
+    }
+    return p;
+  },
+  maisRecente(a,b){
+    const ta=Number(a&&a.lastRead)||0,tb=Number(b&&b.lastRead)||0;
+    if(ta!==tb)return ta>tb?a:b;
+    const pa=Number(a&&a.progress&&a.progress.percentage)||0;
+    const pb=Number(b&&b.progress&&b.progress.percentage)||0;
+    return pb>pa?b:a;
+  },
+  /* `modo` é 'mesclar' (padrão, não perde nada) ou 'substituir'
+     (o backup manda). Em ambos os casos o ARQUIVO do livro é
+     sempre o que já está no aparelho. */
+  aplicarNoLivro(atual,doBackup,modo){
+    const novo={...atual};
+    const vencedor=this.maisRecente(atual,doBackup);
+    const total=Number(atual.totalPages)||Number(doBackup.totalPages)||0;
+
+    if(modo==='substituir'){
+      ['title','author','status','favorite','series','folder','tags','collections',
+       'order','manualOrder','readingMode','comicRtl','comicFit','comicSpread'
+      ].forEach(k=>{if(doBackup[k]!==undefined)novo[k]=doBackup[k]});
+      novo.progress=this.ajustarProgresso(doBackup.progress,total)||atual.progress;
+      novo.bookmarks=Array.isArray(doBackup.bookmarks)?doBackup.bookmarks:[];
+      novo.annotations=Array.isArray(doBackup.annotations)?doBackup.annotations:[];
+      if(doBackup.lastRead)novo.lastRead=doBackup.lastRead;
+      return novo;
+    }
+
+    novo.tags=this.unir(atual.tags,doBackup.tags);
+    novo.collections=this.unir(atual.collections,doBackup.collections);
+    novo.bookmarks=this.unirMarcadores(atual.bookmarks,doBackup.bookmarks);
+    novo.annotations=this.unirMarcacoes(atual.annotations,doBackup.annotations);
+    novo.favorite=!!(atual.favorite||doBackup.favorite);
+    novo.series=atual.series||doBackup.series||'';
+    novo.folder=atual.folder||doBackup.folder||'';
+    ['readingMode','comicRtl','comicFit','comicSpread'].forEach(k=>{
+      if(novo[k]===undefined&&doBackup[k]!==undefined)novo[k]=doBackup[k];
+    });
+    /* Quem leu mais recentemente define onde a leitura parou. */
+    if(vencedor===doBackup){
+      const p=this.ajustarProgresso(doBackup.progress,total);
+      if(p)novo.progress=p;
+      if(doBackup.lastRead)novo.lastRead=doBackup.lastRead;
+      if(doBackup.status)novo.status=doBackup.status;
+    }else if(!atual.progress&&doBackup.progress){
+      novo.progress=this.ajustarProgresso(doBackup.progress,total);
+      if(doBackup.status&&(!atual.status||atual.status==='toread'))novo.status=doBackup.status;
+    }
+    return novo;
+  },
+  /* Casa um livro do backup com um da estante: primeiro pela
+     assinatura do arquivo, que é exata; depois por título e autor,
+     que resolve o caso de ter baixado o mesmo livro de outra fonte. */
+  procurarNaEstante(reg,estante){
+    if(reg.fileHash){
+      const exato=estante.find(b=>b.fileHash&&b.fileHash===reg.fileHash);
+      if(exato)return exato;
+    }
+    const norm=FileFingerprint.normalize;
+    const titulo=norm(reg.title);
+    if(!titulo)return null;
+    const autor=norm(reg.author);
+    const generico=v=>!v||v==='autor desconhecido';
+    return estante.find(b=>{
+      if(BookFormats.normalize(b.format)!==BookFormats.normalize(reg.format))return false;
+      if(norm(b.title)!==titulo)return false;
+      const outro=norm(b.author);
+      return generico(autor)||generico(outro)||outro===autor;
+    })||null;
+  },
+
+  /* ------------------------------------------------------------
+     RESTAURAR
+     ------------------------------------------------------------ */
+  async restaurar({dados,zip},{modo='mesclar',preferencias=true,onStatus}={}){
+    const aviso=onStatus||(()=>{});
+    const estante=await App.db.getBooks();
+    const conta={atualizados:0,aguardando:0,capas:0};
+    const pendentes=[];
+
+    for(let i=0;i<dados.livros.length;i++){
+      const reg=dados.livros[i];
+      if(i%10===0){
+        Utils.setLoaderProgress(Math.round((i/Math.max(1,dados.livros.length))*90),
+          `Restaurando (${i+1} de ${dados.livros.length})...`);
+        await Utils.yieldToUI();
+      }
+      const alvo=this.procurarNaEstante(reg,estante);
+      if(!alvo){
+        /* O livro não está aqui. Os dados esperam pelo arquivo. */
+        const espera={...reg};
+        espera.capaData=await this.capaDoZip(zip,reg.capa);
+        delete espera.capa;
+        pendentes.push(espera);
+        conta.aguardando++;
+        continue;
+      }
+      const atualizado=this.aplicarNoLivro(alvo,reg,modo);
+      if(!alvo.cover&&reg.capa){
+        const capa=await this.capaDoZip(zip,reg.capa);
+        if(capa){atualizado.cover=capa;conta.capas++}
+      }
+      try{
+        await App.db.updateBook(atualizado);
+        conta.atualizados++;
+      }catch(e){console.warn('Livro não pôde ser atualizado:',reg.title,e)}
+    }
+
+    if(pendentes.length)await this.guardarPendentes(pendentes);
+
+    if(preferencias&&dados.preferencias){
+      Utils.setLoaderProgress(94,'Aplicando as suas preferências...');
+      const manter={
+        consent:App.state.settings.consent,
+        scanInvited:App.state.settings.scanInvited,
+        lastBackupAt:App.state.settings.lastBackupAt,
+        backupSnoozeAt:App.state.settings.backupSnoozeAt,
+        backupLembretes:App.state.settings.backupLembretes
+      };
+      App.state.settings={...AppDefaults.settings,...dados.preferencias,...manter};
+      try{await App.persistSettings()}catch(e){console.warn(e)}
+      App.applySettings();
+    }
+    Utils.setLoaderProgress(100,'Pronto.');
+    return conta;
+  },
+
+  /* ------------------------------------------------------------
+     À ESPERA DO ARQUIVO
+     ------------------------------------------------------------ */
+  /* A chave precisa ser um VALOR, não a identidade do objeto: a
+     lista é relida do banco a cada consulta, então comparar
+     referências nunca encontraria nada para remover. */
+  chavePendente(x){
+    if(!x)return '';
+    if(x.fileHash)return `h:${x.fileHash}`;
+    return `t:${FileFingerprint.normalize(x.title)}|${BookFormats.normalize(x.format)}`;
+  },
+  async guardarPendentes(novos){
+    const atual=await this.pendentes();
+    const mapa=new Map();
+    [...atual,...novos].forEach(x=>mapa.set(this.chavePendente(x),x));
+    try{
+      await App.db.putRecord({id:this.PENDENTES_ID,itens:[...mapa.values()],em:Date.now()});
+    }catch(e){console.warn('Não foi possível guardar a restauração pendente.',e)}
+  },
+  async pendentes(){
+    try{
+      const rec=await App.db.getRecord(this.PENDENTES_ID);
+      return rec&&Array.isArray(rec.itens)?rec.itens:[];
+    }catch(e){return []}
+  },
+  async removerPendente(item){
+    const alvo=this.chavePendente(item);
+    if(!alvo)return;
+    const lista=await this.pendentes();
+    const resto=lista.filter(x=>this.chavePendente(x)!==alvo);
+    if(resto.length===lista.length)return;
+    try{
+      if(resto.length)await App.db.putRecord({id:this.PENDENTES_ID,itens:resto,em:Date.now()});
+      else await App.db.deleteRecord(this.PENDENTES_ID);
+    }catch(e){console.warn(e)}
+  },
+  /* Chamado durante a importação, com o livro recém-lido em mãos.
+     Se houver dados esperando por ele, tudo volta para o lugar —
+     e o leitor só percebe que o livro voltou como estava. */
+  async casarPendente(meta){
+    let lista;
+    try{lista=await this.pendentes()}catch(e){return false}
+    if(!lista.length)return false;
+    const achado=this.procurarNaEstante(meta,lista)
+      ||(meta.fileHash?lista.find(x=>x.fileHash===meta.fileHash):null);
+    if(!achado)return false;
+    const restaurado=this.aplicarNoLivro(meta,achado,'substituir');
+    Object.assign(meta,restaurado,{
+      id:meta.id,format:meta.format,
+      fileHash:meta.fileHash,fileSize:meta.fileSize,
+      sourceFileName:meta.sourceFileName,
+      totalPages:meta.totalPages||achado.totalPages,
+      cover:meta.cover||achado.capaData||null
+    });
+    await this.removerPendente(achado);
+    const marcas=(meta.annotations||[]).length+(meta.bookmarks||[]).length;
+    setTimeout(()=>Utils.toast(
+      marcas?`Progresso e ${marcas} marcação(ões) restaurados neste livro.`
+            :'Progresso de leitura restaurado neste livro.','history'),700);
+    return true;
+  }
+};
+
+
+/* ------------------------------------------------------------
+   BACKUP — a parte que o leitor vê
+   ------------------------------------------------------------
+   Duas regras guiaram esta tela:
+
+   1. Ninguém restaura no escuro. Antes de mexer na estante, o
+      aplicativo abre o backup, conta o que tem dentro e mostra —
+      data, quantidade de livros, quantidade de marcações. Só
+      depois pergunta o que fazer.
+   2. O caminho seguro é o padrão. "Juntar" nunca apaga nada;
+      "substituir" existe, mas precisa ser escolhido de propósito.
+   ------------------------------------------------------------ */
+Object.assign(Backup,{
+  init(){
+    const nav=document.getElementById('nav-backup');
+    if(nav)nav.onclick=()=>{App.closeDrawer();this.abrir()};
+    const entrada=document.getElementById('backup-input');
+    if(entrada)entrada.onchange=async e=>{
+      const arquivo=e.target.files&&e.target.files[0];
+      e.target.value='';
+      if(arquivo)await this.fluxoRestaurar(arquivo);
+    };
+    const agora=document.getElementById('backup-reminder-go');
+    if(agora)agora.onclick=()=>this.exportar();
+    const depois=document.getElementById('backup-reminder-later');
+    if(depois)depois.onclick=async()=>{
+      this.esconderLembrete();
+      await App.updateSetting('backupSnoozeAt',Date.now());
+    };
+    const nunca=document.getElementById('backup-reminder-never');
+    if(nunca)nunca.onclick=()=>this.desligarLembretes();
+  },
+
+  /* O mesmo alerta, venha o pedido do painel ou da faixa na estante.
+     Devolve true se os lembretes acabaram desligados. */
+  async desligarLembretes(){
+    const ok=await AppModal.confirm({
+      title:'Desligar os lembretes de backup?',
+      subtitle:'Leia antes de confirmar',
+      message:'A sua estante existe só neste aparelho. Não há cópia em servidor nenhum, e por isso não há como recuperá-la para você.\n\n'+
+        'Limpar os dados do navegador, desinstalar o aplicativo, trocar de celular ou uma pane no aparelho apagam tudo de forma definitiva: progresso, grifos, citações, notas e marcadores.\n\n'+
+        'O lembrete é o único aviso que existe. Desligando-o, lembrar de fazer backup passa a ser só seu.\n\n'+
+        'O botão de salvar continua onde sempre esteve, em Backup e restauração.',
+      confirmText:'Desligar assim mesmo',
+      confirmIcon:'bell-off',
+      cancelText:'Manter ligado',
+      icon:'shield-alert',
+      danger:true
+    });
+    if(!ok)return false;
+    await App.updateSetting('backupLembretes',false);
+    this.esconderLembrete();
+    Utils.toast('Lembretes desligados.','bell-off');
+    if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
+    return true;
+  },
+  podeCompartilhar(){
+    try{
+      return typeof navigator.share==='function'&&typeof navigator.canShare==='function';
+    }catch(e){return false}
+  },
+  dataLegivel(ms){
+    if(!ms)return null;
+    try{return new Date(ms).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'})}
+    catch(e){return new Date(ms).toLocaleString()}
+  },
+  async abrir(){
+    App.openPanel('panel-backup');
+    await this.desenhar();
+  },
+  async desenhar(){
+    const corpo=document.getElementById('backup-body');
+    if(!corpo)return;
+    const livros=(App.library&&App.library.allBooks)||[];
+    const conta=this.resumo(livros);
+    const ultimo=this.dataLegivel(App.state.settings.lastBackupAt);
+    const espera=await this.pendentes();
+    const lembretesLigados=App.state.settings.backupLembretes!==false;
+
+    corpo.innerHTML=`
+      <div class="backup-stats">
+        <div class="backup-stat"><strong>${conta.livros}</strong><small>livro(s)</small></div>
+        <div class="backup-stat"><strong>${conta.grifos+conta.citacoes+conta.notas}</strong><small>grifos, citações e notas</small></div>
+        <div class="backup-stat"><strong>${conta.marcadores}</strong><small>marcador(es)</small></div>
+      </div>
+
+      <div class="backup-status ${ultimo?'ok':'alerta'}">
+        <i data-lucide="${ultimo?'shield-check':'shield-alert'}"></i>
+        <div>${ultimo
+          ?`Último backup em <strong>${Utils.esc(ultimo)}</strong>.`
+          :'<strong>Você ainda não fez nenhum backup.</strong>'}</div>
+      </div>
+
+      <div class="setting-section">
+        <h4>Guardar</h4>
+        <div class="backup-actions">
+          <button class="soft-btn primary" id="backup-save"><i data-lucide="download"></i>Salvar backup</button>
+          ${this.podeCompartilhar()?'<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>Enviar para outro app</button>':''}
+        </div>
+        <div class="drag-tip">O arquivo guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si. Guarde-o onde quiser: nuvem, e-mail, cartão de memória.</div>
+      </div>
+
+      <div class="setting-section">
+        <h4>Restaurar</h4>
+        <div class="backup-actions">
+          <button class="soft-btn" id="backup-restore"><i data-lucide="upload"></i>Restaurar backup</button>
+        </div>
+        <div class="drag-tip">O aplicativo mostra o que tem dentro do arquivo antes de mexer em qualquer coisa. Livros que ainda não estiverem na estante ficam esperando: quando você importar o arquivo deles, as marcações voltam sozinhas.</div>
+      </div>
+
+      <div class="setting-section">
+        <h4>Lembretes</h4>
+        <label class="toggle-row" for="backup-lembretes">
+          <span class="toggle-label">
+            <strong>Avisar quando fizer tempo sem backup</strong>
+            <small>Uma faixa discreta na estante depois de ${this.LEMBRETE_DIAS} dias sem cópia de segurança. Nunca interrompe a leitura.</small>
+          </span>
+          <span class="toggle"><input type="checkbox" id="backup-lembretes"${lembretesLigados?' checked':''}><span></span></span>
+        </label>
+        ${lembretesLigados?'':`
+        <div class="backup-status alerta" style="margin-top:12px;margin-bottom:0">
+          <i data-lucide="bell-off"></i>
+          <div>Os lembretes estão <strong>desligados</strong>. Fazer backup passou a depender só de você.</div>
+        </div>`}
+      </div>
+
+      ${espera.length?`
+      <div class="setting-section">
+        <h4>Esperando o arquivo</h4>
+        <div class="backup-waiting">
+          <i data-lucide="hourglass"></i>
+          <div><strong>${espera.length} livro(s)</strong> com progresso e marcações guardados, à espera de serem importados de novo.</div>
+        </div>
+        <div class="backup-waiting-list">${espera.slice(0,12).map(x=>
+          `<span class="backup-chip">${Utils.esc(x.title||'Sem título')}</span>`).join('')}
+          ${espera.length>12?`<span class="backup-chip mais">+${espera.length-12}</span>`:''}</div>
+        <div style="text-align:center;margin-top:12px">
+          <button class="soft-btn" id="backup-forget"><i data-lucide="trash-2"></i>Descartar o que está esperando</button>
+        </div>
+      </div>`:''}
+    `;
+    lucide.createIcons({root:corpo});
+
+    const salvar=document.getElementById('backup-save');
+    if(salvar)salvar.onclick=()=>this.exportar();
+    const enviar=document.getElementById('backup-share');
+    if(enviar)enviar.onclick=()=>this.exportar({compartilhar:true});
+    const restaurar=document.getElementById('backup-restore');
+    if(restaurar)restaurar.onclick=()=>this.escolherArquivo();
+
+    /* Desligar os lembretes é uma escolha legítima — muita gente tem
+       o próprio hábito e não quer ser cutucada. Mas é também a única
+       coisa no aplicativo que avisa antes de uma perda irreversível,
+       então a pessoa merece saber exatamente o que está abrindo mão
+       antes de confirmar. Religar não precisa de cerimônia nenhuma. */
+    const alterna=document.getElementById('backup-lembretes');
+    if(alterna)alterna.onchange=async()=>{
+      if(alterna.checked){
+        await App.updateSetting('backupLembretes',true);
+        await App.updateSetting('backupSnoozeAt',0);
+        Utils.toast('Lembretes de backup religados.','bell');
+        await this.desenhar();
+        this.verificarLembrete();
+        return;
+      }
+      /* Devolve o botão ao lugar enquanto a pergunta está aberta: se a
+         pessoa desistir, nada mudou. */
+      alterna.checked=true;
+      const desligou=await this.desligarLembretes();
+      if(!desligou)await this.desenhar();
+    };
+    const esquecer=document.getElementById('backup-forget');
+    if(esquecer)esquecer.onclick=async()=>{
+      const ok=await AppModal.confirm({
+        title:'Descartar o que está esperando?',
+        message:'O progresso e as marcações desses livros serão apagados. Se você importar os arquivos depois, eles voltarão em branco.',
+        confirmText:'Descartar',confirmIcon:'trash-2',danger:true
+      });
+      if(!ok)return;
+      try{await App.db.deleteRecord(this.PENDENTES_ID)}catch(e){console.warn(e)}
+      Utils.toast('Pronto, nada mais está esperando.','check');
+      await this.desenhar();
+    };
+  },
+
+  /* ---------- guardar ---------- */
+  async exportar({compartilhar=false}={}){
+    const livros=(App.library&&App.library.allBooks)||[];
+    if(!livros.length){
+      await AppModal.alert({
+        title:'Estante vazia',
+        message:'Importe pelo menos um livro antes de fazer um backup.',
+        icon:'library'
+      });
+      return;
+    }
+    Utils.showLoader('Preparando o backup','Reunindo a sua estante...',{progress:true});
+    let pacote;
+    try{
+      pacote=await this.gerar({onStatus:t=>Utils.setLoaderText(null,t)});
+    }catch(e){
+      console.error(e);
+      Utils.hideLoader();
+      Utils.toast('Não foi possível gerar o backup.','alert-triangle');
+      return;
+    }
+    Utils.hideLoader();
+
+    const arquivo=new File([pacote.blob],pacote.nome,{type:'application/zip'});
+    let entregue=false;
+
+    if(compartilhar&&this.podeCompartilhar()){
+      try{
+        if(navigator.canShare({files:[arquivo]})){
+          await navigator.share({files:[arquivo],title:'Backup do Veredas Reader'});
+          entregue=true;
+        }
+      }catch(err){
+        if(err&&err.name==='AbortError')return;
+        console.warn(err);
+      }
+    }
+    if(!entregue&&typeof window.showSaveFilePicker==='function'){
+      try{
+        const alvo=await window.showSaveFilePicker({
+          suggestedName:pacote.nome,
+          types:[{description:'Backup do Veredas Reader',accept:{'application/zip':['.zip']}}]
+        });
+        const fluxo=await alvo.createWritable();
+        await fluxo.write(pacote.blob);
+        await fluxo.close();
+        entregue=true;
+      }catch(err){
+        if(err&&err.name==='AbortError')return;
+        console.warn('Seletor de gravação indisponível; usando download.',err);
+      }
+    }
+    if(!entregue){
+      const url=URL.createObjectURL(pacote.blob);
+      const a=document.createElement('a');
+      a.href=url;a.download=pacote.nome;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+    }
+
+    await App.updateSetting('lastBackupAt',Date.now());
+    this.esconderLembrete();
+    Utils.toast(`Backup pronto: ${pacote.resumo.livros} livro(s) e ${pacote.resumo.marcacoes} marcação(ões).`,'shield-check');
+    if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
+  },
+
+  /* ---------- restaurar ---------- */
+  escolherArquivo(){
+    const entrada=document.getElementById('backup-input');
+    if(!entrada)return;
+    entrada.value='';
+    entrada.click();
+  },
+  async fluxoRestaurar(file){
+    Utils.showLoader('Lendo o backup',file.name);
+    let pacote;
+    try{
+      pacote=await this.ler(file);
+    }catch(e){
+      Utils.hideLoader();
+      const parse=e instanceof ParseError;
+      await AppModal.alert({
+        title:parse?e.message:'Não foi possível ler este arquivo',
+        message:parse?(e.hint||''):'Escolha o arquivo .zip gerado pelo próprio Veredas Reader.',
+        icon:'alert-triangle'
+      });
+      return;
+    }
+    Utils.hideLoader();
+
+    const d=pacote.dados;
+    const r=d.resumo||this.resumo(d.livros);
+    const quando=d.criadoEm?this.dataLegivel(Date.parse(d.criadoEm)):null;
+
+    const escolha=await AppModal.custom({
+      title:'Restaurar este backup?',
+      subtitle:quando?`Criado em ${quando}`:'',
+      icon:'archive-restore',
+      confirmText:'Restaurar',
+      confirmIcon:'check',
+      html:`
+        <div class="backup-preview">
+          <div class="backup-stat"><strong>${r.livros}</strong><small>livro(s)</small></div>
+          <div class="backup-stat"><strong>${(r.grifos||0)+(r.citacoes||0)+(r.notas||0)}</strong><small>grifos, citações e notas</small></div>
+          <div class="backup-stat"><strong>${r.marcadores||0}</strong><small>marcador(es)</small></div>
+        </div>
+        <div class="form-group" style="margin-top:16px">
+          <label class="form-label">O que fazer com o que já está na estante</label>
+          <div class="backup-modes">
+            <button type="button" class="backup-mode on" data-modo="mesclar">
+              <strong>Juntar <span class="rec">recomendado</span></strong>
+              <small>Nada é apagado. As marcações dos dois lados se somam e o progresso mais recente prevalece.</small>
+            </button>
+            <button type="button" class="backup-mode" data-modo="substituir">
+              <strong>Substituir</strong>
+              <small>O backup manda. As marcações atuais dos livros que estiverem no arquivo serão trocadas pelas do backup.</small>
+            </button>
+          </div>
+        </div>
+        <label class="toggle-row" style="margin-top:6px">
+          <span class="toggle-label"><strong>Restaurar minhas preferências</strong><small>Tema, tipografia, margens, modo de virada e ajustes de áudio.</small></span>
+          <span class="toggle"><input type="checkbox" id="backup-prefs" checked><span></span></span>
+        </label>`,
+      aoAbrir:raiz=>{
+        raiz.querySelectorAll('.backup-mode').forEach(b=>{
+          b.onclick=()=>{
+            raiz.querySelectorAll('.backup-mode').forEach(x=>x.classList.remove('on'));
+            b.classList.add('on');
+          };
+        });
+      },
+      aoConfirmar:raiz=>({
+        modo:raiz.querySelector('.backup-mode.on')?.dataset.modo||'mesclar',
+        preferencias:!!raiz.querySelector('#backup-prefs')?.checked
+      })
+    });
+    if(!escolha)return;
+
+    Utils.showLoader('Restaurando','Devolvendo o seu progresso e as suas marcações...',{progress:true});
+    let conta;
+    try{
+      conta=await this.restaurar(pacote,{
+        modo:escolha.modo,
+        preferencias:escolha.preferencias,
+        onStatus:t=>Utils.setLoaderText(null,t)
+      });
+    }catch(e){
+      console.error(e);
+      Utils.hideLoader();
+      await AppModal.alert({
+        title:'A restauração não pôde ser concluída',
+        message:e&&e.message?e.message:'Tente de novo com o arquivo original.',
+        icon:'alert-triangle'
+      });
+      return;
+    }
+    Utils.hideLoader();
+    await App.library.render();
+    App.syncBottomNav();
+
+    const linhas=[
+      `${conta.atualizados} livro(s) da sua estante foram atualizados.`,
+      conta.capas?`${conta.capas} capa(s) recuperada(s).`:'',
+      conta.aguardando
+        ?`${conta.aguardando} livro(s) do backup ainda não estão aqui. O progresso e as marcações deles ficaram guardados: assim que você importar cada arquivo, tudo volta sozinho para o lugar.`
+        :''
+    ].filter(Boolean);
+    await AppModal.alert({
+      title:'Restauração concluída',
+      subtitle:escolha.modo==='substituir'?'Modo substituir':'Modo juntar',
+      message:linhas.join('\n\n'),
+      icon:'shield-check',
+      confirmText:'Ver estante'
+    });
+    if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
+  },
+
+  /* ---------- lembrete ---------- */
+  mostrarLembrete(dias){
+    const el=document.getElementById('backup-reminder');
+    if(!el)return;
+    const titulo=document.getElementById('backup-reminder-title');
+    const sub=document.getElementById('backup-reminder-sub');
+    if(dias==null){
+      if(titulo)titulo.textContent='Sua estante não tem cópia de segurança';
+      if(sub)sub.textContent='Se este aparelho se perder, o progresso e as marcações vão junto.';
+    }else{
+      if(titulo)titulo.textContent=`Seu último backup foi há ${dias} dias`;
+      if(sub)sub.textContent='Um minuto agora evita perder o progresso e as marcações depois.';
+    }
+    el.hidden=false;
+    lucide.createIcons({root:el});
+  },
+  esconderLembrete(){
+    const el=document.getElementById('backup-reminder');
+    if(el)el.hidden=true;
+  },
+  /* Discreto de propósito: só aparece quando há o que perder, e
+     some por uma semana se a pessoa disser que agora não. */
+  async verificarLembrete(){
+    try{
+      const s=App.state.settings;
+      /* Desligado é desligado: nem se passarem meses. */
+      if(s.backupLembretes===false){this.esconderLembrete();return}
+      const livros=(App.library&&App.library.allBooks)||[];
+      if(livros.length<2){this.esconderLembrete();return}
+      const dia=86400000;
+      if(s.backupSnoozeAt&&Date.now()-s.backupSnoozeAt<this.SONECA_DIAS*dia){
+        this.esconderLembrete();return;
+      }
+      if(!s.lastBackupAt){this.mostrarLembrete(null);return}
+      const dias=Math.floor((Date.now()-s.lastBackupAt)/dia);
+      if(dias>=this.LEMBRETE_DIAS)this.mostrarLembrete(dias);
+      else this.esconderLembrete();
+    }catch(e){console.warn(e)}
+  }
+});
+
+/* ============================================================
    DOCUMENTOS — sobre, licencas, politica e termos
    Os textos vivem em arquivos externos; se nao for possivel le-los
    (pagina aberta via file://, arquivo ausente), o aplicativo mostra
@@ -8606,7 +10136,7 @@ const FileFingerprint={
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-19 · 6';
+const BUILD='2026-09-20 · 10';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -8647,6 +10177,16 @@ const Docs={
       'O aplicativo é uma PWA: depois do primeiro carregamento, funciona sem internet.',
       'Todo o conteúdo fica armazenado no navegador do próprio aparelho.',
       '',
+      '**Nada é buscado na internet durante o uso.** Todas as bibliotecas de que o leitor',
+      'precisa acompanham o aplicativo, na pasta `vendor`: o **Lucide** (ícones), o **JSZip**',
+      '(EPUB, CBZ e o arquivo de backup), o **PDF.js** (PDF) e o **Mammoth.js** (DOCX).',
+      'Por isso o leitor abre e funciona igual com o aparelho em modo avião, e não deixa de',
+      'funcionar se um servidor de terceiros sair do ar ou mudar de endereço.',
+      '',
+      'Quadrinhos em **CBR**, **CB7** e **CBT** usam o **libarchive** compilado para',
+      'WebAssembly, que também acompanha o aplicativo mas só é carregado quando você abre',
+      'um arquivo desse tipo.',
+      '',
       '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/sobre.md`.'
     ].join('\n'),
     privacidade:[
@@ -8668,16 +10208,24 @@ const Docs={
       'O aplicativo só acessa arquivos e pastas que você escolhe explicitamente, no momento em',
       'que você escolhe. Nenhuma varredura acontece sem a sua autorização.',
       '',
-      '## Serviços de terceiros',
+      '## Conexões com a internet',
       '',
-      'As bibliotecas de código aberto usadas pelo aplicativo podem ser carregadas a partir de',
-      'redes de distribuição públicas. Nesse caso, o provedor pode registrar dados técnicos',
-      'padrão de conexão, como endereço IP e tipo de navegador.',
+      '**O aplicativo não faz nenhuma requisição à internet durante o uso.** Todas as',
+      'bibliotecas de que ele precisa acompanham o próprio aplicativo, na pasta `vendor`.',
+      'Nada é buscado em servidores de terceiros, nem na primeira abertura, nem depois —',
+      'por isso nenhum provedor externo chega a ver o seu endereço IP ou o seu navegador.',
+      '',
+      '## Backup',
+      '',
+      'O arquivo de backup é gerado no seu aparelho e entregue a você. **Ele não é enviado a',
+      'nenhum servidor.** Onde guardá-lo é decisão sua. Ele contém seu progresso, suas',
+      'marcações e a organização da estante — não contém os livros em si.',
       '',
       '## Remoção dos dados',
       '',
       'Você pode remover qualquer livro pela própria estante. Limpar os dados do site no',
-      'navegador apaga toda a biblioteca local de forma definitiva.',
+      'navegador apaga toda a biblioteca local de forma definitiva — por isso vale manter',
+      'um backup antes.',
       '',
       '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/politica-de-privacidade.md`.'
     ].join('\n'),
@@ -8713,10 +10261,133 @@ const Docs={
       '',
       '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/termos-de-uso.md`.'
     ].join('\n'),
-    'lic-lucide':'Lucide — Licença ISC\n\nO texto completo da licença deve estar em licencas/LICENSE-Lucide.txt.\nReferência oficial: https://github.com/lucide-icons/lucide/blob/main/LICENSE',
-    'lic-jszip':'JSZip — Licença MIT\n\nO texto completo da licença deve estar em licencas/LICENSE-JSZip.txt.\nReferência oficial: https://github.com/Stuk/jszip/blob/main/LICENSE.markdown',
-    'lic-pdfjs':'PDF.js — Licença Apache 2.0\n\nO texto completo da licença deve estar em licencas/LICENSE-Apache.txt.\nReferência oficial: https://www.apache.org/licenses/LICENSE-2.0',
-    'lic-mammoth':'Mammoth.js — Licença BSD-2-Clause\n\nO texto completo da licença deve estar em licencas/LICENSE-mammoth.txt.\nReferência oficial: https://github.com/mwilliamson/mammoth.js/blob/master/LICENSE',
+    /* Estes textos aparecem quando o arquivo da pasta licencas/ não
+       pode ser lido — o caso de quem abre o index.html direto do
+       disco, onde o navegador proíbe ler arquivos vizinhos. Como as
+       licenças MIT, ISC e BSD são curtas, elas vão inteiras aqui:
+       assim o usuário nunca vê só um endereço e uma promessa. */
+    'lic-lucide':[
+      'Lucide — versão 0.544.0',
+      'Licença ISC (com partes derivadas do Feather, sob licença MIT)',
+      '',
+      'Os ícones da interface. O aplicativo distribui o arquivo',
+      'vendor/lucide/lucide.min.js sem modificação alguma.',
+      '',
+      'Copyright (c) for portions of Lucide are held by Cole Bemis',
+      '2013-2023 as part of Feather (MIT). All other copyright (c) for',
+      'Lucide are held by Lucide Contributors 2025.',
+      '',
+      'Permission to use, copy, modify, and/or distribute this software',
+      'for any purpose with or without fee is hereby granted, provided',
+      'that the above copyright notice and this permission notice appear',
+      'in all copies.',
+      '',
+      'THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL',
+      'WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED',
+      'WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE',
+      'AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR',
+      'CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM',
+      'LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,',
+      'NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN',
+      'CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.',
+      '',
+      'Texto completo em licencas/LICENSE-Lucide.txt',
+      'Projeto: https://lucide.dev/'
+    ].join('\n'),
+    'lic-jszip':[
+      'JSZip — versão 3.10.1',
+      'Licença MIT',
+      '',
+      'Lê EPUB e CBZ e monta o arquivo .zip de backup. O JSZip pode ser',
+      'usado sob a licença MIT ou sob a GPLv3, à escolha de quem o usa;',
+      'o Veredas Reader o usa sob a MIT. O aplicativo distribui o arquivo',
+      'vendor/jszip/jszip.min.js sem modificação alguma.',
+      '',
+      'Copyright (c) 2009-2016 Stuart Knightley and contributors',
+      '',
+      'Permission is hereby granted, free of charge, to any person',
+      'obtaining a copy of this software and associated documentation',
+      'files (the "Software"), to deal in the Software without',
+      'restriction, including without limitation the rights to use, copy,',
+      'modify, merge, publish, distribute, sublicense, and/or sell copies',
+      'of the Software, and to permit persons to whom the Software is',
+      'furnished to do so, subject to the following conditions:',
+      '',
+      'The above copyright notice and this permission notice shall be',
+      'included in all copies or substantial portions of the Software.',
+      '',
+      'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,',
+      'EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF',
+      'MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND',
+      'NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS',
+      'BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN',
+      'ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN',
+      'CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
+      'SOFTWARE.',
+      '',
+      'Texto completo (MIT e GPLv3) em licencas/LICENSE-JSZip.txt',
+      'Projeto: https://stuk.github.io/jszip/'
+    ].join('\n'),
+    'lic-pdfjs':[
+      'PDF.js — versão 2.16.105',
+      'Licença Apache 2.0',
+      '',
+      'Abre e desenha os arquivos PDF. O aplicativo distribui os arquivos',
+      'vendor/pdfjs/pdf.min.js e vendor/pdfjs/pdf.worker.min.js sem',
+      'modificação alguma.',
+      '',
+      'Copyright 2012 Mozilla Foundation e colaboradores do PDF.js',
+      '',
+      'Licensed under the Apache License, Version 2.0 (the "License");',
+      'you may not use this file except in compliance with the License.',
+      'You may obtain a copy of the License at',
+      '',
+      '    http://www.apache.org/licenses/LICENSE-2.0',
+      '',
+      'Unless required by applicable law or agreed to in writing,',
+      'software distributed under the License is distributed on an',
+      '"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,',
+      'either express or implied. See the License for the specific',
+      'language governing permissions and limitations under the License.',
+      '',
+      'Texto completo da Apache 2.0 em licencas/LICENSE-Apache.txt',
+      'Projeto: https://mozilla.github.io/pdf.js/'
+    ].join('\n'),
+    'lic-mammoth':[
+      'Mammoth.js — versão 1.6.0',
+      'Licença BSD de 2 cláusulas',
+      '',
+      'Converte documentos DOCX em HTML para leitura. O aplicativo',
+      'distribui o arquivo vendor/mammoth/mammoth.browser.min.js sem',
+      'modificação alguma.',
+      '',
+      'Copyright (c) 2013, Michael Williamson',
+      'All rights reserved.',
+      '',
+      'Redistribution and use in source and binary forms, with or without',
+      'modification, are permitted provided that the following conditions',
+      'are met:',
+      '',
+      '1. Redistributions of source code must retain the above copyright',
+      '   notice, this list of conditions and the following disclaimer.',
+      '2. Redistributions in binary form must reproduce the above',
+      '   copyright notice, this list of conditions and the following',
+      '   disclaimer in the documentation and/or other materials provided',
+      '   with the distribution.',
+      '',
+      'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS',
+      '"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT',
+      'LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS',
+      'FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE',
+      'COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,',
+      'INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES',
+      'HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,',
+      'STRICT LIABILITY, OR TORT ARISING IN ANY WAY OUT OF THE USE OF THIS',
+      'SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.',
+      '',
+      'Texto completo em licencas/LICENSE-mammoth.txt',
+      'Projeto: https://github.com/mwilliamson/mammoth.js'
+    ].join('\n'),
     'lic-libarchivejs':'libarchive.js — Licença MIT\n\nO empacotamento do libarchive para o navegador, usado pelo leitor de\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\nO texto completo da licença deve estar em licencas/LICENSE-libarchivejs.txt.\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
     'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\n\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\nquadrinhos em CBR, CB7 e CBT.\nO texto completo da licença deve estar em licencas/LICENSE-libarchive.txt.\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
   },
@@ -8782,10 +10453,26 @@ const Docs={
   },
   extras(key){
     if(key!=='sobre')return '';
+    /* A versão de cada uma fica à vista: se um dia algo parar de
+       funcionar num aparelho específico, é a primeira coisa que se
+       quer saber, e evita depender de abrir o código para descobrir. */
     const deps=[
-      ['Lucide','ISC'],['JSZip','MIT'],['PDF.js','Apache 2.0'],['Mammoth.js','BSD-2-Clause']
-    ].map(([n,l])=>`<div class="doc-dep"><i data-lucide="package"></i>${n}<span class="lic-tag">${l}</span></div>`).join('');
-    return `<h2>Bibliotecas de código aberto</h2><div class="doc-dep-list">${deps}</div>`;
+      ['Lucide','0.544.0','ISC'],
+      ['JSZip','3.10.1','MIT'],
+      ['PDF.js','2.16.105','Apache 2.0'],
+      ['Mammoth.js','1.6.0','BSD-2-Clause'],
+      ['libarchive','—','BSD-2-Clause'],
+      ['libarchive.js','—','MIT']
+    ].map(([n,v,l])=>
+      `<div class="doc-dep"><i data-lucide="package"></i>${n}`+
+      (v!=='—'?`<span class="doc-dep-ver">${v}</span>`:'')+
+      `<span class="lic-tag">${l}</span></div>`
+    ).join('');
+    return '<h2>Bibliotecas de código aberto</h2>'+
+      '<p>Todas acompanham o aplicativo, na pasta <code>vendor</code>. '+
+      'Nenhuma é buscada na internet: é por isso que o leitor abre e '+
+      'funciona igual com o aparelho em modo avião.</p>'+
+      `<div class="doc-dep-list">${deps}</div>`;
   },
   async open(key){
     const src=this.sources[key];
@@ -9299,8 +10986,10 @@ const App={
     this.setupPanels();
     this.setupSettingsUI();
     this.setupScrollBehavior();
+    Backup.init();
     await this.library.render();
     this.syncBottomNav();
+    Backup.verificarLembrete();
     try{
       await FirstRun.run();
     }catch(e){
