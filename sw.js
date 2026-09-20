@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-10';
+const VERSAO = 'veredas-2026-09-20-11';
 
 const ESSENCIAIS = [
   './',
@@ -62,7 +62,14 @@ self.addEventListener('install', evento => {
       ))
     )
   );
-  self.skipWaiting();
+  /* Nada de `skipWaiting()` aqui.
+
+     Assumir o controle na marra faz a página que está aberta passar
+     a receber arquivos de uma versão diferente da que ela carregou —
+     o `index.html` de ontem pedindo o `app.js` de hoje. Na primeira
+     instalação não existe fila nenhuma para furar (a ativação é
+     imediata de qualquer jeito), e numa atualização quem decide a
+     hora é a página, pela mensagem `atualizar-agora` lá embaixo. */
 });
 
 self.addEventListener('activate', evento => {

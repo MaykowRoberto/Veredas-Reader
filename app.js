@@ -2,6 +2,19 @@
    SERVICE WORKER PWA
    ============================================================ */
 if ('serviceWorker' in navigator) {
+  /* Havia um service worker no comando ANTES desta página carregar?
+
+     A pergunta decide tudo o que vem depois. Na primeira visita não
+     há nenhum: o que se instala agora assume o controle e isso
+     dispara o mesmo aviso de "trocou de versão" — só que não trocou
+     nada, a página já está rodando o código mais novo que existe.
+     Recarregar ali é puro prejuízo, e era o que fazia o convite
+     "Vamos montar sua estante?" piscar e sumir no primeiro uso.
+
+     A resposta é guardada agora, antes de registrar seja o que for,
+     porque depois já não dá para distinguir uma coisa da outra. */
+  const jaHaviaControlador = !!navigator.serviceWorker.controller;
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
       .then(registro => {
@@ -20,13 +33,42 @@ if ('serviceWorker' in navigator) {
       })
       .catch(err => console.warn("Service Worker não registrado:", err));
   });
+
   let recarregando = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    /* Versão nova assumiu: recarrega uma única vez para que a
-       página inteira passe a rodar o código novo. */
     if (recarregando) return;
-    recarregando = true;
-    window.location.reload();
+    /* Primeira visita: nada a recarregar (ver acima). */
+    if (!jaHaviaControlador) return;
+
+    /* Houve troca de versão de verdade. Mesmo assim, puxar o tapete
+       no meio de alguma coisa é pior do que esperar: quem está lendo
+       perde a página, quem está importando perde a importação, e
+       quem está respondendo uma pergunta vê a pergunta sumir.
+
+       Como o service worker novo JÁ assumiu, a próxima vez que o
+       aplicativo abrir virá com o código novo de qualquer maneira.
+       Então recarregar agora é uma conveniência, não uma
+       necessidade: só acontece se o momento for inofensivo. */
+    const ocupado = () => {
+      try {
+        if (document.querySelector('.onboarding.show')) return true;
+        if (document.querySelector('.app-modal.show, .doc-modal.show, .conversion-modal.show, #scan-modal.show')) return true;
+        if (document.getElementById('loader')?.classList.contains('active')) return true;
+        if (document.body.classList.contains('reader-open')) return true;
+        if (document.querySelector('.panel.visible')) return true;
+        if (window.App && App.player && App.player.isPlaying && App.player.isPlaying()) return true;
+      } catch (e) {}
+      return false;
+    };
+    const quandoDerRecarrega = () => {
+      if (recarregando) return;
+      if (ocupado()) { setTimeout(quandoDerRecarrega, 3000); return; }
+      recarregando = true;
+      window.location.reload();
+    };
+    /* Um instante de folga para a interface assentar antes da
+       primeira verificação. */
+    setTimeout(quandoDerRecarrega, 800);
   });
 }
 
@@ -9171,6 +9213,7 @@ const AppModal={
     this.body.innerHTML=`<p>${Utils.esc(message).replace(/\n/g,'<br>')}</p>`;
     this.confirmBtn.className=`soft-btn ${danger?'danger':'primary'}`;
     this.confirmBtn.innerHTML=`<i data-lucide="${confirmIcon}"></i>${Utils.esc(confirmText)}`;
+    this.confirmBtn.disabled=false;
     this.cancelBtn.style.display='';
     this.cancelBtn.textContent=cancelText;this.cancelBtn.className='soft-btn';
     this.icon.innerHTML=`<i data-lucide="${icon||(danger?'triangle-alert':'circle-alert')}"></i>`;
@@ -9197,6 +9240,8 @@ const AppModal={
     this.body.innerHTML=html;
     this.confirmBtn.className=`soft-btn ${danger?'danger':'primary'}`;
     this.confirmBtn.innerHTML=`<i data-lucide="${confirmIcon}"></i>${Utils.esc(confirmText)}`;
+    /* Um modal anterior pode ter deixado o botão desabilitado. */
+    this.confirmBtn.disabled=false;
     this.cancelBtn.style.display='';
     this.cancelBtn.textContent=cancelText;this.cancelBtn.className='soft-btn';
     this.icon.innerHTML=`<i data-lucide="${danger?'triangle-alert':icon}"></i>`;
@@ -9780,9 +9825,27 @@ Object.assign(Backup,{
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
     return true;
   },
+  /* Um .zip de mentira, do tamanho mínimo que um ZIP pode ter (só o
+     registro de "arquivo vazio"). Serve para perguntar ao aparelho se
+     ele aceitaria compartilhar um arquivo assim, ANTES de montar o
+     backup de verdade. */
+  zipDeTeste(tipo='application/zip'){
+    const vazio=new Uint8Array([0x50,0x4b,0x05,0x06,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+    return new File([vazio],'teste.zip',{type:tipo});
+  },
+  /* Saber compartilhar texto não é saber compartilhar ARQUIVO, e
+     aceitar arquivos não é aceitar .zip — há aparelhos que recusam
+     justamente esse tipo. Perguntar de verdade evita oferecer um
+     botão que, no fim, só faz o mesmo que "Salvar backup". */
   podeCompartilhar(){
     try{
-      return typeof navigator.share==='function'&&typeof navigator.canShare==='function';
+      if(typeof navigator.share!=='function')return false;
+      if(typeof navigator.canShare!=='function')return false;
+      /* Dois tipos, porque há aparelho que recusa `application/zip`
+         mas aceita o arquivo como genérico — e nesse caso o botão
+         funciona, então tem de aparecer. */
+      return !!navigator.canShare({files:[this.zipDeTeste()]})
+          || !!navigator.canShare({files:[this.zipDeTeste('application/octet-stream')]});
     }catch(e){return false}
   },
   dataLegivel(ms){
@@ -9870,7 +9933,7 @@ Object.assign(Backup,{
     const salvar=document.getElementById('backup-save');
     if(salvar)salvar.onclick=()=>this.exportar();
     const enviar=document.getElementById('backup-share');
-    if(enviar)enviar.onclick=()=>this.exportar({compartilhar:true});
+    if(enviar)enviar.onclick=()=>this.compartilhar();
     const restaurar=document.getElementById('backup-restore');
     if(restaurar)restaurar.onclick=()=>this.escolherArquivo();
 
@@ -9910,7 +9973,10 @@ Object.assign(Backup,{
   },
 
   /* ---------- guardar ---------- */
-  async exportar({compartilhar=false}={}){
+  /* ------------------------------------------------------------
+     SALVAR o arquivo de backup no aparelho.
+     ------------------------------------------------------------ */
+  async exportar(){
     const livros=(App.library&&App.library.allBooks)||[];
     if(!livros.length){
       await AppModal.alert({
@@ -9932,21 +9998,8 @@ Object.assign(Backup,{
     }
     Utils.hideLoader();
 
-    const arquivo=new File([pacote.blob],pacote.nome,{type:'application/zip'});
     let entregue=false;
-
-    if(compartilhar&&this.podeCompartilhar()){
-      try{
-        if(navigator.canShare({files:[arquivo]})){
-          await navigator.share({files:[arquivo],title:'Backup do Veredas Reader'});
-          entregue=true;
-        }
-      }catch(err){
-        if(err&&err.name==='AbortError')return;
-        console.warn(err);
-      }
-    }
-    if(!entregue&&typeof window.showSaveFilePicker==='function'){
+    if(typeof window.showSaveFilePicker==='function'){
       try{
         const alvo=await window.showSaveFilePicker({
           suggestedName:pacote.nome,
@@ -9961,18 +10014,165 @@ Object.assign(Backup,{
         console.warn('Seletor de gravação indisponível; usando download.',err);
       }
     }
-    if(!entregue){
-      const url=URL.createObjectURL(pacote.blob);
-      const a=document.createElement('a');
-      a.href=url;a.download=pacote.nome;
-      document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),2000);
-    }
+    if(!entregue)this.baixar(pacote);
+    await this.registrarBackupFeito(pacote);
+  },
 
+  baixar(pacote){
+    const url=URL.createObjectURL(pacote.blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=pacote.nome;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  },
+
+  async registrarBackupFeito(pacote){
     await App.updateSetting('lastBackupAt',Date.now());
     this.esconderLembrete();
     Utils.toast(`Backup pronto: ${pacote.resumo.livros} livro(s) e ${pacote.resumo.marcacoes} marcação(ões).`,'shield-check');
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
+  },
+
+  /* ------------------------------------------------------------
+     ENVIAR o backup para outro aplicativo.
+
+     Aqui existe uma regra do navegador que decide tudo: a folha de
+     compartilhamento do Android só abre se `navigator.share()` for
+     chamado DENTRO do toque da pessoa. Um `await` no meio do caminho
+     — gerar o arquivo, por exemplo — já é tarde demais: o navegador
+     recusa, e o código acabava caindo no download comum. Era por isso
+     que este botão fazia a mesma coisa que "Salvar backup".
+
+     A solução é preparar o arquivo ANTES do toque que compartilha. O
+     aviso que a pessoa pediu para ver serve para as duas coisas ao
+     mesmo tempo: enquanto ela lê o que vai (e o que não vai) no
+     arquivo, ele está sendo montado em segundo plano; quando ela
+     toca em "Escolher o app", o arquivo já existe e a folha abre
+     na hora.
+     ------------------------------------------------------------ */
+  async compartilhar(){
+    const livros=(App.library&&App.library.allBooks)||[];
+    if(!livros.length){
+      await AppModal.alert({
+        title:'Estante vazia',
+        message:'Importe pelo menos um livro antes de fazer um backup.',
+        icon:'library'
+      });
+      return;
+    }
+    if(!this.podeCompartilhar()){
+      const salvar=await AppModal.confirm({
+        title:'Este aparelho não abre a lista de aplicativos',
+        message:'O navegador aqui não oferece o compartilhamento direto. Dá para salvar o arquivo e enviá-lo depois pelo aplicativo que você quiser.',
+        confirmText:'Salvar o arquivo',confirmIcon:'download',
+        cancelText:'Agora não',icon:'share-2'
+      });
+      if(salvar)await this.exportar();
+      return;
+    }
+
+    let arquivo=null,pacote=null,falhou=null;
+    const preparo=this.gerar()
+      .then(p=>{pacote=p;arquivo=new File([p.blob],p.nome,{type:'application/zip'})})
+      .catch(e=>{console.error(e);falhou=e});
+
+    let tentativa=null;
+    const confirmou=await AppModal.custom({
+      title:'Enviar para outro app',
+      subtitle:'Vale conferir o que vai no arquivo',
+      icon:'share-2',
+      confirmText:'Escolher o app',
+      confirmIcon:'share-2',
+      cancelText:'Cancelar',
+      html:`
+        <div class="share-what">
+          <div class="share-line vai">
+            <i data-lucide="check"></i>
+            <div><strong>Vai no arquivo</strong>
+            <small>O seu progresso de leitura, os grifos, as citações, as notas, os marcadores e a organização da estante — status, favoritos, coleções, séries e tags.</small></div>
+          </div>
+          <div class="share-line nao">
+            <i data-lucide="x"></i>
+            <div><strong>Não vai no arquivo</strong>
+            <small>Os livros em si. Nenhum EPUB, PDF, quadrinho ou audiolivro é enviado. Quem receber precisa ter os arquivos dos livros para que as marcações voltem ao lugar.</small></div>
+          </div>
+        </div>
+        <div class="backup-status" id="share-pronto">
+          <i data-lucide="loader"></i>
+          <div>Preparando o arquivo...</div>
+        </div>`,
+      aoAbrir:()=>{
+        const btn=AppModal.confirmBtn;
+        if(btn)btn.disabled=true;
+        const aviso=document.getElementById('share-pronto');
+        preparo.then(()=>{
+          if(!aviso||!aviso.isConnected)return;
+          if(falhou||!arquivo){
+            aviso.className='backup-status alerta';
+            aviso.innerHTML='<i data-lucide="alert-triangle"></i><div>Não foi possível montar o arquivo.</div>';
+          }else{
+            aviso.className='backup-status ok';
+            aviso.innerHTML=`<i data-lucide="shield-check"></i><div>Arquivo pronto — <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>.</div>`;
+            if(btn)btn.disabled=false;
+          }
+          lucide.createIcons({root:aviso});
+        });
+      },
+      /* Chamado de dentro do clique: é exatamente esta a janela em
+         que o navegador aceita abrir a folha de compartilhamento. */
+      aoConfirmar:()=>{
+        if(!arquivo)return false;
+        /* Se o aparelho torcer o nariz para `application/zip`, ainda
+           vale tentar como arquivo genérico: alguns aceitam. Tudo
+           aqui dentro, sem `await`, para não perder o toque. */
+        let enviar=arquivo;
+        try{
+          if(navigator.canShare&&!navigator.canShare({files:[enviar]})){
+            const generico=new File([arquivo],arquivo.name,{type:'application/octet-stream'});
+            if(navigator.canShare({files:[generico]}))enviar=generico;
+          }
+          tentativa=navigator.share({
+            files:[enviar],
+            title:'Backup do Veredas Reader',
+            text:'Progresso e marcações da minha estante do Veredas Reader.'
+          });
+        }catch(e){console.warn(e);tentativa=Promise.reject(e)}
+        return true;
+      }
+    });
+    if(AppModal.confirmBtn)AppModal.confirmBtn.disabled=false;
+
+    if(!confirmou)return;               /* cancelou */
+
+    /* Confirmou mas o envio nem chegou a sair: ou o arquivo não ficou
+       pronto, ou o aparelho recusou o tipo. Em vez de não acontecer
+       nada — que é o pior desfecho possível — salva e diz por quê. */
+    if(!tentativa){
+      if(falhou||!pacote){
+        Utils.toast('Não foi possível montar o arquivo de backup.','alert-triangle');
+        return;
+      }
+      this.baixar(pacote);
+      await AppModal.alert({
+        title:'Seu aparelho não aceitou enviar este arquivo',
+        message:'O backup foi salvo aqui mesmo. Você pode enviá-lo abrindo o aplicativo de sua preferência e anexando o arquivo a partir dos downloads.',
+        icon:'download',confirmText:'Entendi'
+      });
+      await this.registrarBackupFeito(pacote);
+      return;
+    }
+
+    try{
+      await tentativa;
+    }catch(err){
+      if(err&&err.name==='AbortError')return;   /* fechou a folha: nada a dizer */
+      console.warn('Compartilhamento recusado; salvando o arquivo.',err);
+      if(pacote)this.baixar(pacote);
+      Utils.toast('Não deu para abrir a lista de aplicativos; o arquivo foi salvo.','download');
+      if(pacote)await this.registrarBackupFeito(pacote);
+      return;
+    }
+    if(pacote)await this.registrarBackupFeito(pacote);
   },
 
   /* ---------- restaurar ---------- */
@@ -10136,7 +10336,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 10';
+const BUILD='2026-09-20 · 11';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -10847,15 +11047,26 @@ const FirstRun={
 
     const jaConvidado=!!App.state.settings.scanInvited;
     if(!jaConvidado){
-      App.state.settings.scanInvited=true;
-      try{await App.persistSettings()}catch(e){console.warn(e)}
       const vazia=!(App.library&&App.library.allBooks.length);
       if(vazia&&DeviceScan.supported()){
         const quer=await this.inviteScan();
+        /* A marca de "já convidei" só é gravada DEPOIS da resposta.
+           Antes, ela era gravada assim que o convite ia aparecer — e
+           bastava a pessoa fechar o aplicativo, ou a página recarregar
+           naquele instante, para o convite nunca mais voltar, mesmo
+           sem ter sido respondido. O convite é de uma vez só; que
+           seja de uma vez de verdade. */
+        App.state.settings.scanInvited=true;
+        try{await App.persistSettings()}catch(e){console.warn(e)}
         this.hide();
         if(quer)await DeviceScan.start({auto:true});
         return;
       }
+      /* Sem convite a fazer (estante já tem livros, ou o aparelho não
+         sabe escolher pastas): fica registrado assim mesmo, para não
+         reaparecer no futuro sem motivo. */
+      App.state.settings.scanInvited=true;
+      try{await App.persistSettings()}catch(e){console.warn(e)}
     }
     this.hide();
   },
