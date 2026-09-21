@@ -1,5 +1,5 @@
 /* ============================================================
-   SERVICE WORKER PWA
+   SERVICE WORKER (cache para uso sem internet)
    ============================================================ */
 if ('serviceWorker' in navigator) {
   /* Havia um service worker no comando ANTES desta página carregar?
@@ -10647,7 +10647,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 29';
+const BUILD='2026-09-20 · 30';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -10666,115 +10666,9 @@ const Docs={
     'lic-libarchive':{title:'libarchive',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-libarchive.txt',kind:'txt'}
   },
   fallbacks:{
-    sobre:[
-      '# Veredas Reader',
-      '',
-      'O Veredas Reader é um leitor de livros digitais que funciona inteiramente no seu dispositivo.',
-      'Ele abre arquivos **EPUB**, **MOBI**, **PDF**, **TXT**, **MD** (Markdown) e **DOCX**, lê quadrinhos em',
-      '**CBZ**, **CBR**, **CB7** e **CBT**, toca audiolivros em **MP3** e **M4B**,',
-      'reproduz vídeos em **MP4**, guarda a sua estante no dispositivo e preserva marcações, citações, anotações e progresso.',
-      '',
-      '## O que ele faz',
-      '',
-      '- Importa livros do seu aparelho e mantém uma cópia local para leitura no dispositivo.',
-      '- Lê quadrinhos com zoom por pinça, revista aberta no modo paisagem, sentido mangá e rolagem contínua.',
-      '- Organiza a estante por status, coleções, séries, autores e tags.',
-      '- Permite grifar trechos, criar citações, anotações e marcadores.',
-      '- Ajusta tema, tipografia, espaçamento, margens, brilho e modo de virada de página.',
-      '- Lê o texto em voz alta com as vozes disponíveis no dispositivo.',
-      '- Toca audiolivros e vídeos com capítulos, marcadores, velocidade ajustável, timer de sono e retomada exata de onde você parou.',
-      '- Guarda o sentido de rolagem de cada livro separadamente: mudar em um não muda nos outros.',
-      '- Converte PDF em EPUB localmente, sem enviar o arquivo para lugar nenhum.',
-      '',
-      '## Tecnologia',
-      '',
-      'O aplicativo é uma PWA: depois do primeiro carregamento, funciona sem internet.',
-      'Todo o conteúdo fica armazenado no navegador do próprio aparelho.',
-      '',
-      '**Nada é buscado na internet durante o uso.** Todas as bibliotecas de que o leitor',
-      'precisa acompanham o aplicativo, na pasta `vendor`: o **Lucide** (ícones), o **JSZip**',
-      '(EPUB, CBZ e o arquivo de backup), o **PDF.js** (PDF) e o **Mammoth.js** (DOCX).',
-      'Por isso o leitor abre e funciona igual com o aparelho em modo avião, e não deixa de',
-      'funcionar se um servidor de terceiros sair do ar ou mudar de endereço.',
-      '',
-      'Quadrinhos em **CBR**, **CB7** e **CBT** usam o **libarchive** compilado para',
-      'WebAssembly, que também acompanha o aplicativo mas só é carregado quando você abre',
-      'um arquivo desse tipo.',
-      '',
-      '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/sobre.md`.'
-    ].join('\n'),
-    privacidade:[
-      '# Política de privacidade',
-      '',
-      'O Veredas Reader foi construído para funcionar **sem coletar dados pessoais**.',
-      '',
-      '## Dados que ficam no seu dispositivo',
-      '',
-      '- Os livros que você importa e a cópia usada para leitura no dispositivo.',
-      '- Seu progresso de leitura, marcadores, grifos, citações e anotações.',
-      '- Suas preferências de tema, tipografia e leitura.',
-      '',
-      'Essas informações são gravadas no armazenamento local do navegador (IndexedDB) e',
-      '**não são enviadas para servidores do aplicativo**.',
-      '',
-      '## Permissões',
-      '',
-      'O aplicativo só acessa arquivos e pastas que você escolhe explicitamente, no momento em',
-      'que você escolhe. Nenhuma varredura acontece sem a sua autorização.',
-      '',
-      '## Conexões com a internet',
-      '',
-      '**O aplicativo não faz nenhuma requisição à internet durante o uso.** Todas as',
-      'bibliotecas de que ele precisa acompanham o próprio aplicativo, na pasta `vendor`.',
-      'Nada é buscado em servidores de terceiros, nem na primeira abertura, nem depois —',
-      'por isso nenhum provedor externo chega a ver o seu endereço IP ou o seu navegador.',
-      '',
-      '## Backup',
-      '',
-      'O arquivo de backup é gerado no seu aparelho e entregue a você. **Ele não é enviado a',
-      'nenhum servidor.** Onde guardá-lo é decisão sua. Ele contém seu progresso, suas',
-      'marcações e a organização da estante — não contém os livros em si.',
-      '',
-      '## Remoção dos dados',
-      '',
-      'Você pode remover qualquer livro pela própria estante. Limpar os dados do site no',
-      'navegador apaga toda a biblioteca local de forma definitiva — por isso vale manter',
-      'um backup antes.',
-      '',
-      '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/politica-de-privacidade.md`.'
-    ].join('\n'),
-    termos:[
-      '# Termos de uso',
-      '',
-      'Ao usar o Veredas Reader você concorda com as condições abaixo.',
-      '',
-      '## 1. Uso do aplicativo',
-      '',
-      'O aplicativo é oferecido para leitura pessoal de arquivos que você já possui.',
-      'Você é responsável por ter os direitos de uso dos livros que importa.',
-      '',
-      '## 2. Conteúdo protegido',
-      '',
-      'O aplicativo não remove proteções de DRM nem contorna medidas técnicas de proteção.',
-      'Arquivos protegidos podem não abrir.',
-      '',
-      '## 3. Responsabilidade sobre os dados',
-      '',
-      'A biblioteca fica armazenada apenas no seu dispositivo. Faça suas próprias cópias de',
-      'segurança: a perda de dados do navegador implica a perda da estante local.',
-      '',
-      '## 4. Garantias',
-      '',
-      'O aplicativo é fornecido "como está", sem garantias de funcionamento ininterrupto ou',
-      'de compatibilidade com todos os arquivos e dispositivos.',
-      '',
-      '## 5. Código aberto',
-      '',
-      'O aplicativo usa bibliotecas de terceiros, listadas em Sobre > Licenças de código aberto,',
-      'cada uma sujeita à sua própria licença.',
-      '',
-      '> Este texto é a versão embutida. O conteúdo completo fica em `sobre-politicas-e-termos/termos-de-uso.md`.'
-    ].join('\n'),
+    /* Sobre, Política e Termos não têm cópia aqui: vêm de
+       sobre-politicas-e-termos/textos.js (gerado a partir dos .md), que
+       é carregado como <script> e por isso funciona até em file://. */
     /* Estes textos aparecem quando o arquivo da pasta licencas/ não
        pode ser lido — o caso de quem abre o index.html direto do
        disco, onde o navegador proíbe ler arquivos vizinhos. Como as
@@ -10916,20 +10810,49 @@ const Docs={
       if(e.key==='Escape'&&this.el.classList.contains('show')){e.stopPropagation();close()}
     },true);
   },
+  /* Documentos legais existem em português (o que vale) e em inglês,
+     mostrado a quem usa o aplicativo em qualquer outro idioma. */
+  lingua(){
+    const tag=(typeof Idiomas!=='undefined'&&Idiomas._tag)||'pt-BR';
+    return /^pt/i.test(tag)?'pt':'en';
+  },
+  carregarTextos(){
+    if(window.VEREDAS_DOCS)return Promise.resolve(true);
+    if(this._textos)return this._textos;
+    this._textos=new Promise(resolve=>{
+      const s=document.createElement('script');
+      s.src='sobre-politicas-e-termos/textos.js';
+      s.onload=()=>resolve(!!window.VEREDAS_DOCS);
+      s.onerror=()=>{this._textos=null;resolve(false)};
+      document.head.appendChild(s);
+    });
+    return this._textos;
+  },
   async load(key){
-    if(this.cache.has(key))return this.cache.get(key);
+    const lang=this.lingua();
+    const id=key+'|'+lang;
+    if(this.cache.has(id))return this.cache.get(id);
     const src=this.sources[key];
-    let data={text:this.fallbacks[key]||'',embedded:true};
+    /* Primeiro o .md (é nele que o texto é editado); se não der para
+       ler — aplicativo aberto direto do disco, ou sem internet antes de
+       o .md ter sido guardado —, a cópia de textos.js, que vai como
+       <script> e está sempre disponível. */
+    let data={text:this.fallbacks[key]||'',embedded:!!this.fallbacks[key]};
+    let achou=false;
     try{
-      const res=await fetch(src.path,{cache:'no-cache'});
+      const caminho=(src.kind==='md'&&lang==='en')?src.path.replace(/\.md$/,'.en.md'):src.path;
+      const res=await fetch(caminho,{cache:'no-cache'});
       if(res.ok){
         const text=(await res.text()).trim();
-        if(text)data={text,embedded:false};
+        if(text){data={text,embedded:false};achou=true}
       }
-    }catch(e){
-      console.warn(T('app.nao_foi_possivel_ler_path_usando_o_tex',{path:src.path}),e);
+    }catch(e){}
+    if(!achou&&src.kind==='md'){
+      await this.carregarTextos();
+      const t=window.VEREDAS_DOCS&&window.VEREDAS_DOCS[key]&&window.VEREDAS_DOCS[key][lang];
+      if(t)data={text:t,embedded:false};
     }
-    this.cache.set(key,data);
+    this.cache.set(id,data);
     return data;
   },
   /* Conversor de Markdown enxuto: cobre o que documentos legais usam. */
@@ -10963,7 +10886,7 @@ const Docs={
       closeList();para.push(line);
     }
     flushPara();closeList();
-    return html||`<p>${'Conteúdo indisponível no momento.'}</p>`;
+    return html||`<p>${this.lingua()==='en'?'Content unavailable right now.':'Conteúdo indisponível no momento.'}</p>`;
   },
   extras(key){
     if(key!=='sobre')return '';
@@ -10982,10 +10905,11 @@ const Docs={
       (v!=='—'?`<span class="doc-dep-ver">${v}</span>`:'')+
       `<span class="lic-tag">${l}</span></div>`
     ).join('');
-    return `<h2>${'Bibliotecas de código aberto'}</h2>`+
-      `<p>${'Todas acompanham o aplicativo, na pasta'} <code>vendor</code>. `+
-      'Nenhuma é buscada na internet: é por isso que o leitor abre e'+
-      'funciona igual com o aparelho em modo avião.</p>'+
+    const en=this.lingua()==='en';
+    return `<h2>${en?'Open-source libraries':'Bibliotecas de código aberto'}</h2>`+
+      `<p>${en
+        ?'All of them come with the app and stay on your device. None is downloaded from the internet, which is why reading works the same in airplane mode.'
+        :'Todas acompanham o aplicativo e ficam no seu aparelho. Nenhuma é baixada da internet: é por isso que a leitura funciona igual em modo avião.'}</p>`+
       `<div class="doc-dep-list">${deps}</div>`;
   },
   async open(key){
@@ -10999,13 +10923,13 @@ const Docs={
       key==='sobre'?T('app.subtitle_versao_build',{subtitle:src.subtitle,BUILD:BUILD}):src.subtitle;
     document.getElementById('doc-icon').innerHTML=`<i data-lucide="${src.icon}"></i>`;
     const body=document.getElementById('doc-body');
-    body.innerHTML='<div class="doc-loading"><div class="spinner"></div><span>Carregando documento…</span></div>';
+    body.innerHTML=`<div class="doc-loading"><div class="spinner"></div><span>${this.lingua()==='en'?'Loading document…':'Carregando documento…'}</span></div>`;
     this.el.classList.add('show');
     document.body.classList.add('modal-open');
     lucide.createIcons({root:this.el});
     const data=await this.load(key);
     const note=data.embedded
-      ?`<div class="doc-note"><i data-lucide="info"></i><div>${'Não foi possível ler'} <strong>${Utils.esc(src.path)}</strong>. Mostrando a versão incluída no aplicativo.</div></div>`
+      ?`<div class="doc-note"><i data-lucide="info"></i><div>${this.lingua()==='en'?'Showing the copy included in the app.':'Mostrando a cópia incluída no aplicativo.'}</div></div>`
       :'';
     body.innerHTML=note+(src.kind==='md'
       ?this.renderMarkdown(data.text)+this.extras(key)

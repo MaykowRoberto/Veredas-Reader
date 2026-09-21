@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-29';
+const VERSAO = 'veredas-2026-09-20-30';
 
 const ESSENCIAIS = [
   './',
@@ -62,6 +62,9 @@ const ESSENCIAIS = [
   /* O motor de idiomas e os dois arquivos que o aplicativo sempre
      precisa: o idioma da pessoa é carregado sob demanda, mas o
      inglês é a reserva de todos e o português é o original. */
+  /* Sobre, Política de Privacidade e Termos de Uso (pt e en). */
+  './sobre-politicas-e-termos/textos.js',
+
   './idioma.js',
   './idiomas/pt-BR.js',
   './idiomas/en.js'

@@ -1,33 +1,119 @@
-# Termos de uso
+# Termos e Condições de Uso
 
-**Última atualização:** 19 de setembro de 2026
+**Última atualização:** 21 de setembro de 2026
 
-Ao usar o Veredas Reader você concorda com as condições abaixo.
+Estes Termos e Condições de Uso ("Termos") regulam o uso do aplicativo **Veredas Reader** ("Aplicativo"), desenvolvido e disponibilizado por **Torres Software** ("Torres Software", "nós"). Leia com atenção: eles explicam o que o Aplicativo faz, o que você pode e o que não pode fazer com ele e quais são as responsabilidades de cada parte.
 
-## 1. Uso do aplicativo
+Contato: **torres.software.app@gmail.com**
 
-O aplicativo é oferecido para leitura pessoal de arquivos que você já possui. Você é responsável por ter os direitos de uso dos livros, quadrinhos e audiolivros que importa.
+## 1. Aceitação
 
-## 2. Conteúdo protegido
+1.1. Ao baixar, instalar, acessar ou usar o Aplicativo, você declara que leu, entendeu e concorda com estes Termos e com a **Política de Privacidade**, que faz parte deles. Se não concordar com alguma condição, não use o Aplicativo.
 
-O aplicativo **não remove proteções de DRM** nem contorna medidas técnicas de proteção. Arquivos protegidos por DRM podem simplesmente não abrir, e isso é esperado.
+1.2. O aceite é registrado no próprio Aplicativo, na primeira vez em que ele é aberto, e pode ser revisto a qualquer momento em **Menu lateral > Sobre**.
 
-## 3. Responsabilidade sobre os seus dados
+1.3. Se você tiver menos de 18 anos, deve usar o Aplicativo com o conhecimento e a supervisão de seus pais ou responsáveis legais, que respondem pelos atos praticados nos termos da legislação civil.
 
-A sua biblioteca fica armazenada **apenas no seu dispositivo**. Não existe cópia em servidor nenhum, e por isso não há como recuperá-la para você se ela se perder.
+## 2. O que é o Aplicativo
 
-Limpar os dados do site no navegador, desinstalar o aplicativo ou trocar de aparelho apaga a estante local de forma definitiva. Use a função **Backup e restauração** para guardar suas marcações e seu progresso por conta própria, e guarde esse arquivo em lugar seguro.
+2.1. O Veredas Reader é exclusivamente uma **ferramenta de software** para organizar, ler e reproduzir arquivos digitais (como EPUB, MOBI, PDF, TXT, MD, DOCX, CBZ, CBR, CB7, CBT, MP3, M4B e MP4) que **já estão armazenados no seu dispositivo**.
 
-## 4. Garantias
+2.2. O Aplicativo **não hospeda, não vende, não fornece e não distribui** livros, textos, áudios, vídeos, quadrinhos ou qualquer outro conteúdo. Todo conteúdo aberto no Aplicativo é escolhido e importado por você.
 
-O aplicativo é fornecido **"como está"**, sem garantia de funcionamento ininterrupto ou de compatibilidade com todos os arquivos e todos os dispositivos. Formatos de livro digital variam muito na prática, e alguns arquivos podem abrir de forma imperfeita ou não abrir.
+2.3. A leitura e a reprodução acontecem **localmente, no seu dispositivo**. Nenhuma cópia do seu acervo, das suas anotações ou do seu progresso é enviada a servidores da Torres Software.
 
-Na máxima extensão permitida pela lei aplicável, o desenvolvedor não responde por perda de dados, lucros cessantes ou danos indiretos decorrentes do uso do aplicativo. Nada nestes termos afasta direitos que a legislação de defesa do consumidor garanta a você.
+## 3. Licença de uso
 
-## 5. Código aberto
+3.1. A Torres Software concede a você uma licença de uso **pessoal, limitada, não exclusiva, intransferível, não sublicenciável e revogável** do Aplicativo, para fins pessoais e não comerciais, nos termos da Lei nº 9.609/1998 (Lei de Software) e da Lei nº 9.610/1998 (Lei de Direitos Autorais).
 
-O aplicativo distribui bibliotecas de código aberto de terceiros, listadas em **Sobre → Licenças de código aberto**, cada uma sujeita à sua própria licença. Os textos completos acompanham o aplicativo, na pasta `licencas`.
+3.2. Esta licença **não transfere** a você nenhum direito de propriedade sobre o Aplicativo. Tudo o que não estiver expressamente permitido nestes Termos é reservado à Torres Software.
 
-## 6. Mudanças nestes termos
+## 4. Propriedade intelectual do Aplicativo
 
-Estes termos podem ser atualizados. A data no topo indica a versão vigente.
+4.1. O código-fonte e o código-objeto, a arquitetura, o design, a interface, os textos, os ícones próprios, o nome e a marca **Veredas Reader**, bem como os demais elementos do Aplicativo, são protegidos pela legislação brasileira e pelos tratados internacionais de propriedade intelectual e pertencem à Torres Software ou a seus licenciantes.
+
+4.2. Os componentes de código aberto de terceiros incluídos no Aplicativo continuam regidos por suas próprias licenças (item 12).
+
+## 5. Condutas proibidas
+
+É **proibido**, sem autorização prévia e por escrito da Torres Software:
+
+- **reproduzir, copiar, distribuir, publicar, vender, alugar, emprestar ou sublicenciar** o Aplicativo, no todo ou em parte;
+- praticar **engenharia reversa, descompilar, desmontar, decodificar** ou de qualquer forma tentar **extrair o código-fonte** do Aplicativo ou reconstruir sua lógica interna;
+- **modificar, adaptar, traduzir** o Aplicativo ou criar obras derivadas a partir dele, inclusive versões alteradas, "modificadas" ou "desbloqueadas";
+- tentar **invadir, hackear, burlar ou desativar** mecanismos de segurança, de licenciamento, de assinatura ou de exibição de anúncios do Aplicativo;
+- **remover, ocultar ou alterar** avisos de direitos autorais, marcas ou licenças;
+- usar o Aplicativo para **infringir direitos autorais** de terceiros, inclusive para consumir ou distribuir obras protegidas sem autorização (pirataria);
+- usar o Aplicativo para qualquer finalidade ilícita ou contrária a estes Termos.
+
+Ficam ressalvadas apenas as hipóteses expressamente autorizadas pelo art. 6º da Lei nº 9.609/1998 e pelas licenças de código aberto dos componentes de terceiros.
+
+A violação desta cláusula implica o cancelamento imediato da licença e sujeita o infrator às medidas civis e criminais cabíveis, inclusive às previstas no art. 12 da Lei nº 9.609/1998, nos arts. 102 a 110 da Lei nº 9.610/1998 e no art. 184 do Código Penal.
+
+## 6. Conteúdo importado e direitos autorais
+
+6.1. Você é o **único responsável** pela origem, pela legalidade e pelo licenciamento dos arquivos que importa, lê, reproduz ou compartilha pelo Aplicativo, e deve ter o direito de usá-los.
+
+6.2. A Torres Software não tem acesso ao seu acervo e não controla, não verifica e não se responsabiliza pelo conteúdo dos arquivos que você escolhe abrir.
+
+6.3. **Proteção técnica (DRM).** O Aplicativo respeita as medidas técnicas de proteção de direitos autorais: ele **não remove, não quebra e não contorna** DRM ou qualquer outra proteção. Arquivos protegidos podem simplesmente não abrir, e isso é esperado.
+
+6.4. **Compartilhamento.** Quando você compartilha um arquivo, um trecho ou um backup, o Aplicativo apenas aciona o recurso de compartilhamento do próprio sistema operacional. O que é compartilhado, e com quem, é decisão e responsabilidade sua.
+
+## 7. Versão gratuita, anúncios e assinatura
+
+7.1. **Versão gratuita.** O Aplicativo pode ser oferecido gratuitamente com a exibição de anúncios fornecidos por redes de publicidade de terceiros, como o **Google AdMob**. O tratamento de dados envolvido está descrito na Política de Privacidade.
+
+7.2. **Assinatura.** Você pode contratar uma assinatura, pela loja de aplicativos, para remover os anúncios. Preço, periodicidade, renovação automática e forma de cancelamento são informados na loja antes da contratação.
+
+7.3. Pagamentos, renovações, cancelamentos e reembolsos são processados **exclusivamente pela loja de aplicativos** (por exemplo, Google Play ou App Store) e seguem também os termos dessas plataformas. A Torres Software não recebe nem armazena dados do seu cartão ou da sua conta bancária.
+
+7.4. A assinatura pode ser cancelada a qualquer momento nas configurações da loja. O cancelamento interrompe as próximas cobranças; o período já pago continua valendo até o fim.
+
+7.5. Seus direitos como consumidor, inclusive o **direito de arrependimento** previsto no art. 49 do Código de Defesa do Consumidor, podem ser exercidos pelos canais da loja ou pelo nosso e-mail de contato.
+
+## 8. Seus dados e o backup
+
+8.1. Seu progresso, suas marcações, anotações, a organização da estante e a cópia dos arquivos usada para leitura ficam armazenados **somente no seu dispositivo**. A Torres Software não mantém cópia desses dados em servidores.
+
+8.2. Por isso, desinstalar o Aplicativo, limpar os dados dele, perder, danificar ou trocar o aparelho pode tornar esses dados **irrecuperáveis**, a menos que você tenha gerado um arquivo de backup pela função **Backup e restauração**.
+
+8.3. Guardar o arquivo de backup em lugar seguro é responsabilidade sua. Ele contém suas anotações e seu histórico de leitura: trate-o como um documento pessoal.
+
+## 9. Disponibilidade, atualizações e garantias
+
+9.1. Trabalhamos para que o Aplicativo funcione bem, mas os formatos de livro digital variam muito e dependem de como cada arquivo foi produzido. Por isso, **não garantimos** que todos os arquivos existentes abram perfeitamente, nem funcionamento ininterrupto em todos os aparelhos e versões de sistema.
+
+9.2. O Aplicativo pode receber atualizações que acrescentem, alterem ou removam recursos, inclusive para corrigir falhas, melhorar a segurança ou cumprir exigências legais e das lojas.
+
+9.3. Na máxima extensão permitida pela lei, a Torres Software não responde por danos indiretos, lucros cessantes ou perda de dados decorrentes de uso inadequado, de falhas do dispositivo ou do sistema operacional, de arquivos corrompidos ou de fatos de terceiros. **Nada nestes Termos exclui ou limita os direitos que o Código de Defesa do Consumidor assegura a você.**
+
+## 10. Suspensão e encerramento
+
+Você pode deixar de usar o Aplicativo a qualquer momento, bastando desinstalá-lo. Em caso de violação destes Termos, especialmente do item 5, a licença concedida é automaticamente cancelada, sem prejuízo das medidas legais cabíveis.
+
+## 11. Alterações destes Termos
+
+Estes Termos podem ser atualizados para refletir mudanças no Aplicativo ou na legislação. A data no topo indica a versão vigente. Alterações relevantes serão comunicadas no próprio Aplicativo antes de entrarem em vigor e, quando a lei exigir, será pedido um novo aceite.
+
+## 12. Licenças de código aberto
+
+O Aplicativo inclui componentes de código aberto de terceiros (por exemplo, leitura de PDF, descompactação de arquivos e ícones). Cada componente é licenciado sob sua própria licença (como MIT, ISC, Apache 2.0 e BSD), cujos textos completos podem ser consultados em **Sobre > Licenças de código aberto**. Nada nestes Termos restringe direitos concedidos por essas licenças em relação aos respectivos componentes.
+
+## 13. Lei aplicável e foro
+
+13.1. Estes Termos são regidos pelas leis da **República Federativa do Brasil**, em especial pelo Código de Defesa do Consumidor (Lei nº 8.078/1990), pelo Marco Civil da Internet (Lei nº 12.965/2014), pela Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018), pela Lei de Software (Lei nº 9.609/1998) e pela Lei de Direitos Autorais (Lei nº 9.610/1998).
+
+13.2. Fica eleito o foro do **domicílio do usuário** para resolver qualquer questão relacionada a estes Termos, conforme o art. 101, inciso I, do Código de Defesa do Consumidor.
+
+## 14. Disposições gerais
+
+14.1. Se alguma cláusula destes Termos for considerada inválida, as demais continuam válidas.
+
+14.2. A tolerância com o descumprimento de qualquer cláusula não significa renúncia ao direito de exigi-la.
+
+14.3. Estes Termos podem ser disponibilizados em outros idiomas por conveniência. Em caso de divergência, **prevalece a versão em português**.
+
+## 15. Contato
+
+Dúvidas, sugestões ou solicitações sobre estes Termos: **torres.software.app@gmail.com**

@@ -1,0 +1,121 @@
+# Terms and Conditions of Use
+
+**Last updated:** September 21, 2026
+
+> This English version is provided for convenience. In case of any discrepancy, the **Portuguese (Brazil) version prevails**.
+
+These Terms and Conditions of Use ("Terms") govern the use of the **Veredas Reader** application ("App"), developed and made available by **Torres Software** ("Torres Software", "we", "us"). Please read them carefully: they explain what the App does, what you may and may not do with it, and each party's responsibilities.
+
+Contact: **torres.software.app@gmail.com**
+
+## 1. Acceptance
+
+1.1. By downloading, installing, accessing or using the App, you confirm that you have read, understood and agree to these Terms and to the **Privacy Policy**, which is part of them. If you do not agree with any condition, do not use the App.
+
+1.2. Your acceptance is recorded in the App itself the first time it is opened, and the documents can be reviewed at any time under **Side menu > About**.
+
+1.3. If you are under 18, you must use the App with the knowledge and supervision of your parents or legal guardians, who are responsible for your acts under applicable civil law.
+
+## 2. What the App is
+
+2.1. Veredas Reader is exclusively a **software tool** to organize, read and play digital files (such as EPUB, MOBI, PDF, TXT, MD, DOCX, CBZ, CBR, CB7, CBT, MP3, M4B and MP4) that **are already stored on your device**.
+
+2.2. The App **does not host, sell, provide or distribute** books, texts, audio, video, comics or any other content. All content opened in the App is chosen and imported by you.
+
+2.3. Reading and playback happen **locally, on your device**. No copy of your library, notes or progress is sent to Torres Software servers.
+
+## 3. License to use
+
+3.1. Torres Software grants you a **personal, limited, non-exclusive, non-transferable, non-sublicensable and revocable** license to use the App for personal, non-commercial purposes, under Brazilian Law No. 9,609/1998 (Software Law) and Law No. 9,610/1998 (Copyright Law).
+
+3.2. This license **does not transfer** to you any ownership of the App. Anything not expressly permitted in these Terms is reserved to Torres Software.
+
+## 4. Intellectual property of the App
+
+4.1. The source code and object code, architecture, design, interface, texts, original icons, the **Veredas Reader** name and brand and all other elements of the App are protected by Brazilian law and international intellectual property treaties and belong to Torres Software or its licensors.
+
+4.2. Third-party open-source components included in the App remain governed by their own licenses (section 12).
+
+## 5. Prohibited conduct
+
+Without Torres Software's prior written authorization, you **may not**:
+
+- **reproduce, copy, distribute, publish, sell, rent, lend or sublicense** the App, in whole or in part;
+- **reverse engineer, decompile, disassemble, decode** or otherwise attempt to **extract the source code** of the App or reconstruct its internal logic;
+- **modify, adapt or translate** the App or create derivative works from it, including altered, "modded" or "unlocked" versions;
+- attempt to **break into, hack, bypass or disable** the App's security, licensing, subscription or ad-display mechanisms;
+- **remove, hide or alter** copyright, trademark or license notices;
+- use the App to **infringe third-party copyrights**, including consuming or distributing protected works without authorization (piracy);
+- use the App for any unlawful purpose or in breach of these Terms.
+
+The only exceptions are the cases expressly allowed by article 6 of Law No. 9,609/1998 and by the open-source licenses of third-party components.
+
+Breach of this section immediately terminates your license and subjects the offender to the applicable civil and criminal measures, including those provided in article 12 of Law No. 9,609/1998, articles 102 to 110 of Law No. 9,610/1998 and article 184 of the Brazilian Criminal Code.
+
+## 6. Imported content and copyright
+
+6.1. You are **solely responsible** for the origin, lawfulness and licensing of the files you import, read, play or share through the App, and you must have the right to use them.
+
+6.2. Torres Software has no access to your library and does not control, check or take responsibility for the content of the files you choose to open.
+
+6.3. **Technical protection (DRM).** The App respects technical copyright protection measures: it **does not remove, break or circumvent** DRM or any other protection. Protected files may simply not open, and this is expected.
+
+6.4. **Sharing.** When you share a file, a passage or a backup, the App only calls your operating system's own sharing feature. What is shared, and with whom, is your decision and responsibility.
+
+## 7. Free version, ads and subscription
+
+7.1. **Free version.** The App may be offered free of charge with ads provided by third-party advertising networks such as **Google AdMob**. The related data processing is described in the Privacy Policy.
+
+7.2. **Subscription.** You may purchase a subscription through the app store to remove ads. Price, billing period, automatic renewal and how to cancel are shown in the store before purchase.
+
+7.3. Payments, renewals, cancellations and refunds are processed **exclusively by the app store** (for example, Google Play or the App Store) and are also subject to those platforms' terms. Torres Software does not receive or store your card or bank details.
+
+7.4. You can cancel the subscription at any time in the store settings. Cancelling stops future charges; the period already paid remains valid until it ends.
+
+7.5. Your consumer rights, including the **right of withdrawal** under article 49 of the Brazilian Consumer Protection Code, may be exercised through the store's channels or through our contact e-mail.
+
+## 8. Your data and backups
+
+8.1. Your progress, marks, notes, shelf organization and the copy of the files used for reading are stored **only on your device**. Torres Software keeps no copy of this data on servers.
+
+8.2. Therefore, uninstalling the App, clearing its data, or losing, damaging or replacing your device may make this data **unrecoverable**, unless you have created a backup file using the **Backup and restore** feature.
+
+8.3. Keeping the backup file somewhere safe is your responsibility. It contains your notes and reading history: treat it as a personal document.
+
+## 9. Availability, updates and warranties
+
+9.1. We work to make the App run well, but e-book formats vary widely and depend on how each file was produced. Therefore, we **do not guarantee** that every existing file will open perfectly, nor uninterrupted operation on every device and system version.
+
+9.2. The App may receive updates that add, change or remove features, including to fix bugs, improve security or meet legal and app store requirements.
+
+9.3. To the maximum extent permitted by law, Torres Software is not liable for indirect damages, lost profits or data loss resulting from improper use, device or operating system failures, corrupted files or acts of third parties. **Nothing in these Terms excludes or limits the rights granted to you by the Brazilian Consumer Protection Code or other mandatory consumer laws.**
+
+## 10. Suspension and termination
+
+You may stop using the App at any time by uninstalling it. If these Terms are breached, especially section 5, the license granted is automatically terminated, without prejudice to any applicable legal measures.
+
+## 11. Changes to these Terms
+
+These Terms may be updated to reflect changes in the App or in the law. The date at the top shows the current version. Material changes will be announced in the App before they take effect and, where the law requires, your acceptance will be requested again.
+
+## 12. Open-source licenses
+
+The App includes third-party open-source components (for example, PDF reading, file decompression and icons). Each component is licensed under its own license (such as MIT, ISC, Apache 2.0 and BSD), whose full texts are available under **About > Open-source licenses**. Nothing in these Terms restricts the rights granted by those licenses regarding the respective components.
+
+## 13. Governing law and jurisdiction
+
+13.1. These Terms are governed by the laws of the **Federative Republic of Brazil**, in particular the Consumer Protection Code (Law No. 8,078/1990), the Brazilian Civil Rights Framework for the Internet (Law No. 12,965/2014), the General Data Protection Law (Law No. 13,709/2018), the Software Law (Law No. 9,609/1998) and the Copyright Law (Law No. 9,610/1998).
+
+13.2. The courts of the **user's place of residence** shall have jurisdiction over any matter related to these Terms, as provided in article 101, item I, of the Consumer Protection Code. This does not deprive users residing outside Brazil of any mandatory protection granted by the laws of their country of residence.
+
+## 14. General provisions
+
+14.1. If any provision of these Terms is held invalid, the remaining provisions remain in effect.
+
+14.2. Failure to enforce any provision is not a waiver of the right to enforce it.
+
+14.3. These Terms may be made available in other languages for convenience. In case of any discrepancy, the **Portuguese version prevails**.
+
+## 15. Contact
+
+Questions, suggestions or requests about these Terms: **torres.software.app@gmail.com**
