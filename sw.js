@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-17';
+const VERSAO = 'veredas-2026-09-20-29';
 
 const ESSENCIAIS = [
   './',
@@ -52,7 +52,19 @@ const ESSENCIAIS = [
   './vendor/fontes/inter-variavel.woff2',
   './vendor/fontes/literata-400.woff2',
   './vendor/fontes/literata-400-italico.woff2',
-  './vendor/fontes/literata-700.woff2'
+  './vendor/fontes/literata-700.woff2',
+  /* Os recortes cirílicos (*-cirilico.woff2, 53 KB) ficam de fora:
+     só quem usa a interface em russo precisa deles, e a página pede
+     para guardá-los pelo recado 'guardar-idiomas' lá embaixo. Um
+     livro em russo aberto por quem usa outra língua também os busca,
+     e aí o tratador de `fetch` os guarda. */
+
+  /* O motor de idiomas e os dois arquivos que o aplicativo sempre
+     precisa: o idioma da pessoa é carregado sob demanda, mas o
+     inglês é a reserva de todos e o português é o original. */
+  './idioma.js',
+  './idiomas/pt-BR.js',
+  './idiomas/en.js'
 
   /* vendor/libarchive/libarchive-embutido.js fica de fora de
      propósito: são 1,4 MB que só fazem falta para CBR, CB7 e CBT.
@@ -121,5 +133,30 @@ self.addEventListener('fetch', evento => {
 
 /* Permite que a página peça a troca imediata por uma versão nova. */
 self.addEventListener('message', evento => {
-  if (evento.data === 'atualizar-agora') self.skipWaiting();
+  if (evento.data === 'atualizar-agora') { self.skipWaiting(); return; }
+
+  /* A página avisa qual idioma ela carregou, para guardarmos aquele
+     arquivo.
+
+     Por que não guardar os doze de uma vez na instalação: são uns
+     600 KB, e cada pessoa usa um só. Por que não confiar no tratador
+     de `fetch` abaixo: na PRIMEIRA visita o service worker ainda não
+     controla a página, então o arquivo do idioma passa direto por ele
+     e é guardado apenas pelo cache comum do navegador — que o sistema
+     esvazia quando bem entende. Quem abrisse o aplicativo uma vez, em
+     espanhol, e depois ficasse sem internet podia encontrar a
+     interface em inglês.
+
+     Com este recado, o idioma é guardado de verdade já na primeira
+     visita. */
+  if (evento.data && evento.data.tipo === 'guardar-idiomas') {
+    const urls = Array.isArray(evento.data.urls) ? evento.data.urls : [];
+    evento.waitUntil(
+      caches.open(VERSAO).then(cache =>
+        Promise.all(urls.map(u =>
+          cache.match(u).then(ja => ja ? null : cache.add(new Request(u, { cache: 'reload' })).catch(() => {}))
+        ))
+      )
+    );
+  }
 });

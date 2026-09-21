@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260920-17">
+<link rel="stylesheet" href="styles.css?v=20260920-29">
 
 <!-- ============================================================
      DEPENDÊNCIAS
@@ -23,10 +23,10 @@
      arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
      versão, de onde veio e a impressão digital do arquivo.
      ============================================================ -->
-<script src="vendor/lucide/lucide.min.js?v=20260920-17"></script>
-<script src="vendor/jszip/jszip.min.js?v=20260920-17"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=20260920-17"></script>
-<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-17"></script>
+<script src="vendor/lucide/lucide.min.js?v=20260920-29"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260920-29"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260920-29"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-29"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -39,10 +39,10 @@
       <div class="brand-mark"><img src="logo.png" alt="Veredas Reader"></div>
       <span>Veredas Reader</span>
     </div>
-    <button class="bar-btn" id="btn-search-toggle" aria-label="Buscar">
+    <button class="bar-btn" id="btn-search-toggle" aria-label="Buscar" data-i18n-aria="ui.buscar">
       <i data-lucide="search"></i>
     </button>
-    <button class="bar-btn primary" id="btn-import" aria-label="Importar livro">
+    <button class="bar-btn primary" id="btn-import" aria-label="Importar livro" data-i18n-aria="ui.importar_livro">
       <i data-lucide="plus"></i>
     </button>
     <!-- input file: livros (epub, pdf, txt, md, docx, mobi), quadrinhos (cbz, cbr, cb7, cbt),
@@ -57,8 +57,8 @@
   <!-- SEARCH OVERLAY -->
   <div class="search-bar" id="search-bar">
     <i data-lucide="search" class="search-icon" style="width:18px;height:18px"></i>
-    <input id="library-search-input" placeholder="Buscar título, autor, tag..." autocomplete="off" autocapitalize="off" spellcheck="false">
-    <button class="bar-btn" id="btn-close-search" aria-label="Fechar busca">
+    <input id="library-search-input" placeholder="Buscar título, autor, tag..." data-i18n-placeholder="ui.buscar_titulo_autor_tag" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="bar-btn" id="btn-close-search" aria-label="Fechar busca" data-i18n-aria="ui.fechar_busca">
       <i data-lucide="x"></i>
     </button>
   </div>
@@ -71,50 +71,50 @@
       <div class="content-grid">
 
         <!-- SIDEBAR / DRAWER -->
-        <aside class="sidebar" id="sidebar" aria-label="Navegação da biblioteca">
+        <aside class="sidebar" id="sidebar" aria-label="Navegação da biblioteca" data-i18n-aria="ui.navegacao_da_biblioteca">
           <div class="sidebar-head">
             <div class="brand-mark"><img src="logo.png" alt="Veredas Reader"></div>
             <div style="min-width:0">
               <strong>Veredas Reader</strong>
-              <small>Sua biblioteca local</small>
+              <small data-i18n="ui.sua_biblioteca_local">Sua biblioteca local</small>
             </div>
-            <button class="bar-btn" id="btn-close-drawer" aria-label="Fechar menu">
+            <button class="bar-btn" id="btn-close-drawer" aria-label="Fechar menu" data-i18n-aria="ui.fechar_menu">
               <i data-lucide="x"></i>
             </button>
           </div>
 
           <div id="library-nav">
-            <div class="nav-title">Biblioteca</div>
-            <button class="nav-item active" data-filter="all"><i data-lucide="library"></i>Todos<span class="count" id="count-all">0</span></button>
-            <button class="nav-item" data-filter="reading"><i data-lucide="book-open-check"></i>Lendo<span class="count" id="count-reading">0</span></button>
-            <button class="nav-item" data-filter="read"><i data-lucide="circle-check"></i>Lidos<span class="count" id="count-read">0</span></button>
-            <button class="nav-item" data-filter="toread"><i data-lucide="bookmark-plus"></i>Para ler<span class="count" id="count-toread">0</span></button>
-            <button class="nav-item" data-filter="paused"><i data-lucide="pause-circle"></i>Pausados<span class="count" id="count-paused">0</span></button>
-            <button class="nav-item" data-filter="favorite"><i data-lucide="heart"></i>Favoritos<span class="count" id="count-favorite">0</span></button>
-            <button class="nav-item" data-filter="audio"><i data-lucide="headphones"></i>Áudio e vídeo<span class="count" id="count-audio">0</span></button>
+            <div class="nav-title" data-i18n="ui.biblioteca">Biblioteca</div>
+            <button class="nav-item active" data-filter="all" data-i18n="ui.todos"><i data-lucide="library"></i>Todos<span class="count" id="count-all">0</span></button>
+            <button class="nav-item" data-filter="reading" data-i18n="ui.lendo"><i data-lucide="book-open-check"></i>Lendo<span class="count" id="count-reading">0</span></button>
+            <button class="nav-item" data-filter="read" data-i18n="ui.lidos"><i data-lucide="circle-check"></i>Lidos<span class="count" id="count-read">0</span></button>
+            <button class="nav-item" data-filter="toread" data-i18n="app.para_ler_2"><i data-lucide="bookmark-plus"></i>Para ler<span class="count" id="count-toread">0</span></button>
+            <button class="nav-item" data-filter="paused" data-i18n="ui.pausados"><i data-lucide="pause-circle"></i>Pausados<span class="count" id="count-paused">0</span></button>
+            <button class="nav-item" data-filter="favorite" data-i18n="ui.favoritos"><i data-lucide="heart"></i>Favoritos<span class="count" id="count-favorite">0</span></button>
+            <button class="nav-item" data-filter="audio" data-i18n="app.audio_e_video"><i data-lucide="headphones"></i>Áudio e vídeo<span class="count" id="count-audio">0</span></button>
 
-            <div class="nav-title">Organização</div>
-            <button class="nav-item" data-filter="collections"><i data-lucide="layers-3"></i>Coleções</button>
-            <button class="nav-item" data-filter="series"><i data-lucide="library-big"></i>Séries</button>
-            <button class="nav-item" data-filter="authors"><i data-lucide="users"></i>Autores</button>
-            <button class="nav-item" data-filter="tags"><i data-lucide="tags"></i>Tags</button>
+            <div class="nav-title" data-i18n="ui.organizacao">Organização</div>
+            <button class="nav-item" data-filter="collections" data-i18n="app.colecoes"><i data-lucide="layers-3"></i>Coleções</button>
+            <button class="nav-item" data-filter="series" data-i18n="app.series"><i data-lucide="library-big"></i>Séries</button>
+            <button class="nav-item" data-filter="authors" data-i18n="ui.autores"><i data-lucide="users"></i>Autores</button>
+            <button class="nav-item" data-filter="tags" data-i18n="ui.tags"><i data-lucide="tags"></i>Tags</button>
 
-            <div class="nav-title">Minhas marcações</div>
-            <button class="nav-item" data-filter="bookmarks"><i data-lucide="bookmark"></i>Marcadores<span class="count" id="count-bookmarks">0</span></button>
-            <button class="nav-item" data-filter="notes"><i data-lucide="sticky-note"></i>Anotações<span class="count" id="count-notes">0</span></button>
-            <button class="nav-item" data-filter="quotes"><i data-lucide="quote"></i>Citações<span class="count" id="count-quotes">0</span></button>
+            <div class="nav-title" data-i18n="ui.minhas_marcacoes">Minhas marcações</div>
+            <button class="nav-item" data-filter="bookmarks" data-i18n="ui.marcadores"><i data-lucide="bookmark"></i>Marcadores<span class="count" id="count-bookmarks">0</span></button>
+            <button class="nav-item" data-filter="notes" data-i18n="app.anotacoes"><i data-lucide="sticky-note"></i>Anotações<span class="count" id="count-notes">0</span></button>
+            <button class="nav-item" data-filter="quotes" data-i18n="app.citacoes"><i data-lucide="quote"></i>Citações<span class="count" id="count-quotes">0</span></button>
 
-            <div class="nav-title">Sistema</div>
-            <button class="nav-item" id="nav-scan"><i data-lucide="folder-search"></i>Buscar livros no dispositivo</button>
-            <button class="nav-item" id="nav-backup"><i data-lucide="archive"></i>Backup e restauração</button>
-            <button class="nav-item" id="nav-settings"><i data-lucide="settings-2"></i>Configurações</button>
+            <div class="nav-title" data-i18n="ui.sistema">Sistema</div>
+            <button class="nav-item" id="nav-scan" data-i18n="ui.buscar_livros_no_dispositivo"><i data-lucide="folder-search"></i>Buscar livros no dispositivo</button>
+            <button class="nav-item" id="nav-backup" data-i18n="ui.backup_e_restauracao"><i data-lucide="archive"></i>Backup e restauração</button>
+            <button class="nav-item nav-item-duplo" id="nav-settings"><i data-lucide="settings-2"></i><span class="nav-rotulo"><span data-i18n="ui.configuracoes">Configurações</span><small data-i18n="ui.temas_e_idioma">Temas e idioma</small></span></button>
 
-            <button class="nav-item" id="nav-sobre-group" aria-expanded="false" aria-controls="nav-sobre-content">
+            <button class="nav-item" id="nav-sobre-group" data-i18n="ui.sobre" aria-expanded="false" aria-controls="nav-sobre-content">
               <i data-lucide="info"></i>Sobre<i class="nav-chevron" data-lucide="chevron-down"></i>
             </button>
             <div class="nav-sub" id="nav-sobre-content" hidden>
-              <button class="nav-item nav-sub-item" data-doc="sobre"><i data-lucide="info"></i>Sobre o aplicativo</button>
-              <button class="nav-item nav-sub-item" id="nav-licenses" aria-expanded="false" aria-controls="nav-licenses-group">
+              <button class="nav-item nav-sub-item" data-doc="sobre" data-i18n="app.sobre_o_aplicativo"><i data-lucide="info"></i>Sobre o aplicativo</button>
+              <button class="nav-item nav-sub-item" id="nav-licenses" data-i18n="ui.licencas_de_codigo_aberto" aria-expanded="false" aria-controls="nav-licenses-group">
                 <i data-lucide="scale"></i>Licenças de código aberto<i class="nav-chevron" data-lucide="chevron-down"></i>
               </button>
               <div class="nav-sub" id="nav-licenses-group" hidden>
@@ -125,8 +125,8 @@
                 <button class="nav-item nav-sub-item" data-doc="lic-libarchivejs"><i data-lucide="file-code-2"></i>libarchive.js<span class="lic-tag">MIT</span></button>
                 <button class="nav-item nav-sub-item" data-doc="lic-libarchive"><i data-lucide="file-code-2"></i>libarchive<span class="lic-tag">BSD-2-Clause</span></button>
               </div>
-              <button class="nav-item nav-sub-item" data-doc="privacidade"><i data-lucide="shield-check"></i>Política de privacidade</button>
-              <button class="nav-item nav-sub-item" data-doc="termos"><i data-lucide="file-text"></i>Termos de uso</button>
+              <button class="nav-item nav-sub-item" data-doc="privacidade" data-i18n="app.politica_de_privacidade"><i data-lucide="shield-check"></i>Política de privacidade</button>
+              <button class="nav-item nav-sub-item" data-doc="termos" data-i18n="app.termos_de_uso"><i data-lucide="file-text"></i>Termos de uso</button>
             </div>
           </div>
         </aside>
@@ -137,13 +137,13 @@
 
           <div class="toolbar">
             <div class="title-block">
-              <h2 id="section-title">Sua Biblioteca</h2>
-              <p id="section-subtitle">Toque em um livro para começar a ler.</p>
+              <h2 id="section-title" data-i18n="ui.sua_biblioteca">Sua Biblioteca</h2>
+              <p id="section-subtitle" data-i18n="ui.toque_em_um_livro_para_comecar_a_ler">Toque em um livro para começar a ler.</p>
             </div>
             <div class="toolbar-right">
-              <button class="soft-btn" id="btn-organize" aria-label="Agrupar livros" aria-haspopup="dialog" aria-controls="panel-sort">
+              <button class="soft-btn" id="btn-organize" aria-label="Agrupar livros" data-i18n-aria="ui.agrupar_livros" aria-haspopup="dialog" aria-controls="panel-sort">
                 <i data-lucide="list-filter"></i>
-                <span>Agrupar</span>
+                <span data-i18n="ui.agrupar">Agrupar</span>
               </button>
             </div>
           </div>
@@ -152,16 +152,16 @@
           <div class="backup-reminder" id="backup-reminder" hidden>
             <i data-lucide="shield-alert"></i>
             <div class="backup-reminder-text">
-              <strong id="backup-reminder-title">Sua estante não tem cópia de segurança</strong>
-              <small id="backup-reminder-sub">Se este aparelho se perder, o progresso e as marcações vão junto.</small>
+              <strong id="backup-reminder-title" data-i18n="ui.sua_estante_nao_tem_copia_de_seguranca">Sua estante não tem cópia de segurança</strong>
+              <small id="backup-reminder-sub" data-i18n="ui.se_este_aparelho_se_perder_o_progresso">Se este aparelho se perder, o progresso e as marcações vão junto.</small>
             </div>
             <div class="backup-reminder-actions">
-              <button class="soft-btn primary" id="backup-reminder-go"><i data-lucide="download"></i>Fazer backup</button>
-              <button class="soft-btn" id="backup-reminder-later">Agora não</button>
+              <button class="soft-btn primary" id="backup-reminder-go" data-i18n="ui.fazer_backup"><i data-lucide="download"></i>Fazer backup</button>
+              <button class="soft-btn" id="backup-reminder-later" data-i18n="ui.agora_nao">Agora não</button>
               <!-- Quem quer se livrar do aviso procura o desligamento
                    aqui, no próprio aviso, e não num painel que ainda
                    nem sabe que existe. Leva ao mesmo alerta. -->
-              <button class="soft-btn ghost" id="backup-reminder-never">Não avisar mais</button>
+              <button class="soft-btn ghost" id="backup-reminder-never" data-i18n="ui.nao_avisar_mais">Não avisar mais</button>
             </div>
           </div>
 
@@ -183,13 +183,13 @@
     <div class="reader-ui" id="reader-ui">
       <div class="reader-top">
         <div class="reader-actions">
-          <button class="reader-icon" id="btn-close-reader" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
+          <button class="reader-icon" id="btn-close-reader" aria-label="Voltar" data-i18n-aria="ui.voltar"><i data-lucide="arrow-left"></i></button>
         </div>
-        <div class="reader-title" id="reader-title">Carregando...</div>
+        <div class="reader-title" id="reader-title" data-i18n="ui.carregando">Carregando...</div>
         <div class="reader-actions">
-          <button class="reader-icon" id="btn-reader-layout" aria-label="Modo de leitura" title="Modo de leitura"><i data-lucide="arrow-left-right"></i></button>
-          <button class="reader-icon" id="btn-reader-tts" aria-label="Ouvir leitura" title="Ouvir leitura"><i data-lucide="headphones"></i></button>
-          <button class="reader-icon" id="btn-reader-toc" aria-label="Sumário"><i data-lucide="list"></i></button>
+          <button class="reader-icon" id="btn-reader-layout" aria-label="Modo de leitura" data-i18n-aria="ui.modo_de_leitura" title="Modo de leitura" data-i18n-title="ui.modo_de_leitura"><i data-lucide="arrow-left-right"></i></button>
+          <button class="reader-icon" id="btn-reader-tts" aria-label="Ouvir leitura" data-i18n-aria="ui.ouvir_leitura" title="Ouvir leitura" data-i18n-title="ui.ouvir_leitura"><i data-lucide="headphones"></i></button>
+          <button class="reader-icon" id="btn-reader-toc" aria-label="Sumário" data-i18n-aria="ui.sumario"><i data-lucide="list"></i></button>
         </div>
       </div>
       <div class="reader-bottom">
@@ -200,11 +200,11 @@
         </div>
         <div class="bottom-actions-row">
           <div class="reader-center-actions">
-            <button class="reader-icon" id="btn-reader-bookmark" title="Marcar página"><i data-lucide="bookmark"></i></button>
-            <button class="reader-icon" id="btn-reader-annotations" title="Minhas marcações"><i data-lucide="sticky-note"></i></button>
+            <button class="reader-icon" id="btn-reader-bookmark" title="Marcar página" data-i18n-title="ui.marcar_pagina"><i data-lucide="bookmark"></i></button>
+            <button class="reader-icon" id="btn-reader-annotations" title="Minhas marcações" data-i18n-title="ui.minhas_marcacoes"><i data-lucide="sticky-note"></i></button>
           </div>
           <div class="reader-center-actions">
-            <button class="reader-icon" id="btn-reader-settings" title="Personalizar"><i data-lucide="sliders-horizontal"></i></button>
+            <button class="reader-icon" id="btn-reader-settings" title="Personalizar" data-i18n-title="ui.personalizar"><i data-lucide="sliders-horizontal"></i></button>
           </div>
         </div>
       </div>
@@ -214,28 +214,28 @@
   <!-- ============================================================
        BOTTOM NAV
        ============================================================ -->
-  <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação principal">
-    <button data-filter="all" class="active"><i data-lucide="library"></i><span>Estante</span></button>
-    <button data-filter="reading"><i data-lucide="book-open"></i><span>Lendo</span></button>
-    <button data-filter="favorite"><i data-lucide="heart"></i><span>Favoritos</span></button>
-    <button data-filter="bookmarks"><i data-lucide="bookmark"></i><span>Marcas</span></button>
-    <button id="tab-more"><i data-lucide="menu"></i><span>Mais</span></button>
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação principal" data-i18n-aria="ui.navegacao_principal">
+    <button data-filter="all" class="active"><i data-lucide="library"></i><span data-i18n="ui.estante">Estante</span></button>
+    <button data-filter="reading"><i data-lucide="book-open"></i><span data-i18n="ui.lendo">Lendo</span></button>
+    <button data-filter="favorite"><i data-lucide="heart"></i><span data-i18n="ui.favoritos">Favoritos</span></button>
+    <button data-filter="bookmarks"><i data-lucide="bookmark"></i><span data-i18n="ui.marcas">Marcas</span></button>
+    <button id="tab-more"><i data-lucide="menu"></i><span data-i18n="ui.mais">Mais</span></button>
   </nav>
 
 </div>
 
 <!-- SELECTION POPUP -->
-<div class="selection-pop" id="selection-pop" aria-label="Ações do trecho">
-  <button id="sel-highlight"><i data-lucide="highlighter" style="width:14px;height:14px"></i>Grifar</button>
-  <button class="sel-color active" data-hl-color="#f3d76a" style="background:#f3d76a" aria-label="Amarelo"></button>
-  <button class="sel-color" data-hl-color="#b9efc7" style="background:#b9efc7" aria-label="Verde"></button>
-  <button class="sel-color" data-hl-color="#ffb9c8" style="background:#ffb9c8" aria-label="Rosa"></button>
-  <button class="sel-color" data-hl-color="#a8c6ff" style="background:#a8c6ff" aria-label="Azul"></button>
+<div class="selection-pop" id="selection-pop" aria-label="Ações do trecho" data-i18n-aria="ui.acoes_do_trecho">
+  <button id="sel-highlight" data-i18n="ui.grifar"><i data-lucide="highlighter" style="width:14px;height:14px"></i>Grifar</button>
+  <button class="sel-color active" data-hl-color="#f3d76a" style="background:#f3d76a" aria-label="Amarelo" data-i18n-aria="ui.amarelo"></button>
+  <button class="sel-color" data-hl-color="#b9efc7" style="background:#b9efc7" aria-label="Verde" data-i18n-aria="ui.verde"></button>
+  <button class="sel-color" data-hl-color="#ffb9c8" style="background:#ffb9c8" aria-label="Rosa" data-i18n-aria="ui.rosa"></button>
+  <button class="sel-color" data-hl-color="#a8c6ff" style="background:#a8c6ff" aria-label="Azul" data-i18n-aria="ui.azul"></button>
   <div class="sep"></div>
-  <button id="sel-quote"><i data-lucide="quote" style="width:14px;height:14px"></i>Citação</button>
+  <button id="sel-quote" data-i18n="app.citacao_2"><i data-lucide="quote" style="width:14px;height:14px"></i>Citação</button>
   <div class="sep"></div>
-  <button id="sel-note"><i data-lucide="sticky-note" style="width:14px;height:14px"></i>Anotar</button>
-  <button id="sel-share"><i data-lucide="share-2" style="width:14px;height:14px"></i>Enviar</button>
+  <button id="sel-note" data-i18n="ui.anotar"><i data-lucide="sticky-note" style="width:14px;height:14px"></i>Anotar</button>
+  <button id="sel-share" data-i18n="ui.enviar"><i data-lucide="share-2" style="width:14px;height:14px"></i>Enviar</button>
 </div>
 
 <!-- Comentário ou ação de marcação contextual dentro da página -->
@@ -249,13 +249,13 @@
      enquanto o livro aberto for de áudio. -->
 
 
-<section class="audio-player" id="audio-player" role="dialog" aria-modal="true" aria-label="Player de audiolivro" hidden>
+<section class="audio-player" id="audio-player" role="dialog" aria-modal="true" aria-label="Player de audiolivro" data-i18n-aria="ui.player_de_audiolivro" hidden>
   <div class="ap-bg" id="ap-bg" aria-hidden="true"></div>
   <div class="ap-shell">
     <header class="ap-top">
-      <button type="button" class="ap-icon" id="ap-collapse" aria-label="Minimizar player" title="Minimizar"><i data-lucide="chevron-down"></i></button>
+      <button type="button" class="ap-icon" id="ap-collapse" aria-label="Minimizar player" data-i18n-aria="ui.minimizar_player" title="Minimizar" data-i18n-title="ui.minimizar"><i data-lucide="chevron-down"></i></button>
       <div class="ap-top-mid" id="ap-top-mid" aria-live="off"></div>
-      <button type="button" class="ap-icon" id="ap-options" aria-label="Ajustes do áudio" title="Ajustes do áudio"><i data-lucide="sliders-horizontal"></i></button>
+      <button type="button" class="ap-icon" id="ap-options" aria-label="Ajustes do áudio" data-i18n-aria="ui.ajustes_do_audio" title="Ajustes do áudio" data-i18n-title="ui.ajustes_do_audio"><i data-lucide="sliders-horizontal"></i></button>
     </header>
 
     <div class="ap-body">
@@ -264,7 +264,7 @@
         <div class="ap-video" id="ap-video" hidden>
           <video id="video-el" preload="auto" playsinline webkit-playsinline
                  disablepictureinpicture controlslist="nodownload noremoteplayback nofullscreen"
-                 aria-label="Vídeo em reprodução"></video>
+                 aria-label="Vídeo em reprodução" data-i18n-aria="ui.video_em_reproducao"></video>
         </div>
       </div>
 
@@ -273,66 +273,66 @@
           <h2 class="ap-title" id="ap-title"></h2>
           <p class="ap-author" id="ap-author"></p>
           <p class="ap-narrator" id="ap-narrator"></p>
-          <button type="button" class="ap-chapter-btn" id="ap-chapter-btn" hidden aria-label="Abrir a lista de capítulos">
+          <button type="button" class="ap-chapter-btn" id="ap-chapter-btn" hidden aria-label="Abrir a lista de capítulos" data-i18n-aria="ui.abrir_a_lista_de_capitulos">
             <i data-lucide="list"></i><span id="ap-chapter-name"></span><i data-lucide="chevron-right"></i>
           </button>
         </div>
 
         <div class="ap-seek">
-          <input type="range" id="ap-seek" min="0" max="1" step="any" value="0" aria-label="Posição no áudio">
+          <input type="range" id="ap-seek" min="0" max="1" step="any" value="0" aria-label="Posição no áudio" data-i18n-aria="ui.posicao_no_audio">
           <div class="ap-times">
             <span id="ap-elapsed">0:00</span>
-            <button type="button" class="ap-scope" id="ap-scope" hidden aria-label="Alternar entre o progresso do capítulo e o do livro inteiro">Neste capítulo</button>
+            <button type="button" class="ap-scope" id="ap-scope" hidden aria-label="Alternar entre o progresso do capítulo e o do livro inteiro" data-i18n-aria="ui.alternar_entre_o_progresso_do_capitulo" data-i18n="ui.neste_capitulo">Neste capítulo</button>
             <span id="ap-remaining">-0:00</span>
           </div>
         </div>
 
         <div class="ap-transport">
-          <button type="button" class="ap-icon" id="ap-prev" hidden aria-label="Capítulo anterior" title="Capítulo anterior"><i data-lucide="skip-back"></i></button>
-          <button type="button" class="ap-skip" id="ap-back" aria-label="Voltar 15 segundos">
+          <button type="button" class="ap-icon" id="ap-prev" hidden aria-label="Capítulo anterior" data-i18n-aria="ui.capitulo_anterior" title="Capítulo anterior" data-i18n-title="ui.capitulo_anterior"><i data-lucide="skip-back"></i></button>
+          <button type="button" class="ap-skip" id="ap-back" aria-label="Voltar 15 segundos" data-i18n-aria="ui.voltar_15_segundos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><text id="ap-back-num" x="12" y="15.3" text-anchor="middle" stroke="none" fill="currentColor" font-size="7.4" font-weight="800" font-family="Inter,system-ui,sans-serif">15</text></svg>
           </button>
-          <button type="button" class="ap-play" id="ap-play" aria-label="Reproduzir">
+          <button type="button" class="ap-play" id="ap-play" aria-label="Reproduzir" data-i18n-aria="ui.reproduzir">
             <svg class="i-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.53.85l10.9-6.86a1 1 0 0 0 0-1.7L9.53 4.29A1 1 0 0 0 8 5.14z"/></svg>
             <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4"/></svg>
             <span class="ap-spin" aria-hidden="true"></span>
           </button>
-          <button type="button" class="ap-skip" id="ap-fwd" aria-label="Avançar 30 segundos">
+          <button type="button" class="ap-skip" id="ap-fwd" aria-label="Avançar 30 segundos" data-i18n-aria="ui.avancar_30_segundos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><text id="ap-fwd-num" x="12" y="15.3" text-anchor="middle" stroke="none" fill="currentColor" font-size="7.4" font-weight="800" font-family="Inter,system-ui,sans-serif">30</text></svg>
           </button>
-          <button type="button" class="ap-icon" id="ap-next" hidden aria-label="Próximo capítulo" title="Próximo capítulo"><i data-lucide="skip-forward"></i></button>
+          <button type="button" class="ap-icon" id="ap-next" hidden aria-label="Próximo capítulo" data-i18n-aria="ui.proximo_capitulo" title="Próximo capítulo" data-i18n-title="ui.proximo_capitulo"><i data-lucide="skip-forward"></i></button>
         </div>
 
         <div class="ap-tools">
-          <button type="button" id="ap-speed" aria-label="Velocidade de reprodução"><span class="ap-speed-val" id="ap-speed-val">1×</span><small>Velocidade</small></button>
-          <button type="button" id="ap-sleep" aria-label="Timer de sono"><i data-lucide="moon"></i><small id="ap-sleep-label">Timer</small></button>
-          <button type="button" id="ap-bookmark-add" aria-label="Marcar este ponto"><i data-lucide="bookmark-plus"></i><small>Marcar</small></button>
-          <button type="button" id="ap-bookmarks" aria-label="Ver marcadores"><i data-lucide="bookmark"></i><small>Marcadores</small></button>
+          <button type="button" id="ap-speed" aria-label="Velocidade de reprodução" data-i18n-aria="ui.velocidade_de_reproducao"><span class="ap-speed-val" id="ap-speed-val">1×</span><small data-i18n="ui.velocidade">Velocidade</small></button>
+          <button type="button" id="ap-sleep" aria-label="Timer de sono" data-i18n-aria="ui.timer_de_sono"><i data-lucide="moon"></i><small id="ap-sleep-label" data-i18n="ui.timer">Timer</small></button>
+          <button type="button" id="ap-bookmark-add" aria-label="Marcar este ponto" data-i18n-aria="ui.marcar_este_ponto"><i data-lucide="bookmark-plus"></i><small data-i18n="ui.marcar">Marcar</small></button>
+          <button type="button" id="ap-bookmarks" aria-label="Ver marcadores" data-i18n-aria="ui.ver_marcadores"><i data-lucide="bookmark"></i><small data-i18n="ui.marcadores">Marcadores</small></button>
         </div>
 
         <div class="ap-volume" id="ap-volume-wrap">
-          <button type="button" id="ap-mute" aria-label="Silenciar"><i data-lucide="volume-2" class="i-vol"></i><i data-lucide="volume-x" class="i-mute"></i></button>
-          <input type="range" id="ap-volume" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+          <button type="button" id="ap-mute" aria-label="Silenciar" data-i18n-aria="ui.silenciar"><i data-lucide="volume-2" class="i-vol"></i><i data-lucide="volume-x" class="i-mute"></i></button>
+          <input type="range" id="ap-volume" min="0" max="1" step="0.01" value="1" aria-label="Volume" data-i18n-aria="ui.volume">
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<div class="mini-player" id="mini-player" role="region" aria-label="Audiolivro em reprodução" hidden>
+<div class="mini-player" id="mini-player" role="region" aria-label="Audiolivro em reprodução" data-i18n-aria="ui.audiolivro_em_reproducao" hidden>
   <div class="mini-progress" aria-hidden="true"><span id="mini-progress"></span></div>
-  <button type="button" class="mini-open" id="mini-open" aria-label="Abrir o player">
+  <button type="button" class="mini-open" id="mini-open" aria-label="Abrir o player" data-i18n-aria="ui.abrir_o_player">
     <span class="mini-cover" id="mini-cover"></span>
     <span class="mini-text"><strong id="mini-title"></strong><small id="mini-sub"></small></span>
   </button>
-  <button type="button" class="mini-btn mini-back" id="mini-back" aria-label="Voltar 15 segundos">
+  <button type="button" class="mini-btn mini-back" id="mini-back" aria-label="Voltar 15 segundos" data-i18n-aria="ui.voltar_15_segundos">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><text x="12" y="15.3" text-anchor="middle" stroke="none" fill="currentColor" font-size="7.4" font-weight="800" font-family="Inter,system-ui,sans-serif">15</text></svg>
   </button>
-  <button type="button" class="mini-btn mini-play" id="mini-play" aria-label="Reproduzir">
+  <button type="button" class="mini-btn mini-play" id="mini-play" aria-label="Reproduzir" data-i18n-aria="ui.reproduzir">
     <svg class="i-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.53.85l10.9-6.86a1 1 0 0 0 0-1.7L9.53 4.29A1 1 0 0 0 8 5.14z"/></svg>
     <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4"/></svg>
   </button>
-  <button type="button" class="mini-btn" id="mini-close" aria-label="Fechar o player"><i data-lucide="x"></i></button>
+  <button type="button" class="mini-btn" id="mini-close" aria-label="Fechar o player" data-i18n-aria="ui.fechar_o_player"><i data-lucide="x"></i></button>
 </div>
 
 <!-- BACKDROP -->
@@ -341,19 +341,33 @@
 <!-- PANELS -->
 <section class="panel" id="panel-settings">
   <div class="panel-head">
-    <div><h3>Personalizar leitura</h3><p>As preferências ficam salvas para as próximas leituras.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.personalizar_leitura">Personalizar leitura</h3><p data-i18n="ui.as_preferencias_ficam_salvas_para_as_p">As preferências ficam salvas para as próximas leituras.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="setting-section"><h4>Tema</h4>
-      <div class="theme-grid" id="theme-grid">
-        <button class="theme-option active" data-theme-value="light" style="background:#fbfbfa;color:#222">Claro</button>
-        <button class="theme-option" data-theme-value="sepia" style="background:#f3e8d0;color:#46341f">Sépia</button>
-        <button class="theme-option" data-theme-value="dark" style="background:#1a1a1a;color:#eee">Escuro</button>
-        <button class="theme-option" data-theme-value="ocean" style="background:#0f172a;color:#38bdf8">Oceano</button>
+    <!-- ============================================================
+         IDIOMA
+         ------------------------------------------------------------
+         Primeira seção de propósito: quem abriu o aplicativo numa
+         língua que não lê precisa achar isto sem procurar. A lista é
+         montada pelo app.js a partir de Idiomas.DISPONIVEIS, com o
+         nome de cada idioma escrito no próprio idioma.
+         ============================================================ -->
+    <div class="setting-section"><h4 data-i18n="ui.idioma">Idioma</h4>
+      <div class="form-group">
+        <select class="select" id="set-idioma" aria-label="Idioma do aplicativo" data-i18n-aria="ui.idioma_do_aplicativo"></select>
+        <p class="setting-hint" id="idioma-dica" data-i18n="ui.o_aplicativo_segue_o_idioma_do_apare">O aplicativo segue o idioma do aparelho. Se o seu idioma ainda não existir aqui, ele abre em inglês.</p>
       </div>
     </div>
-    <div class="setting-section"><h4>Tipografia</h4>
+    <div class="setting-section"><h4 data-i18n="ui.tema">Tema</h4>
+      <div class="theme-grid" id="theme-grid">
+        <button class="theme-option active" data-theme-value="light" style="background:#fbfbfa;color:#222" data-i18n="ui.claro">Claro</button>
+        <button class="theme-option" data-theme-value="sepia" style="background:#f3e8d0;color:#46341f" data-i18n="ui.sepia">Sépia</button>
+        <button class="theme-option" data-theme-value="dark" style="background:#1a1a1a;color:#eee" data-i18n="ui.escuro">Escuro</button>
+        <button class="theme-option" data-theme-value="ocean" style="background:#0f172a;color:#38bdf8" data-i18n="ui.oceano">Oceano</button>
+      </div>
+    </div>
+    <div class="setting-section"><h4 data-i18n="ui.tipografia">Tipografia</h4>
       <div class="seg" id="font-grid">
         <button class="active" data-font="'Literata',Georgia,serif">Literata</button>
         <button data-font="'Inter',system-ui,sans-serif">Inter</button>
@@ -361,184 +375,184 @@
       </div>
     </div>
     <div class="setting-section">
-      <h4>Texto</h4>
-      <div class="form-group"><label class="form-label">Tamanho</label>
+      <h4 data-i18n="ui.texto">Texto</h4>
+      <div class="form-group"><label class="form-label" data-i18n="ui.tamanho">Tamanho</label>
         <div class="range-row"><input id="set-font-size" type="range" min="12" max="32" step="1"><div class="range-value" id="val-font-size"></div></div>
       </div>
-      <div class="form-group"><label class="form-label">Espaçamento</label>
+      <div class="form-group"><label class="form-label" data-i18n="ui.espacamento">Espaçamento</label>
         <div class="range-row"><input id="set-line-height" type="range" min="1.2" max="2.2" step=".05"><div class="range-value" id="val-line-height"></div></div>
       </div>
-      <div class="form-group"><label class="form-label">Margens</label>
+      <div class="form-group"><label class="form-label" data-i18n="ui.margens">Margens</label>
         <div class="range-row"><input id="set-margin" type="range" min="2" max="12" step="1"><div class="range-value" id="val-margin"></div></div>
       </div>
     </div>
     <div class="setting-section">
-      <h4>Cores personalizadas (Opcional)</h4>
+      <h4 data-i18n="ui.cores_personalizadas_opcional">Cores personalizadas (Opcional)</h4>
       <div class="color-row">
-        <div><label class="form-label">Fundo</label><input class="color-input" id="set-reader-bg" type="color"></div>
-        <div><label class="form-label">Fonte</label><input class="color-input" id="set-reader-text" type="color"></div>
+        <div><label class="form-label" data-i18n="ui.fundo">Fundo</label><input class="color-input" id="set-reader-bg" type="color"></div>
+        <div><label class="form-label" data-i18n="ui.fonte">Fonte</label><input class="color-input" id="set-reader-text" type="color"></div>
       </div>
     </div>
     <div class="setting-section">
-      <h4>Brilho</h4>
+      <h4 data-i18n="ui.brilho">Brilho</h4>
       <div class="range-row"><input id="set-brightness" type="range" min="55" max="120" step="1"><div class="range-value" id="val-brightness"></div></div>
     </div>
     <div class="setting-section">
-      <h4>Orientação</h4>
+      <h4 data-i18n="ui.orientacao">Orientação</h4>
       <div class="seg" id="orientation-grid">
-        <button data-orientation="auto" class="active">Auto</button>
-        <button data-orientation="portrait">Retrato</button>
-        <button data-orientation="landscape">Paisagem</button>
+        <button data-orientation="auto" class="active" data-i18n="ui.auto">Auto</button>
+        <button data-orientation="portrait" data-i18n="ui.retrato">Retrato</button>
+        <button data-orientation="landscape" data-i18n="ui.paisagem">Paisagem</button>
       </div>
     </div>
     <div class="setting-section">
-      <h4>Modo de leitura</h4>
+      <h4 data-i18n="ui.modo_de_leitura">Modo de leitura</h4>
       <div class="seg reading-mode-seg" id="reading-mode-grid">
-        <button data-reading-mode="auto" class="active">Automático</button>
-        <button data-reading-mode="horizontal">Horizontal</button>
-        <button data-reading-mode="vertical">Vertical</button>
+        <button data-reading-mode="auto" class="active" data-i18n="ui.automatico">Automático</button>
+        <button data-reading-mode="horizontal" data-i18n="ui.horizontal">Horizontal</button>
+        <button data-reading-mode="vertical" data-i18n="ui.vertical">Vertical</button>
       </div>
-      <div class="drag-tip" id="reading-mode-tip">Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. Mudando durante a leitura, o ajuste fica guardado só naquele livro.</div>
+      <div class="drag-tip" id="reading-mode-tip" data-i18n="ui.automatico_usa_rolagem_horizontal_para">Automático usa rolagem horizontal para EPUB, MOBI, TXT e MD, e vertical para PDF e DOCX. Mudando durante a leitura, o ajuste fica guardado só naquele livro.</div>
     </div>
     <!-- Só aparece quando há um quadrinho aberto -->
     <div class="setting-section" id="comic-settings" hidden>
-      <h4>Quadrinhos</h4>
+      <h4 data-i18n="ui.quadrinhos">Quadrinhos</h4>
       <div class="form-group">
-        <label class="form-label">Como a página aparece</label>
+        <label class="form-label" data-i18n="ui.como_a_pagina_aparece">Como a página aparece</label>
         <div class="seg" id="comic-fit-grid">
-          <button data-comic-fit="page" class="active">Página inteira</button>
-          <button data-comic-fit="width">Largura da tela</button>
+          <button data-comic-fit="page" class="active" data-i18n="ui.pagina_inteira">Página inteira</button>
+          <button data-comic-fit="width" data-i18n="ui.largura_da_tela">Largura da tela</button>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Sentido da leitura</label>
+        <label class="form-label" data-i18n="ui.sentido_da_leitura">Sentido da leitura</label>
         <div class="seg" id="comic-direction-grid">
-          <button data-comic-dir="ltr" class="active">Normal →</button>
-          <button data-comic-dir="rtl">← Mangá</button>
+          <button data-comic-dir="ltr" class="active" data-i18n="ui.normal">Normal →</button>
+          <button data-comic-dir="rtl" data-i18n="ui.manga">← Mangá</button>
         </div>
       </div>
       <label class="toggle-row">
-        <span class="toggle-label"><strong>Revista aberta na horizontal</strong><small>Com o aparelho deitado, mostra duas páginas lado a lado — a capa fica sozinha, como numa revista de verdade.</small></span>
+        <span class="toggle-label"><strong data-i18n="ui.revista_aberta_na_horizontal">Revista aberta na horizontal</strong><small data-i18n="ui.com_o_aparelho_deitado_mostra_duas_pag">Com o aparelho deitado, mostra duas páginas lado a lado — a capa fica sozinha, como numa revista de verdade.</small></span>
         <span class="toggle"><input type="checkbox" id="comic-spread-toggle" checked><span></span></span>
       </label>
-      <div class="drag-tip">Normal vira da esquerda para a direita. Mangá inverte tudo: o deslize, o toque nas bordas e a ordem das duas páginas na revista aberta.</div>
-      <div class="drag-tip" id="comic-settings-tip">Gire o aparelho para a horizontal para ver duas páginas lado a lado.</div>
-      <div class="drag-tip">Dois toques ampliam no ponto tocado; com zoom, arraste para passear pela página. Pinçar com dois dedos também funciona.</div>
-      <div class="drag-tip">O botão de rolagem, no topo do leitor, alterna entre página a página e rolagem contínua (estilo webtoon). Na rolagem contínua as páginas emendam uma na outra, e ampliar alarga a página: você passeia por ela rolando para os lados.</div>
+      <div class="drag-tip" data-i18n="ui.normal_vira_da_esquerda_para_a_direita">Normal vira da esquerda para a direita. Mangá inverte tudo: o deslize, o toque nas bordas e a ordem das duas páginas na revista aberta.</div>
+      <div class="drag-tip" id="comic-settings-tip" data-i18n="ui.gire_o_aparelho_para_a_horizontal_para">Gire o aparelho para a horizontal para ver duas páginas lado a lado.</div>
+      <div class="drag-tip" data-i18n="ui.dois_toques_ampliam_no_ponto_tocado_co">Dois toques ampliam no ponto tocado; com zoom, arraste para passear pela página. Pinçar com dois dedos também funciona.</div>
+      <div class="drag-tip" data-i18n="ui.o_botao_de_rolagem_no_topo_do_leitor_a">O botão de rolagem, no topo do leitor, alterna entre página a página e rolagem contínua (estilo webtoon). Na rolagem contínua as páginas emendam uma na outra, e ampliar alarga a página: você passeia por ela rolando para os lados.</div>
     </div>
 
     <div class="setting-section">
-      <h4>Virada de página</h4>
+      <h4 data-i18n="ui.virada_de_pagina">Virada de página</h4>
       <div class="seg" id="page-turn-grid">
-        <button data-page-turn="curl" class="active">Folha real</button>
-        <button data-page-turn="slide">Deslizar</button>
-        <button data-page-turn="none">Sem animação</button>
+        <button data-page-turn="curl" class="active" data-i18n="ui.folha_real">Folha real</button>
+        <button data-page-turn="slide" data-i18n="ui.deslizar">Deslizar</button>
+        <button data-page-turn="none" data-i18n="ui.sem_animacao">Sem animação</button>
       </div>
-      <div class="drag-tip">Na leitura horizontal, arraste a página a partir da borda para dobrá-la com o dedo. Solte no meio do caminho para desistir da virada.</div>
+      <div class="drag-tip" data-i18n="ui.na_leitura_horizontal_arraste_a_pagina">Na leitura horizontal, arraste a página a partir da borda para dobrá-la com o dedo. Solte no meio do caminho para desistir da virada.</div>
     </div>
     <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
-      <button class="soft-btn" id="btn-restore-settings"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
+      <button class="soft-btn" id="btn-restore-settings" data-i18n="ui.restaurar_padroes"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
     </div>
   </div>
 </section>
 
 <section class="panel" id="panel-tts">
   <div class="panel-head">
-    <div><h3>Ouvir leitura</h3><p>Continue de onde parou, no seu ritmo.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.ouvir_leitura">Ouvir leitura</h3><p data-i18n="ui.continue_de_onde_parou_no_seu_ritmo">Continue de onde parou, no seu ritmo.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="tts-now-playing"><i data-lucide="headphones"></i><div><strong id="tts-book-title">Livro</strong><small id="tts-status">Pronto para começar</small></div></div>
+    <div class="tts-now-playing"><i data-lucide="headphones"></i><div><strong id="tts-book-title" data-i18n="ui.livro">Livro</strong><small id="tts-status" data-i18n="ui.pronto_para_comecar">Pronto para começar</small></div></div>
     <div class="tts-play-row">
-      <button class="reader-icon" id="btn-tts-back" aria-label="Trecho anterior"><i data-lucide="rewind"></i></button>
-      <button class="reader-icon primary" id="btn-tts-play" aria-label="Iniciar leitura"><i data-lucide="play"></i></button>
-      <button class="reader-icon" id="btn-tts-forward" aria-label="Próximo trecho"><i data-lucide="fast-forward"></i></button>
+      <button class="reader-icon" id="btn-tts-back" aria-label="Trecho anterior" data-i18n-aria="ui.trecho_anterior"><i data-lucide="rewind"></i></button>
+      <button class="reader-icon primary" id="btn-tts-play" aria-label="Iniciar leitura" data-i18n-aria="ui.iniciar_leitura"><i data-lucide="play"></i></button>
+      <button class="reader-icon" id="btn-tts-forward" aria-label="Próximo trecho" data-i18n-aria="ui.proximo_trecho"><i data-lucide="fast-forward"></i></button>
     </div>
-    <div class="setting-section"><h4>Velocidade</h4>
+    <div class="setting-section"><h4 data-i18n="ui.velocidade">Velocidade</h4>
       <div class="seg" id="tts-rate-grid">
         <button data-tts-rate="0.8">0,8×</button><button data-tts-rate="1" class="active">1×</button><button data-tts-rate="1.25">1,25×</button><button data-tts-rate="1.5">1,5×</button><button data-tts-rate="2">2×</button>
       </div>
     </div>
-    <div class="setting-section"><h4>Voz</h4>
-      <label class="form-label" for="tts-voice">Escolha uma voz disponível no dispositivo</label>
-      <select class="field" id="tts-voice"><option value="">Voz padrão do sistema</option></select>
+    <div class="setting-section"><h4 data-i18n="ui.voz">Voz</h4>
+      <label class="form-label" for="tts-voice" data-i18n="ui.escolha_uma_voz_disponivel_no_disposit">Escolha uma voz disponível no dispositivo</label>
+      <select class="field" id="tts-voice"><option value="" data-i18n="ui.voz_padrao_do_sistema">Voz padrão do sistema</option></select>
     </div>
-    <div class="setting-section"><h4>Durante a reprodução</h4>
-      <p style="font-size:12px;line-height:1.5;color:var(--muted)">A leitura avança página a página. Os controles do sistema aparecem quando o navegador oferece suporte.</p>
+    <div class="setting-section"><h4 data-i18n="ui.durante_a_reproducao">Durante a reprodução</h4>
+      <p style="font-size:12px;line-height:1.5;color:var(--muted)" data-i18n="ui.a_leitura_avanca_pagina_a_pagina_os_co">A leitura avança página a página. Os controles do sistema aparecem quando o navegador oferece suporte.</p>
     </div>
   </div>
 </section>
 
 <section class="panel" id="panel-organize">
   <div class="panel-head">
-    <div><h3>Organizar livro</h3><p>Estantes, coleções, tags e status.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.organizar_livro">Organizar livro</h3><p data-i18n="ui.estantes_colecoes_tags_e_status">Estantes, coleções, tags e status.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="organize-body"></div>
   <div class="panel-footer">
-    <button class="soft-btn" data-close-panel>Cancelar</button>
-    <button class="soft-btn primary" id="btn-save-organize">Salvar</button>
+    <button class="soft-btn" data-close-panel data-i18n="ui.cancelar">Cancelar</button>
+    <button class="soft-btn primary" id="btn-save-organize" data-i18n="ui.salvar">Salvar</button>
   </div>
 </section>
 
 <section class="panel" id="panel-annotations">
   <div class="panel-head">
-    <div><h3 id="annotations-title">Minhas marcações</h3><p>Grifos, citações, notas e marcadores deste livro.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 id="annotations-title" data-i18n="ui.minhas_marcacoes">Minhas marcações</h3><p data-i18n="ui.grifos_citacoes_notas_e_marcadores_des">Grifos, citações, notas e marcadores deste livro.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="annotations-body"></div>
 </section>
 
 <section class="panel" id="panel-toc">
   <div class="panel-head">
-    <div><h3>Sumário</h3><p>Toque em um capítulo para ir direto ao ponto.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.sumario">Sumário</h3><p data-i18n="ui.toque_em_um_capitulo_para_ir_direto_ao">Toque em um capítulo para ir direto ao ponto.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="toc-body"></div>
 </section>
 
 <section class="panel" id="panel-note">
   <div class="panel-head">
-    <div><h3>Sua anotação</h3><p>Edite ou adicione comentários ao seu trecho.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.sua_anotacao">Sua anotação</h3><p data-i18n="ui.edite_ou_adicione_comentarios_ao_seu_t">Edite ou adicione comentários ao seu trecho.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="form-group"><label class="form-label">Trecho</label>
+    <div class="form-group"><label class="form-label" data-i18n="ui.trecho">Trecho</label>
       <div class="annotation-card" id="selected-preview"></div>
     </div>
-    <div class="form-group"><label class="form-label">Sua nota</label>
-      <textarea class="textarea" id="note-text" placeholder="Escreva seu comentário, interpretação ou lembrete..."></textarea>
+    <div class="form-group"><label class="form-label" data-i18n="ui.sua_nota">Sua nota</label>
+      <textarea class="textarea" id="note-text" placeholder="Escreva seu comentário, interpretação ou lembrete..." data-i18n-placeholder="ui.escreva_seu_comentario_interpretacao_o"></textarea>
     </div>
   </div>
   <div class="panel-footer">
-    <button class="soft-btn" data-close-panel>Cancelar</button>
-    <button class="soft-btn primary" id="btn-save-note">Salvar nota</button>
+    <button class="soft-btn" data-close-panel data-i18n="ui.cancelar">Cancelar</button>
+    <button class="soft-btn primary" id="btn-save-note" data-i18n="ui.salvar_nota">Salvar nota</button>
   </div>
 </section>
 
 <section class="panel" id="panel-sort">
   <div class="panel-head">
-    <div><h3>Agrupar biblioteca</h3><p>Escolha como os livros serão organizados na estante.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.agrupar_biblioteca">Agrupar biblioteca</h3><p data-i18n="ui.escolha_como_os_livros_serao_organizad">Escolha como os livros serão organizados na estante.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
     <div id="sort-options" class="sort-options"></div>
-    <div class="drag-tip">Ao arrastar um livro para outra posição, a estante muda sozinha para Minha Ordem e mantém a sequência que você montou.</div>
+    <div class="drag-tip" data-i18n="ui.ao_arrastar_um_livro_para_outra_posica">Ao arrastar um livro para outra posição, a estante muda sozinha para Minha Ordem e mantém a sequência que você montou.</div>
   </div>
 </section>
 
 <section class="panel" id="panel-backup">
   <div class="panel-head">
-    <div><h3>Backup e restauração</h3><p>Sua estante, seu progresso e suas marcações num arquivo só.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.backup_e_restauracao">Backup e restauração</h3><p data-i18n="ui.sua_estante_seu_progresso_e_suas_marca">Sua estante, seu progresso e suas marcações num arquivo só.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="backup-body"></div>
 </section>
 
 <section class="panel" id="panel-library-filter">
   <div class="panel-head">
-    <div><h3 id="filter-panel-title">Organização</h3><p>Escolha uma dimensão para explorar sua biblioteca.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 id="filter-panel-title" data-i18n="ui.organizacao">Organização</h3><p data-i18n="ui.escolha_uma_dimensao_para_explorar_sua">Escolha uma dimensão para explorar sua biblioteca.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="filter-panel-body"></div>
 </section>
@@ -547,67 +561,67 @@
 <!-- ============================================================
      PAINÉIS DO AUDIOLIVRO
      ============================================================ -->
-<section class="panel" id="panel-audio-chapters" aria-label="Capítulos">
+<section class="panel" id="panel-audio-chapters" aria-label="Capítulos" data-i18n-aria="ui.capitulos">
   <div class="panel-head">
-    <div><h3>Capítulos</h3><p id="ap-chapters-sub">Toque em um capítulo para ir direto ao ponto.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.capitulos">Capítulos</h3><p id="ap-chapters-sub" data-i18n="ui.toque_em_um_capitulo_para_ir_direto_ao">Toque em um capítulo para ir direto ao ponto.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body" id="ap-chapter-list"></div>
 </section>
 
-<section class="panel" id="panel-audio-speed" aria-label="Velocidade">
+<section class="panel" id="panel-audio-speed" aria-label="Velocidade" data-i18n-aria="ui.velocidade">
   <div class="panel-head">
-    <div><h3>Velocidade</h3><p>A voz não fica mais grave nem mais aguda. A escolha vale para este e para os próximos livros.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.velocidade">Velocidade</h3><p data-i18n="ui.a_voz_nao_fica_mais_grave_nem_mais_agu">A voz não fica mais grave nem mais aguda. A escolha vale para este e para os próximos livros.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
     <div class="ap-chips" id="ap-speed-grid"></div>
     <div class="setting-section" style="border:none;padding-top:18px">
-      <h4>Ajuste fino</h4>
-      <div class="range-row"><input id="ap-speed-range" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Velocidade"><div class="range-value" id="ap-speed-readout">1×</div></div>
+      <h4 data-i18n="ui.ajuste_fino">Ajuste fino</h4>
+      <div class="range-row"><input id="ap-speed-range" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Velocidade" data-i18n-aria="ui.velocidade"><div class="range-value" id="ap-speed-readout">1×</div></div>
     </div>
-    <div style="text-align:center"><button class="soft-btn" id="ap-speed-reset"><i data-lucide="rotate-ccw"></i>Voltar para 1×</button></div>
+    <div style="text-align:center"><button class="soft-btn" id="ap-speed-reset" data-i18n="ui.voltar_para_1"><i data-lucide="rotate-ccw"></i>Voltar para 1×</button></div>
   </div>
 </section>
 
-<section class="panel" id="panel-audio-sleep" aria-label="Timer de sono">
+<section class="panel" id="panel-audio-sleep" aria-label="Timer de sono" data-i18n-aria="ui.timer_de_sono">
   <div class="panel-head">
-    <div><h3>Timer de sono</h3><p>O áudio diminui de volume aos poucos e pausa sozinho.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.timer_de_sono">Timer de sono</h3><p data-i18n="ui.o_audio_diminui_de_volume_aos_poucos_e">O áudio diminui de volume aos poucos e pausa sozinho.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body"><div class="sort-options" id="ap-sleep-list"></div></div>
 </section>
 
-<section class="panel" id="panel-audio-bookmarks" aria-label="Marcadores">
+<section class="panel" id="panel-audio-bookmarks" aria-label="Marcadores" data-i18n-aria="ui.marcadores">
   <div class="panel-head">
-    <div><h3>Marcadores</h3><p>Pontos que você guardou neste audiolivro.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.marcadores">Marcadores</h3><p data-i18n="ui.pontos_que_voce_guardou_neste_audioliv">Pontos que você guardou neste audiolivro.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <button class="soft-btn primary ap-bm-add" id="ap-bm-add"><i data-lucide="bookmark-plus"></i>Marcar agora</button>
+    <button class="soft-btn primary ap-bm-add" id="ap-bm-add" data-i18n="ui.marcar_agora"><i data-lucide="bookmark-plus"></i>Marcar agora</button>
     <div id="ap-bm-list"></div>
   </div>
 </section>
 
-<section class="panel" id="panel-audio-options" aria-label="Ajustes do áudio">
+<section class="panel" id="panel-audio-options" aria-label="Ajustes do áudio" data-i18n-aria="ui.ajustes_do_audio">
   <div class="panel-head">
-    <div><h3>Ajustes do áudio</h3><p>As preferências ficam salvas para todos os audiolivros.</p></div>
-    <button class="icon-btn" data-close-panel aria-label="Fechar"><i data-lucide="x"></i></button>
+    <div><h3 data-i18n="ui.ajustes_do_audio">Ajustes do áudio</h3><p data-i18n="ui.as_preferencias_ficam_salvas_para_todo">As preferências ficam salvas para todos os audiolivros.</p></div>
+    <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="setting-section"><h4>Botão de voltar</h4>
+    <div class="setting-section"><h4 data-i18n="ui.botao_de_voltar">Botão de voltar</h4>
       <div class="seg" id="ap-opt-back"><button type="button" data-skip="10">10 s</button><button type="button" data-skip="15">15 s</button><button type="button" data-skip="30">30 s</button></div>
     </div>
-    <div class="setting-section"><h4>Botão de avançar</h4>
+    <div class="setting-section"><h4 data-i18n="ui.botao_de_avancar">Botão de avançar</h4>
       <div class="seg" id="ap-opt-fwd"><button type="button" data-skip="15">15 s</button><button type="button" data-skip="30">30 s</button><button type="button" data-skip="60">60 s</button></div>
     </div>
     <div class="setting-section">
-      <label class="toggle-row"><span class="toggle-label"><strong>Recuar ao retomar</strong><small>Depois de uma pausa longa, volta alguns segundos para você reencontrar o fio da história.</small></span><span class="toggle"><input type="checkbox" id="ap-opt-rewind"><span></span></span></label>
+      <label class="toggle-row"><span class="toggle-label"><strong data-i18n="ui.recuar_ao_retomar">Recuar ao retomar</strong><small data-i18n="ui.depois_de_uma_pausa_longa_volta_alguns">Depois de uma pausa longa, volta alguns segundos para você reencontrar o fio da história.</small></span><span class="toggle"><input type="checkbox" id="ap-opt-rewind"><span></span></span></label>
     </div>
     <div class="setting-section">
-      <label class="toggle-row"><span class="toggle-label"><strong>Tocar ao abrir</strong><small>Ao tocar em um audiolivro na estante, a reprodução começa na hora.</small></span><span class="toggle"><input type="checkbox" id="ap-opt-autoplay"><span></span></span></label>
+      <label class="toggle-row"><span class="toggle-label"><strong data-i18n="ui.tocar_ao_abrir">Tocar ao abrir</strong><small data-i18n="ui.ao_tocar_em_um_audiolivro_na_estante_a">Ao tocar em um audiolivro na estante, a reprodução começa na hora.</small></span><span class="toggle"><input type="checkbox" id="ap-opt-autoplay"><span></span></span></label>
     </div>
-    <p class="drag-tip">No computador: espaço toca e pausa · ← → pulam · Shift + ← → trocam de capítulo · ↑ ↓ volume · B marca · [ ] velocidade.</p>
+    <p class="drag-tip" data-i18n="ui.no_computador_espaco_toca_e_pausa_pula">No computador: espaço toca e pausa · ← → pulam · Shift + ← → trocam de capítulo · ↑ ↓ volume · B marca · [ ] velocidade.</p>
   </div>
 </section>
 
@@ -617,15 +631,15 @@
     <div class="conversion-dialog-head">
       <div class="conversion-dialog-icon"><i data-lucide="file-output"></i></div>
       <div style="min-width:0;flex:1">
-        <h3 id="conversion-title">Converter PDF para EPUB</h3>
-        <p id="conversion-subtitle">Prepare o livro para leitura fluida e ajustável.</p>
+        <h3 id="conversion-title" data-i18n="ui.converter_pdf_para_epub">Converter PDF para EPUB</h3>
+        <p id="conversion-subtitle" data-i18n="ui.prepare_o_livro_para_leitura_fluida_e">Prepare o livro para leitura fluida e ajustável.</p>
       </div>
-      <button class="icon-btn" id="conversion-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+      <button class="icon-btn" id="conversion-close" aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
     </div>
     <div class="conversion-dialog-body" id="conversion-body"></div>
     <div class="conversion-dialog-footer" id="conversion-footer">
-      <button class="soft-btn" id="conversion-cancel">Cancelar</button>
-      <button class="soft-btn primary" id="conversion-confirm"><i data-lucide="file-output"></i>Converter para EPUB</button>
+      <button class="soft-btn" id="conversion-cancel" data-i18n="ui.cancelar">Cancelar</button>
+      <button class="soft-btn primary" id="conversion-confirm" data-i18n="app.converter_para_epub"><i data-lucide="file-output"></i>Converter para EPUB</button>
     </div>
   </div>
 </div>
@@ -636,15 +650,15 @@
     <div class="conversion-dialog-head">
       <div class="conversion-dialog-icon" id="app-modal-icon"><i data-lucide="circle-alert"></i></div>
       <div style="min-width:0;flex:1">
-        <h3 id="app-modal-title">Confirmação</h3>
+        <h3 id="app-modal-title" data-i18n="ui.confirmacao">Confirmação</h3>
         <p id="app-modal-subtitle"></p>
       </div>
-      <button class="icon-btn" id="app-modal-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+      <button class="icon-btn" id="app-modal-close" aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
     </div>
     <div class="conversion-dialog-body" id="app-modal-body"></div>
     <div class="conversion-dialog-footer" id="app-modal-footer">
-      <button class="soft-btn" id="app-modal-cancel">Cancelar</button>
-      <button class="soft-btn primary" id="app-modal-confirm">Confirmar</button>
+      <button class="soft-btn" id="app-modal-cancel" data-i18n="ui.cancelar">Cancelar</button>
+      <button class="soft-btn primary" id="app-modal-confirm" data-i18n="ui.confirmar">Confirmar</button>
     </div>
   </div>
 </div>
@@ -653,7 +667,7 @@
 <div class="loader" id="loader" role="status" aria-live="polite">
   <div class="loader-box">
     <div class="spinner"></div>
-    <div class="loader-title" id="loader-title">Processando</div>
+    <div class="loader-title" id="loader-title" data-i18n="ui.processando">Processando</div>
     <div class="loader-sub" id="loader-sub"></div>
     <div class="loader-track" id="loader-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
       <div class="loader-fill" id="loader-fill"></div>
@@ -661,7 +675,7 @@
     <div class="loader-pct" id="loader-pct">0%</div>
     <!-- quanto já veio, velocidade e tempo restante durante um download -->
     <div class="loader-meta" id="loader-meta"></div>
-    <button type="button" class="loader-cancel" id="loader-cancel">Cancelar</button>
+    <button type="button" class="loader-cancel" id="loader-cancel" data-i18n="ui.cancelar">Cancelar</button>
   </div>
 </div>
 <!-- ============================================================
@@ -672,14 +686,14 @@
     <div class="doc-head">
       <div class="conversion-dialog-icon" id="doc-icon"><i data-lucide="info"></i></div>
       <div style="min-width:0;flex:1">
-        <h3 id="doc-title">Documento</h3>
+        <h3 id="doc-title" data-i18n="ui.documento">Documento</h3>
         <p id="doc-subtitle"></p>
       </div>
-      <button class="icon-btn" id="doc-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+      <button class="icon-btn" id="doc-close" aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
     </div>
     <div class="doc-body" id="doc-body"></div>
     <div class="doc-foot">
-      <button class="soft-btn primary" id="doc-ok"><i data-lucide="check"></i>Fechar</button>
+      <button class="soft-btn primary" id="doc-ok" data-i18n="ui.fechar"><i data-lucide="check"></i>Fechar</button>
     </div>
   </div>
 </div>
@@ -692,15 +706,15 @@
     <div class="conversion-dialog-head">
       <div class="conversion-dialog-icon" id="scan-icon"><i data-lucide="folder-search"></i></div>
       <div style="min-width:0;flex:1">
-        <h3 id="scan-title">Buscar livros no dispositivo</h3>
-        <p id="scan-subtitle">Encontre arquivos EPUB, MOBI, CBZ, CBR e M4B já salvos no aparelho.</p>
+        <h3 id="scan-title" data-i18n="ui.buscar_livros_no_dispositivo">Buscar livros no dispositivo</h3>
+        <p id="scan-subtitle" data-i18n="ui.encontre_arquivos_epub_mobi_cbz_cbr_e">Encontre arquivos EPUB, MOBI, CBZ, CBR e M4B já salvos no aparelho.</p>
       </div>
-      <button class="icon-btn" id="scan-close" aria-label="Fechar"><i data-lucide="x"></i></button>
+      <button class="icon-btn" id="scan-close" aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
     </div>
     <div class="conversion-dialog-body" id="scan-body"></div>
     <div class="conversion-dialog-footer" id="scan-footer">
-      <button class="soft-btn" id="scan-cancel">Agora não</button>
-      <button class="soft-btn primary" id="scan-confirm"><i data-lucide="folder-open"></i>Escolher pasta</button>
+      <button class="soft-btn" id="scan-cancel" data-i18n="ui.agora_nao">Agora não</button>
+      <button class="soft-btn primary" id="scan-confirm" data-i18n="ui.escolher_pasta"><i data-lucide="folder-open"></i>Escolher pasta</button>
     </div>
   </div>
 </div>
@@ -713,22 +727,22 @@
     <div class="conversion-dialog-head">
       <div class="conversion-dialog-icon"><i data-lucide="layers"></i></div>
       <div style="min-width:0;flex:1">
-        <h3 id="agm-title">Juntar em um único audiolivro?</h3>
+        <h3 id="agm-title" data-i18n="ui.juntar_em_um_unico_audiolivro">Juntar em um único audiolivro?</h3>
         <p id="agm-sub"></p>
       </div>
-      <button class="icon-btn" id="agm-close" aria-label="Cancelar importação"><i data-lucide="x"></i></button>
+      <button class="icon-btn" id="agm-close" aria-label="Cancelar importação" data-i18n-aria="ui.cancelar_importacao"><i data-lucide="x"></i></button>
     </div>
     <div class="conversion-dialog-body">
       <p id="agm-lead"></p>
       <div class="form-grid" style="margin-top:14px">
-        <div class="form-group"><label class="form-label" for="agm-title-input">Título</label><input class="field" id="agm-title-input" placeholder="Nome do audiolivro" autocomplete="off"></div>
-        <div class="form-group"><label class="form-label" for="agm-author-input">Autor</label><input class="field" id="agm-author-input" placeholder="Nome do autor" autocomplete="off"></div>
+        <div class="form-group"><label class="form-label" for="agm-title-input" data-i18n="ui.titulo">Título</label><input class="field" id="agm-title-input" placeholder="Nome do audiolivro" data-i18n-placeholder="ui.nome_do_audiolivro" autocomplete="off"></div>
+        <div class="form-group"><label class="form-label" for="agm-author-input" data-i18n="ui.autor">Autor</label><input class="field" id="agm-author-input" placeholder="Nome do autor" data-i18n-placeholder="ui.nome_do_autor" autocomplete="off"></div>
       </div>
       <div class="agm-list" id="agm-list"></div>
     </div>
     <div class="conversion-dialog-footer">
-      <button class="soft-btn" id="agm-separate">Importar separados</button>
-      <button class="soft-btn primary" id="agm-group"><i data-lucide="layers"></i>Juntar em um audiolivro</button>
+      <button class="soft-btn" id="agm-separate" data-i18n="ui.importar_separados">Importar separados</button>
+      <button class="soft-btn primary" id="agm-group" data-i18n="ui.juntar_em_um_audiolivro"><i data-lucide="layers"></i>Juntar em um audiolivro</button>
     </div>
   </div>
 </div>
@@ -740,8 +754,8 @@
   <div class="onb-card" role="document">
     <div class="onb-hero">
       <div class="onb-logo"><img id="onb-logo-img" src="logo.png" alt=""></div>
-      <h2 id="onb-title">Bem-vindo ao Veredas Reader</h2>
-      <p id="onb-lead">Sua biblioteca de leitura, inteiramente no seu dispositivo.</p>
+      <h2 id="onb-title" data-i18n="ui.bem_vindo_ao_veredas_reader">Bem-vindo ao Veredas Reader</h2>
+      <p id="onb-lead" data-i18n="ui.sua_biblioteca_de_leitura_inteiramente">Sua biblioteca de leitura, inteiramente no seu dispositivo.</p>
     </div>
     <div class="onb-steps" id="onb-steps"></div>
     <div class="onb-body" id="onb-body"></div>
@@ -752,9 +766,20 @@
 <div class="toast-wrap" id="toast-wrap"></div>
 
 
+<!-- ============================================================
+     IDIOMAS
+     ------------------------------------------------------------
+     O motor vem antes do aplicativo porque o aplicativo pede
+     texto a ele logo na primeira tela. Os arquivos de cada idioma
+     ficam em idiomas/ e são carregados sob demanda: só o idioma
+     escolhido, a língua-base dele e o inglês de reserva.
+     ============================================================ -->
+<script>window.BUILD_QS="20260920-29";</script>
+<script src="idioma.js?v=20260920-29"></script>
+
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260920-17"></script>
+<script src="epub-pdf-converter.js?v=20260920-29"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260920-17"></script>
+<script src="app.js?v=20260920-29"></script>
 </body>
 </html>

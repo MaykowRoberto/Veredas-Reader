@@ -57,3 +57,20 @@ literata-latin-700-italic.woff2 no mesmo pacote do npm.
 Para atualizar um dia: baixe a versão nova, troque os arquivos,
 atualize este bilhete e a lista ESSENCIAIS do sw.js, e teste com a
 internet desligada antes de publicar.
+
+Recorte cirílico (acrescentado na build 24, para o russo)
+---------------------------------------------------------
+  Mesmos pacotes e versões acima, arquivos *-cyrillic-*:
+  inter-variavel-cirilico.woff2
+    md5 de93fdc85e3d9009340f44f401ce62cf   18.748 bytes
+  literata-400-cirilico.woff2
+    md5 5e3f6211e49678b9cdb523148c57c5b1   10.988 bytes
+  literata-400-italico-cirilico.woff2
+    md5 0fee88c04ca78130d8ae4503c97c7dfb   11.740 bytes
+  literata-700-cirilico.woff2
+    md5 96fd99e00740100cd7cc5fb53f664b60   11.640 bytes
+
+  O CSS declara cada família duas vezes, com unicode-range: o
+  navegador só baixa o cirílico quando uma letra cirílica aparece.
+  Não entram na instalação do service worker; quem escolhe russo
+  recebe os quatro guardados pelo recado 'guardar-idiomas'.

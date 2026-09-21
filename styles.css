@@ -16,21 +16,51 @@
    tela — é a fonte do Google Play Livros. Procedência, licença e
    impressão digital em vendor/fontes/PROCEDENCIA.txt.
    ============================================================ */
+/* Cada família tem dois recortes: o latino e o cirílico (russo).
+   O unicode-range diz ao navegador qual arquivo tem qual letra, e
+   ele só baixa o cirílico quando aparece uma letra cirílica na tela.
+   Na prática a Inter cirílica (18 KB) vem para todos, porque o nome
+   "Русский" está no seletor de idioma; a Literata cirílica só vem
+   com a interface em russo ou com um livro em russo aberto. */
 @font-face{
   font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
   src:url('vendor/fontes/inter-variavel.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('vendor/fontes/inter-variavel-cirilico.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
 }
 @font-face{
   font-family:'Literata';font-style:normal;font-weight:400;font-display:swap;
   src:url('vendor/fontes/literata-400.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Literata';font-style:normal;font-weight:400;font-display:swap;
+  src:url('vendor/fontes/literata-400-cirilico.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
 }
 @font-face{
   font-family:'Literata';font-style:italic;font-weight:400;font-display:swap;
   src:url('vendor/fontes/literata-400-italico.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Literata';font-style:italic;font-weight:400;font-display:swap;
+  src:url('vendor/fontes/literata-400-italico-cirilico.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
 }
 @font-face{
   font-family:'Literata';font-style:normal;font-weight:700;font-display:swap;
   src:url('vendor/fontes/literata-700.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Literata';font-style:normal;font-weight:700;font-display:swap;
+  src:url('vendor/fontes/literata-700-cirilico.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
 }
 
 /* ============================================================
@@ -156,7 +186,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 
 .bar-brand{
   display:flex;align-items:center;gap:9px;font-weight:800;font-size:14px;
-  flex:1;min-width:0;padding-left:14px;letter-spacing:-.2px;
+  flex:1;min-width:0;padding-inline-start:14px;letter-spacing:-.2px;
 }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 9px;
@@ -180,7 +210,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
   transition:transform .28s;
 }
 .search-bar.open{display:flex}
-.search-bar .search-icon{color:var(--muted);margin-left:6px;flex-shrink:0}
+.search-bar .search-icon{color:var(--muted);margin-inline-start:6px;flex-shrink:0}
 .search-bar input{
   flex:1;height:42px;padding:0 14px;border:1px solid var(--border);
   border-radius:12px;background:var(--surface-2);font-size:14px;min-width:0;
@@ -231,7 +261,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .sidebar-head strong{font-size:14px;letter-spacing:-.2px;display:block}
 .sidebar-head small{color:var(--muted);font-size:11px}
-.sidebar-head .bar-btn{margin-left:auto;width:38px;height:38px}
+.sidebar-head .bar-btn{margin-inline-start:auto;width:38px;height:38px}
 .sidebar-head .bar-btn svg{width:18px;height:18px}
 
 .nav-title{
@@ -240,7 +270,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .nav-item{
   width:100%;display:flex;align-items:center;gap:11px;
-  padding:11px 12px;border-radius:12px;text-align:left;font-size:13.5px;
+  padding:11px 12px;border-radius:12px;text-align:start;font-size:13.5px;
   color:var(--muted);transition:background .15s,color .15s;
   min-height:44px;
 }
@@ -251,7 +281,7 @@ body.bar-hidden .search-bar{transform:translateY(-100%)}
 }
 .nav-item svg{width:18px;height:18px;flex-shrink:0}
 .nav-item .count{
-  margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;
+  margin-inline-start:auto;font-size:11px;padding:2px 8px;border-radius:999px;
   background:var(--surface-hover);color:var(--muted);font-weight:700;
 }
 .nav-item.active .count{
@@ -741,16 +771,16 @@ body.reader-open .search-bar{display:none!important}
    quebrar bem uma linha só é trabalho do text-wrap:balance. */
 .page-text h1,.page-text h2,.page-text h3{
   font-family:var(--reader-font);font-weight:700;
-  text-indent:0;text-align:left;margin-bottom:1em;
+  text-indent:0;text-align:start;margin-bottom:1em;
   hyphens:none;-webkit-hyphens:none;text-wrap:balance;letter-spacing:-.01em;
 }
 .page-text img{max-width:100%;max-height:78vh;height:auto;display:block;margin:1em auto;object-fit:contain}
 .page-text table{max-width:100%;border-collapse:collapse;font-size:.92em;text-indent:0}
-.page-text td,.page-text th{border:1px solid var(--border);padding:4px 6px;text-align:left}
+.page-text td,.page-text th{border:1px solid var(--border);padding:4px 6px;text-align:start}
 .page-text pre{white-space:pre-wrap;word-break:break-word;text-indent:0}
 .doc-notice{
   margin:2em 0;padding:16px;border:1px solid var(--border);border-radius:14px;
-  background:var(--surface-2);text-indent:0;text-align:left;font-size:.95em;line-height:1.55;
+  background:var(--surface-2);text-indent:0;text-align:start;font-size:.95em;line-height:1.55;
 }
 .doc-notice strong{display:block;margin-bottom:6px;font-family:var(--ui-font)}
 .page-number{height:20px;text-align:center;font:11px var(--ui-font);color:var(--muted);padding-top:8px}
@@ -1082,7 +1112,7 @@ body.reader-open .search-bar{display:none!important}
 .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
 
 .sort-options{display:flex;flex-direction:column;gap:8px}
-.sort-option{width:100%;min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);text-align:left;transition:background .15s,border-color .15s,transform .1s}
+.sort-option{width:100%;min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);text-align:start;transition:background .15s,border-color .15s,transform .1s}
 .sort-option:hover{background:var(--surface-hover)}
 .sort-option:active{transform:scale(.99)}
 .sort-option svg{width:19px;height:19px;flex:none;color:var(--muted)}
@@ -1199,17 +1229,25 @@ body.reader-open .search-bar{display:none!important}
    TOAST + LOADER
    ============================================================ */
 .toast-wrap{
-  position:fixed;left:50%;bottom:calc(88px + var(--safe-bottom));
-  transform:translateX(-50%);z-index:400;
-  display:flex;flex-direction:column;gap:7px;pointer-events:none;
-  max-width:calc(100vw - 24px);
+  /* Presa às duas bordas (e não em left:50%): com metade da tela de
+     largura disponível, um aviso que quebra linha ficava espremido
+     numa coluna estreita. */
+  position:fixed;left:12px;right:12px;bottom:calc(88px + var(--safe-bottom));
+  z-index:400;
+  display:flex;flex-direction:column;align-items:center;gap:7px;pointer-events:none;
 }
 .toast{
   padding:12px 16px;border-radius:999px;background:#1d1d1f;color:#fff;
   box-shadow:var(--shadow);font-size:12.5px;font-weight:700;
   display:flex;align-items:center;gap:8px;
   animation:toast .25s ease;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  /* O aviso pode quebrar em duas linhas. Numa linha só, frases longas
+     (alemão, russo, francês) passavam da borda e eram cortadas no
+     meio de uma palavra — as reticências não funcionam num texto solto
+     dentro de flex. Com o raio de 20px uma linha continua parecendo
+     uma pílula; duas linhas viram um cartão arredondado. */
+  white-space:normal;overflow-wrap:anywhere;line-height:1.35;border-radius:20px;
+  max-width:560px;
 }
 .toast svg{flex-shrink:0}
 @keyframes toast{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -1356,7 +1394,7 @@ body.reader-open .search-bar{display:none!important}
 .conversion-dialog-head p{font-size:12px;line-height:1.5;color:var(--muted)}
 .conversion-dialog-body{padding:8px 20px 18px}
 .conversion-dialog-body p,.conversion-dialog-body li{font-size:12.5px;line-height:1.55;color:var(--text)}
-.conversion-dialog-body ul{padding-left:18px;margin:10px 0}
+.conversion-dialog-body ul{padding-inline-start:18px;margin:10px 0}
 .conversion-dialog-body li+li{margin-top:5px}
 .conversion-warning{
   display:flex;gap:10px;padding:12px 13px;margin-top:12px;border-radius:14px;
@@ -1397,14 +1435,14 @@ body.reader-open .search-bar{display:none!important}
 /* ============================================================
    MENU SOBRE + SUBMENU DE LICENCAS
    ============================================================ */
-.nav-chevron{margin-left:auto;width:16px;height:16px;opacity:.65;transition:transform .2s ease}
+.nav-chevron{margin-inline-start:auto;width:16px;height:16px;opacity:.65;transition:transform .2s ease}
 .nav-item[aria-expanded="true"] .nav-chevron{transform:rotate(180deg)}
-.nav-sub{display:grid;gap:2px;margin:2px 0 4px 21px;padding-left:8px;border-left:2px solid var(--border)}
+.nav-sub{display:grid;gap:2px;margin-block:2px 4px;margin-inline:21px 0;padding-inline-start:8px;border-inline-start:2px solid var(--border)}
 .nav-sub[hidden]{display:none}
 .nav-sub-item{font-size:12.5px;min-height:40px;padding:9px 10px;gap:9px}
 .nav-sub-item svg{width:15px;height:15px;opacity:.7}
 .lic-tag{
-  margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.04em;
+  margin-inline-start:auto;font-size:9.5px;font-weight:800;letter-spacing:.04em;
   padding:3px 7px;border-radius:999px;background:var(--surface-hover);
   color:var(--muted);border:1px solid var(--border);white-space:nowrap;
 }
@@ -1438,7 +1476,7 @@ body.reader-open .search-bar{display:none!important}
 .doc-body strong{font-weight:800}
 .doc-body hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 .doc-body blockquote{
-  margin:12px 0;padding:10px 14px;border-left:3px solid var(--accent);
+  margin:12px 0;padding:10px 14px;border-inline-start:3px solid var(--accent);
   background:var(--surface-2);border-radius:0 12px 12px 0;font-size:13px;line-height:1.6;
 }
 .doc-body code{
@@ -1482,7 +1520,7 @@ body.reader-open .search-bar{display:none!important}
    ============================================================ */
 .scan-list{display:grid;gap:6px;max-height:min(44dvh,320px);overflow:auto;margin-top:12px;padding-right:2px}
 .scan-item{
-  display:flex;gap:10px;align-items:center;width:100%;text-align:left;
+  display:flex;gap:10px;align-items:center;width:100%;text-align:start;
   padding:10px 12px;border-radius:13px;border:1px solid var(--border);background:var(--surface-2);
 }
 .scan-item.on{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
@@ -1537,7 +1575,7 @@ body.reader-open .search-bar{display:none!important}
 .onb-docs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}
 .onb-docs .soft-btn{flex:1 1 190px;justify-content:center}
 .consent-check{
-  display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;
+  display:flex;gap:11px;align-items:flex-start;width:100%;text-align:start;
   padding:14px;border-radius:16px;border:1.5px solid var(--border);background:var(--surface);
   transition:border-color .16s,background .16s;
 }
@@ -1805,7 +1843,7 @@ body.app-locked{overflow:hidden}
 }
 .ap-ch{
   width:100%;min-height:58px;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:14px;
-  text-align:left;transition:background .15s;
+  text-align:start;transition:background .15s;
 }
 .ap-ch:hover{background:var(--surface-hover)}
 .ap-ch-n{width:28px;flex:none;text-align:center;font-size:12px;font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -1827,7 +1865,7 @@ body.app-locked{overflow:hidden}
   display:flex;align-items:center;gap:6px;padding:4px 8px 4px 4px;margin-bottom:8px;
   border-radius:14px;border:1px solid var(--border);background:var(--surface-2);
 }
-.ap-bm-go{flex:1;min-width:0;min-height:48px;display:flex;align-items:center;gap:12px;padding:0 8px;border-radius:10px;text-align:left}
+.ap-bm-go{flex:1;min-width:0;min-height:48px;display:flex;align-items:center;gap:12px;padding:0 8px;border-radius:10px;text-align:start}
 .ap-bm-time{
   flex:none;padding:6px 10px;border-radius:999px;font:800 12px var(--ui-font);font-variant-numeric:tabular-nums;
   color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);
@@ -1852,7 +1890,7 @@ body.bar-hidden .mini-player{bottom:calc(10px + var(--safe-bottom))}
 body.reader-open .mini-player,body.audio-open .mini-player{display:none}
 .mini-progress{position:absolute;left:0;right:0;top:0;height:3px}
 .mini-progress span{display:block;height:100%;width:0;background:var(--accent);border-radius:0 3px 3px 0}
-.mini-open{flex:1;min-width:0;min-height:52px;display:flex;align-items:center;gap:11px;text-align:left;border-radius:12px}
+.mini-open{flex:1;min-width:0;min-height:52px;display:flex;align-items:center;gap:11px;text-align:start;border-radius:12px}
 .mini-cover{
   position:relative;width:46px;height:46px;flex:none;border-radius:10px;overflow:hidden;
   display:grid;place-items:center;background:var(--surface-hover);color:var(--accent);
@@ -1974,11 +2012,11 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .page-text .md-table th{background:color-mix(in srgb,var(--text) 5%,transparent);font-weight:800}
 .page-text .md-link{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
 .page-text .md-img{display:block;text-align:center;color:var(--muted);font-size:.9em;margin:.8em 0}
-.page-text ul,.page-text ol{margin:0 0 1.15em 1.4em;text-indent:0}
+.page-text ul,.page-text ol{margin-block:0 1.15em;margin-inline:1.4em 0;text-indent:0}
 .page-text li{margin-bottom:.35em}
 .page-text blockquote{
-  margin:1em 0;padding:.2em 0 .2em 1em;text-indent:0;
-  border-left:3px solid color-mix(in srgb,var(--accent) 55%,transparent);color:var(--muted);
+  margin:1em 0;padding-block:.2em;padding-inline:1em 0;text-indent:0;
+  border-inline-start:3px solid color-mix(in srgb,var(--accent) 55%,transparent);color:var(--muted);
 }
 
 /* ============================================================
@@ -2056,7 +2094,7 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
    e o outro exige um toque de propósito. */
 .backup-modes{display:grid;gap:8px}
 .backup-mode{
-  text-align:left;padding:12px 14px;border-radius:14px;cursor:pointer;
+  text-align:start;padding:12px 14px;border-radius:14px;cursor:pointer;
   border:1.5px solid var(--border);background:var(--surface);
   transition:border-color .15s,background .15s;
 }
@@ -2082,6 +2120,16 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .backup-reminder-text small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45}
 .backup-reminder-actions{display:flex;gap:8px;flex-wrap:wrap}
 .backup-reminder-actions .soft-btn{font-size:12px;padding:8px 12px}
+/* "Não avisar mais" mora sempre sozinho, na linha de baixo, discreto.
+   Em português ele caía lá naturalmente, porque os dois botões de cima
+   já enchiam a linha; em línguas de palavras curtas ("Back up now",
+   "今すぐバックアップ") sobrava espaço, ele subia e ficava com o mesmo
+   peso das duas ações de verdade. Aqui a posição não depende mais do
+   tamanho do texto. */
+.backup-reminder-actions #backup-reminder-never{
+  flex:1 0 100%;justify-content:center;
+  font-size:11.5px;padding:6px 12px;color:var(--muted);
+}
 
 @media (max-width:520px){
   /* Três colunas continuam cabendo num celular: os números são curtos e
@@ -2115,3 +2163,161 @@ body.audio-open .toast-wrap{bottom:auto;top:calc(62px + var(--safe-top))}
 .hero-card,.app-modal-box,.sheet,.audio-player{
   box-shadow:var(--shadow),inset 0 1px 0 var(--hairline);
 }
+
+/* Explicação curta embaixo de um ajuste. */
+.setting-hint{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:7px}
+
+/* ============================================================
+   ALFABETOS QUE NÃO SÃO O LATINO
+   ------------------------------------------------------------
+   Dois ajustes, e nenhum deles é capricho.
+
+   1) O ESPACINHO NEGATIVO. Em títulos apertamos as letras
+      (letter-spacing:-.5px) porque no alfabeto latino isso deixa
+      o texto mais firme. Devanágari, tailandês, hangul e kana não
+      foram desenhados assim: ali o aperto GRUDA os conjuntos e
+      empurra as marcas para cima da letra vizinha. Em tailandês
+      chega a mudar o que está escrito.
+
+   2) A ENTRELINHA. Devanágari pendura marcas abaixo e tailandês
+      empilha até três níveis acima. Uma entrelinha calculada para
+      letras sem acento deixa tudo encostado.
+
+   O seletor :lang() pega pelo atributo lang do <html>, que o motor
+   de idiomas mantém atualizado. Para quem lê em alfabeto latino
+   este bloco inteiro não existe.
+   ============================================================ */
+:lang(hi),:lang(th),:lang(ko),:lang(ja),:lang(zh),:lang(ar){letter-spacing:normal}
+
+:lang(hi) .hero-title,:lang(th) .hero-title,:lang(ko) .hero-title,:lang(ja) .hero-title,:lang(zh) .hero-title,:lang(ar) .hero-title,
+:lang(hi) .title-block h2,:lang(th) .title-block h2,:lang(ko) .title-block h2,:lang(ja) .title-block h2,:lang(zh) .title-block h2,:lang(ar) .title-block h2,
+:lang(hi) .shelf-head h3,:lang(th) .shelf-head h3,:lang(ko) .shelf-head h3,:lang(ja) .shelf-head h3,:lang(zh) .shelf-head h3,:lang(ar) .shelf-head h3,
+:lang(hi) .panel-head h3,:lang(th) .panel-head h3,:lang(ko) .panel-head h3,:lang(ja) .panel-head h3,:lang(zh) .panel-head h3,:lang(ar) .panel-head h3,
+:lang(hi) .setting-section h4,:lang(th) .setting-section h4,:lang(ko) .setting-section h4,:lang(ja) .setting-section h4,:lang(zh) .setting-section h4,:lang(ar) .setting-section h4,
+:lang(hi) .onb-hero h2,:lang(th) .onb-hero h2,:lang(ko) .onb-hero h2,:lang(ja) .onb-hero h2,:lang(zh) .onb-hero h2,:lang(ar) .onb-hero h2,
+:lang(hi) .stat-chip strong,:lang(th) .stat-chip strong,:lang(ko) .stat-chip strong,:lang(ja) .stat-chip strong,:lang(zh) .stat-chip strong,:lang(ar) .stat-chip strong,
+:lang(hi) .sidebar-head strong,:lang(th) .sidebar-head strong,:lang(ko) .sidebar-head strong,:lang(ja) .sidebar-head strong,:lang(zh) .sidebar-head strong,:lang(ar) .sidebar-head strong{
+  letter-spacing:normal;
+}
+
+/* A etiqueta de cima do cartão de destaque é caixa-alta com as letras
+   MUITO afastadas. Em tailandês e devanágari isso desmonta a palavra:
+   as marcas ficam longe da letra a que pertencem. */
+:lang(hi) .hero-label,:lang(th) .hero-label,:lang(ko) .hero-label,:lang(ja) .hero-label,:lang(zh) .hero-label,:lang(ar) .hero-label,
+:lang(hi) .nav-title,:lang(th) .nav-title,:lang(ko) .nav-title,:lang(ja) .nav-title,:lang(zh) .nav-title,:lang(ar) .nav-title{
+  letter-spacing:.02em;text-transform:none;
+}
+
+/* Entrelinha e tamanho: um pouco mais de ar onde o texto é menor. */
+:lang(hi) .hero-title,:lang(th) .hero-title{line-height:1.38}
+:lang(ko) .hero-title,:lang(ja) .hero-title,:lang(zh) .hero-title,:lang(ar) .hero-title{line-height:1.32}
+:lang(hi) .title-block h2,:lang(th) .title-block h2{line-height:1.42}
+:lang(hi) .bottom-nav button span,:lang(th) .bottom-nav button span,
+:lang(ko) .bottom-nav button span,:lang(ja) .bottom-nav button span,:lang(zh) .bottom-nav button span,:lang(ar) .bottom-nav button span{
+  /* 9,5px é legível em latim e apertado nestes alfabetos, que têm
+     mais traço por caractere. */
+  font-size:10.5px;line-height:1.5;
+}
+:lang(hi) .setting-hint,:lang(th) .setting-hint,
+:lang(hi) .drag-tip,:lang(th) .drag-tip{line-height:1.7}
+/* Árabe é escrita cursiva: as letras se ligam umas às outras. Qualquer
+   espaçamento entre letras quebra essas ligações. */
+:lang(ar) .hero-label,:lang(ar) .nav-title{letter-spacing:0}
+
+/* ============================================================
+   DA DIREITA PARA A ESQUERDA (árabe)
+   ------------------------------------------------------------
+   O motor de idiomas põe dir="rtl" no <html>. Quase tudo já se
+   espelha sozinho, porque a interface é feita de flex e grid, e as
+   margens de lado viraram propriedades lógicas (inline-start/end),
+   que valem "esquerda" em português e "direita" em árabe.
+
+   Aqui fica só o que não se resolve assim:
+   - o LIVRO continua da esquerda para a direita. A interface é que
+     está em árabe, não o livro; e a paginação, a virada de página e
+     o arraste do dedo foram todos pensados nesse sentido;
+   - a barra de páginas do leitor acompanha o livro, não a interface;
+   - o menu lateral e os painéis do computador entram pela direita;
+   - setas de "voltar" e "abrir" apontam para o outro lado.
+   Controles de mídia (tocar, avançar, voltar 10 s) NÃO se espelham:
+   é a convenção dos tocadores também em árabe.
+   ============================================================ */
+html[dir="rtl"] .reader-stage,
+html[dir="rtl"] .scrubber-row{direction:ltr}
+/* A barra de posição do audiolivro é controle de mídia: fica como nos
+   tocadores, da esquerda para a direita, e o preenchimento dela (um
+   degradê "to right") continua casando com o botão. */
+html[dir="rtl"] .ap-seek input[type=range]{direction:ltr}
+
+html[dir="rtl"] svg.lucide-arrow-left,
+html[dir="rtl"] svg.lucide-arrow-right,
+html[dir="rtl"] svg.lucide-chevron-left,
+html[dir="rtl"] svg.lucide-chevron-right{transform:scaleX(-1)}
+
+html[dir="rtl"] .sidebar{
+  left:auto;right:0;
+  border-right:0;border-left:1px solid var(--border);
+  transform:translateX(102%);
+}
+html[dir="rtl"] .sidebar.open{transform:translateX(0)}
+
+html[dir="rtl"] .select{
+  background-position:left 12px center;padding-right:12px;padding-left:32px;
+}
+
+@media (min-width:1000px){
+  html[dir="rtl"] .sidebar,
+  html[dir="rtl"] .sidebar.open{transform:none;border-left:0;right:auto}
+  html[dir="rtl"] .panel{
+    right:auto;left:0;
+    border-left:0;border-right:1px solid var(--border);
+    box-shadow:16px 0 48px rgba(0,0,0,.16);
+    transform:translateX(-100%);
+  }
+  html[dir="rtl"] .panel.visible{transform:translateX(0)}
+}
+
+/* ============================================================
+   LIVRO ESCRITO DA DIREITA PARA A ESQUERDA
+   ------------------------------------------------------------
+   Vale para o LIVRO (árabe, hebraico...), qualquer que seja a
+   língua da interface. O texto da página recebe dir="rtl" pelo
+   próprio leitor; os títulos, tabelas, listas e citações do livro
+   já usam "start" e "inline-start", que em livro da esquerda para a
+   direita continuam sendo a esquerda, como sempre foram.
+
+   A barra de páginas acompanha o livro: a página 1 fica à direita
+   e o avanço vai para a esquerda, no mesmo sentido do dedo.
+   ============================================================ */
+.reader-ui.livro-rtl .scrubber-row{direction:rtl}
+
+/* ============================================================
+   AVISO IMPORTANTE (vermelho)
+   ------------------------------------------------------------
+   Para o que a pessoa PRECISA ler para não achar que o aplicativo
+   está com defeito. Vermelho escuro nos temas claros, vermelho
+   claro nos escuros — o mesmo vermelho nos dois ficaria ilegível
+   num deles.
+   ============================================================ */
+:root{--aviso-forte:#b42336}
+[data-theme="dark"],[data-theme="ocean"]{--aviso-forte:#ff8f99}
+.aviso-importante{
+  display:flex;gap:10px;align-items:flex-start;padding:12px 13px;margin-top:12px;border-radius:14px;
+  background:color-mix(in srgb,var(--aviso-forte) 8%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--aviso-forte) 40%,var(--border));
+  text-align:start;
+}
+.aviso-importante>svg{width:18px;height:18px;flex:0 0 18px;color:var(--aviso-forte);margin-top:1px}
+.aviso-importante .aviso-titulo{display:block;color:var(--aviso-forte);font-size:12.5px;line-height:1.4;font-weight:800;margin-bottom:4px}
+.aviso-importante .aviso-texto{font-size:12px;line-height:1.55;color:var(--text)}
+.aviso-importante .aviso-texto strong{font-weight:800}
+.onb-body .aviso-importante,.onb-points+.aviso-importante{margin-top:10px}
+
+/* Item do menu com duas linhas: o nome curto em cima e, embaixo,
+   o que mais mora ali. Evita um rótulo comprido que quebraria feio
+   em alemão, russo ou tailandês. */
+.nav-item-duplo .nav-rotulo{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.nav-item-duplo .nav-rotulo small{font-size:11px;font-weight:500;color:var(--muted);margin-top:1px}
+.onb-points .aviso-importante{margin-top:0}
+/* O texto que vem depois do título em negrito, nos avisos amarelos. */
+.conversion-warning strong+div{font-size:12px;line-height:1.5;color:var(--muted)}

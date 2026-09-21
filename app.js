@@ -104,6 +104,23 @@ const Utils={
      `<<5` antes de somar espalha títulos parecidos por tons
      diferentes — sem isso, "Volume 1" e "Volume 2" cairiam na
      mesma cor. O `|0` mantém a conta dentro de 32 bits. */
+  /* "Autor Desconhecido" é DUAS coisas diferentes, e misturá-las dá
+     defeito: é o valor GRAVADO no banco quando o arquivo não diz quem
+     escreveu, e é o texto MOSTRADO na tela.
+
+     Se o valor gravado fosse traduzido, um livro importado com o
+     aplicativo em inglês guardaria "Unknown author" e outro, importado
+     em português, guardaria "Autor Desconhecido" — dois autores
+     diferentes na estante, para o mesmo nada. Pior: o agrupamento por
+     autor separaria os dois, e as comparações do player, que procuram
+     o texto exato, parariam de funcionar.
+
+     Então o gravado nunca muda de idioma (SEM_AUTOR), e só a exibição
+     é traduzida (autorVisivel). É a regra geral: idioma é coisa da
+     tela, nunca do banco. */
+  SEM_AUTOR:'Autor Desconhecido',
+  autorVisivel:a=>(!a||a===Utils.SEM_AUTOR||String(a).toLowerCase()==='autor desconhecido')
+    ?T('app.autor_desconhecido'):a,
   capa:texto=>{
     const s=String(texto||'');
     let h=0;
@@ -142,7 +159,7 @@ const Utils={
     track.setAttribute('aria-valuenow','0');
     cancel.classList.toggle('visible',typeof opts.onCancel==='function');
     cancel.disabled=false;
-    cancel.textContent='Cancelar';
+    cancel.textContent=T('ui.cancelar');
     Utils.setLoaderMeta('');
     Utils._onCancel=opts.onCancel||null;
     document.getElementById('loader').classList.add('active');
@@ -174,7 +191,7 @@ const Utils={
     const l=document.getElementById('loader');
     if(l)l.classList.remove('active');
     const c=document.getElementById('loader-cancel');
-    if(c){c.classList.remove('visible');c.disabled=false;c.textContent='Cancelar'}
+    if(c){c.classList.remove('visible');c.disabled=false;c.textContent=T('ui.cancelar')}
     const t=document.getElementById('loader-track');
     if(t)t.classList.remove('visible');
     const p=document.getElementById('loader-pct');
@@ -228,7 +245,7 @@ window.addEventListener('error',e=>{console.error(e.error||e.message);Utils.hide
 document.getElementById('loader-cancel').addEventListener('click',e=>{
   if(typeof Utils._onCancel!=='function')return;
   e.currentTarget.disabled=true;
-  e.currentTarget.textContent='Cancelando...';
+  e.currentTarget.textContent=T('app.cancelando');
   try{Utils._onCancel()}catch(err){console.error(err)}
 });
 
@@ -289,7 +306,7 @@ const FileTransfer={
       for(;;){
         if(signal&&signal.aborted){
           try{await reader.cancel()}catch(e){}
-          throw new DOMException('Cancelado','AbortError');
+          throw new DOMException(T('app.cancelado'),'AbortError');
         }
         const {done,value}=await reader.read();
         if(done)break;
@@ -320,7 +337,7 @@ const FileTransfer={
    para quem está olhando: quanto já veio, quão rápido e quanto falta. */
 class TransferMeter{
   constructor(name,total,{mode='bar',prefix=''}={}){
-    this.name=name||'Arquivo';
+    this.name=name||T('app.arquivo');
     this.total=Number(total)||0;
     this.mode=mode;                 /* 'bar' usa a barra; 'text' só a legenda */
     this.prefix=prefix;
@@ -336,7 +353,7 @@ class TransferMeter{
     if(!this.announced&&elapsed>0.55&&this.total&&loaded<this.total*0.92){
       this.announced=true;
       if(this.mode==='bar'){
-        Utils.setLoaderText('Baixando o arquivo','O arquivo está vindo do armazenamento em nuvem para o seu aparelho.');
+        Utils.setLoaderText(T('app.baixando_o_arquivo'),T('app.o_arquivo_esta_vindo_do_armazenamento'));
       }
     }
     if(!complete&&now-this.lastPaint<130)return;
@@ -344,7 +361,7 @@ class TransferMeter{
     const rate=elapsed>0.3?loaded/elapsed:0;
     const left=rate>0&&this.total>loaded?(this.total-loaded)/rate:0;
     const bits=[];
-    if(this.total)bits.push(`${Utils.fmtBytes(loaded)} de ${Utils.fmtBytes(this.total)}`);
+    if(this.total)bits.push(T('app.v_de_total',{v:Utils.fmtBytes(loaded),total:Utils.fmtBytes(this.total)}));
     else bits.push(Utils.fmtBytes(loaded));
     if(rate>0&&!complete)bits.push(`${Utils.fmtBytes(rate)}/s`);
     if(left>1.5&&!complete)bits.push(`faltam ~${AudioFmt.long(left)}`);
@@ -410,7 +427,7 @@ class DBManager{
       }
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+      tx.onabort=()=>reject(tx.error||new Error(T('app.gravacao_cancelada')));
     });
   }
   async getComicPage(bookId,i){
@@ -488,7 +505,7 @@ class DBManager{
       tx.objectStore('files').put({id:meta.id,kind:'audio',blobs});
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+      tx.onabort=()=>reject(tx.error||new Error(T('app.gravacao_cancelada')));
     });
   }
   /* Quadrinho: as páginas já foram gravadas uma a uma durante a
@@ -503,7 +520,7 @@ class DBManager{
       else tx.objectStore('files').delete(meta.id);
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+      tx.onabort=()=>reject(tx.error||new Error(T('app.gravacao_cancelada')));
     });
   }
   /* Leitura + alteração + gravação numa transação só. Quem só quer mexer em
@@ -523,7 +540,7 @@ class DBManager{
       };
       tx.oncomplete=()=>resolve(saved);
       tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada.'));
+      tx.onabort=()=>reject(tx.error||new Error(T('app.gravacao_cancelada')));
     });
   }
   async getBooks(){
@@ -631,8 +648,88 @@ const AppDefaults={settings:{
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
   comicFit:'page',comicSpread:true,comicRtl:false,
   lastBackupAt:0,backupSnoozeAt:0,backupLembretes:true,
-  consent:null,scanInvited:false,scrollPerBook:false
+  consent:null,scanInvited:false,scrollPerBook:false,
+  /* 'sistema' segue o idioma do aparelho; qualquer outra coisa é
+     uma tag escolhida à mão na tela de configurações. */
+  idioma:'sistema'
 }};
+
+/* ============================================================
+   A PREFERÊNCIA DE IDIOMA
+   ------------------------------------------------------------
+   O motor (idioma.js) sabe carregar e traduzir. Este pedaço sabe
+   o que a PESSOA escolheu — que é assunto do aplicativo, não do
+   motor.
+   ============================================================ */
+const Idioma={
+  CHAVE:'veredas-idioma',
+
+  /* A cópia rápida. Precisamos do idioma antes de abrir o banco,
+     e IndexedDB é assíncrono; localStorage responde na hora.
+     Se estiver bloqueado (janela anônima, cookies desligados), o
+     `catch` devolve nulo e seguimos pelo idioma do aparelho —
+     nada quebra, só não lembra da escolha. */
+  guardado(){
+    try{ return localStorage.getItem(this.CHAVE) || 'sistema' }
+    catch(e){ return 'sistema' }
+  },
+  guardar(valor){
+    try{ localStorage.setItem(this.CHAVE, valor) }catch(e){}
+  },
+
+  /* 'sistema' vira a tag de verdade aqui, e em nenhum outro
+     lugar: o resto do aplicativo só lida com tags reais. */
+  resolver(preferencia){
+    return (!preferencia || preferencia==='sistema')
+      ? Idiomas.doSistema()
+      : preferencia;
+  },
+
+  async iniciar(){
+    this.preferencia=this.guardado();
+    await Idiomas.usar(this.resolver(this.preferencia));
+  },
+
+  /* Chamado depois que o banco abre. Um backup restaurado pode
+     trazer um idioma diferente do que está no localStorage deste
+     aparelho; nesse caso o banco manda. */
+  async conferirComAsConfiguracoes(settings){
+    const doBanco=settings&&settings.idioma;
+    if(!doBanco||doBanco===this.preferencia){
+      /* Primeira vez neste aparelho: grava no banco o que já
+         estava valendo, para o backup levar junto. */
+      if(settings&&!settings.idioma)settings.idioma=this.preferencia;
+      return;
+    }
+    this.preferencia=doBanco;
+    this.guardar(doBanco);
+    await Idiomas.usar(this.resolver(doBanco));
+  },
+
+  /* A troca feita pela pessoa na tela de configurações. */
+  async trocar(preferencia){
+    this.preferencia=preferencia;
+    this.guardar(preferencia);
+    await Idiomas.usar(this.resolver(preferencia));
+    if(App.state&&App.state.settings){
+      App.state.settings.idioma=preferencia;
+      try{ await App.db.saveSettings(App.state.settings) }catch(e){ console.warn(e) }
+    }
+    /* Metade da interface é desenhada por JavaScript e não tem
+       marcação data-i18n para o motor reescrever. Em vez de
+       espalhar "redesenhe-se" por trinta lugares, redesenhamos as
+       telas de uma vez só. */
+    this.redesenhar();
+  },
+
+  redesenhar(){
+    try{
+      if(App.library){ App.library.renderHero(); App.library.render(); App.library.renderSidebarCounts&&App.library.renderSidebarCounts(); }
+      if(App.setupSettingsUI)App.setupSettingsUI();
+      if(window.lucide)lucide.createIcons();
+    }catch(e){ console.warn('[idioma] redesenho parcial:',e) }
+  },
+};
 
 /* ============================================================
    FORMATOS DE LIVRO
@@ -689,7 +786,7 @@ const BookFormats={
     return BookFormats.TEXT.includes(n)||Object.prototype.hasOwnProperty.call(AUDIO_FORMATS,n);
   },
   info:f=>BookFormats.INFO[BookFormats.normalize(f)]||null,
-  label:f=>(BookFormats.info(f)||{}).label||String(f||'').toUpperCase()||'Outro',
+  label:f=>(BookFormats.info(f)||{}).label||String(f||'').toUpperCase()||T('app.outro'),
   icon:f=>(BookFormats.info(f)||{}).icon||'file',
   mime:f=>(BookFormats.info(f)||{}).mime||'application/octet-stream',
   canShare:f=>!!(BookFormats.info(f)||{}).share,
@@ -699,10 +796,10 @@ const BookFormats={
   /* Nome amigável do grupo na estante agrupada por tipo. */
   groupName(f){
     const n=BookFormats.normalize(f);
-    const names={epub:'EPUB',mobi:'MOBI',pdf:'PDF',docx:'Word (DOCX)',txt:'Texto (TXT)',
-      md:'Markdown (MD)',cbz:'Quadrinho (CBZ)',cbr:'Quadrinho (CBR)',cb7:'Quadrinho (CB7)',
-      cbt:'Quadrinho (CBT)',mp3:'Audiolivro (MP3)',m4b:'Audiolivro (M4B)',mp4:'Vídeo (MP4)'};
-    return names[n]||(n?n.toUpperCase():'Outros');
+    const names={epub:'EPUB',mobi:'MOBI',pdf:'PDF',docx:T('app.word_docx'),txt:T('app.texto_txt'),
+      md:T('app.markdown_md'),cbz:T('app.quadrinho_cbz'),cbr:T('app.quadrinho_cbr'),cb7:T('app.quadrinho_cb7'),
+      cbt:T('app.quadrinho_cbt'),mp3:T('app.audiolivro_mp3'),m4b:T('app.audiolivro_m4b'),mp4:T('app.video_mp4')};
+    return names[n]||(n?n.toUpperCase():T('app.outros'));
   },
   groupRank(f){
     const i=BookFormats.GROUP_ORDER.indexOf(BookFormats.normalize(f));
@@ -783,9 +880,9 @@ class DOCXParser{
   static async parse(buffer,opts={}){
     const onProgress=opts.onProgress||(()=>{});
     if(typeof mammoth==='undefined'||!mammoth||typeof mammoth.convertToHtml!=='function'){
-      throw new ParseError('O conversor de DOCX não carregou.','Conecte-se à internet uma vez para baixar o componente e abra o livro novamente.');
+      throw new ParseError(T('app.o_conversor_de_docx_nao_carregou'),T('app.conecte_se_a_internet_uma_vez_para_bai'));
     }
-    onProgress('Convertendo o documento',.1);
+    onProgress(T('app.convertendo_o_documento'),.1);
     let budget=DOCXParser.IMAGE_BUDGET;
     const options={styleMap:DOCXParser.STYLE_MAP};
     if(mammoth.images&&typeof mammoth.images.imgElement==='function'){
@@ -805,14 +902,14 @@ class DOCXParser{
       result=await mammoth.convertToHtml({arrayBuffer:buffer},options);
     }catch(e){
       console.error(e);
-      throw new ParseError('Não foi possível ler este arquivo DOCX.','O arquivo pode estar corrompido, protegido por senha ou ser um .doc antigo. Salve-o novamente como .docx e importe de novo.');
+      throw new ParseError(T('app.nao_foi_possivel_ler_este_arquivo_docx'),T('app.o_arquivo_pode_estar_corrompido_proteg'));
     }
-    onProgress('Organizando o texto',.85);
+    onProgress(T('app.organizando_o_texto'),.85);
     let html=String((result&&result.value)||'').trim();
     html=html.replace(/<img[^>]*src\s*=\s*(""|'')[^>]*>/gi,'');
     html=DocUtils.stripLinks(html);
     if(!html){
-      html=DocUtils.notice('Documento sem texto','Este arquivo .docx não tem conteúdo de texto que possa ser exibido.');
+      html=DocUtils.notice(T('app.documento_sem_texto'),T('app.este_arquivo_docx_nao_tem_conteudo_de'));
     }
     return html;
   }
@@ -820,15 +917,15 @@ class DOCXParser{
 DOCXParser.MAX_IMAGE=700*1024;
 DOCXParser.IMAGE_BUDGET=4*1024*1024;
 DOCXParser.STYLE_MAP=[
-  "p[style-name='Title'] => h1:fresh",
-  "p[style-name='Subtitle'] => h2:fresh",
-  "p[style-name='Heading 1'] => h1:fresh",
-  "p[style-name='Heading 2'] => h2:fresh",
-  "p[style-name='Heading 3'] => h3:fresh",
-  "p[style-name='Título'] => h1:fresh",
-  "p[style-name='Título 1'] => h1:fresh",
-  "p[style-name='Título 2'] => h2:fresh",
-  "p[style-name='Título 3'] => h3:fresh"
+  'p[style-name=\'Title\'] => h1:fresh',
+  'p[style-name=\'Subtitle\'] => h2:fresh',
+  'p[style-name=\'Heading 1\'] => h1:fresh',
+  'p[style-name=\'Heading 2\'] => h2:fresh',
+  'p[style-name=\'Heading 3\'] => h3:fresh',
+  'p[style-name=\'Título\'] => h1:fresh',
+  'p[style-name=\'Título 1\'] => h1:fresh',
+  'p[style-name=\'Título 2\'] => h2:fresh',
+  'p[style-name=\'Título 3\'] => h3:fresh'
 ];
 
 /* ------------------------------------------------------------
@@ -840,15 +937,15 @@ class MobiHuffman{
     let s='';for(let i=0;i<n;i++)s+=String.fromCharCode(rec[i]||0);return s;
   }
   loadHuff(rec){
-    if(!rec||rec.length<24||MobiHuffman.tag(rec)!=='HUFF')throw new ParseError('Tabela de compressão MOBI inválida.','');
+    if(!rec||rec.length<24||MobiHuffman.tag(rec)!=='HUFF')throw new ParseError(T('app.tabela_de_compressao_mobi_invalida'),'');
     const dv=new DataView(rec.buffer,rec.byteOffset,rec.byteLength);
     const off1=dv.getUint32(8,false),off2=dv.getUint32(12,false);
-    if(off1+1024>rec.length||off2+256>rec.length)throw new ParseError('Tabela de compressão MOBI incompleta.','');
+    if(off1+1024>rec.length||off2+256>rec.length)throw new ParseError(T('app.tabela_de_compressao_mobi_incompleta'),'');
     this.dict1=new Array(256);
     for(let i=0;i<256;i++){
       const v=dv.getUint32(off1+i*4,false);
       const codelen=v&0x1F,term=(v&0x80)!==0,maxcode=v>>>8;
-      if(codelen===0)throw new ParseError('Tabela de compressão MOBI corrompida.','');
+      if(codelen===0)throw new ParseError(T('app.tabela_de_compressao_mobi_corrompida'),'');
       this.dict1[i]={codelen,term,maxcode:(maxcode+1)*Math.pow(2,32-codelen)-1};
     }
     const dict2=new Array(64);
@@ -879,7 +976,7 @@ class MobiHuffman{
     }
   }
   unpack(data,depth=0){
-    if(depth>12)throw new ParseError('Arquivo MOBI corrompido.','');
+    if(depth>12)throw new ParseError(T('app.arquivo_mobi_corrompido'),'');
     const total=data.length;
     const out=[];
     let bitsleft=total*8,bitPos=0,guard=0;
@@ -970,16 +1067,16 @@ class MobiFile{
   }
   readHeader(){
     const dv=this.dv,len=this.buffer.byteLength;
-    if(len<80)throw new ParseError('Arquivo MOBI incompleto.','O download parece ter sido interrompido. Baixe o arquivo novamente.');
+    if(len<80)throw new ParseError(T('app.arquivo_mobi_incompleto'),T('app.o_download_parece_ter_sido_interrompid'));
     this.signature=MobiFile.signature(this.buffer);
     this.numRecords=dv.getUint16(76,false);
     if(!this.numRecords||78+this.numRecords*8>len){
-      throw new ParseError('Arquivo MOBI corrompido.','A lista interna de registros está incompleta. Tente baixar ou converter o arquivo novamente.');
+      throw new ParseError(T('app.arquivo_mobi_corrompido'),T('app.a_lista_interna_de_registros_esta_inco'));
     }
     this.offsets=new Array(this.numRecords);
     for(let i=0;i<this.numRecords;i++)this.offsets[i]=dv.getUint32(78+i*8,false);
     const r0=this.rec0=this.offsets[0];
-    if(r0+16>len)throw new ParseError('Arquivo MOBI corrompido.','O cabeçalho do livro não pôde ser lido.');
+    if(r0+16>len)throw new ParseError(T('app.arquivo_mobi_corrompido'),T('app.o_cabecalho_do_livro_nao_pode_ser_lido'));
     this.compression=dv.getUint16(r0,false);
     this.textLength=dv.getUint32(r0+4,false);
     this.textRecordCount=dv.getUint16(r0+8,false);
@@ -1124,29 +1221,29 @@ class MobiFile{
   }
   async readText(onProgress,signal){
     if(this.encryption===1||this.encryption===2){
-      throw new ParseError('Este arquivo está protegido por DRM.','Livros com proteção da Amazon não podem ser abertos aqui. Use uma cópia sem DRM ou converta o livro para EPUB.');
+      throw new ParseError(T('app.este_arquivo_esta_protegido_por_drm'),T('app.livros_com_protecao_da_amazon_nao_pode'));
     }
     const comp=this.compression;
     if(comp!==1&&comp!==2&&comp!==17480){
-      throw new ParseError('Compressão MOBI não reconhecida.','Converta o arquivo para EPUB em um programa como o Calibre e importe novamente.');
+      throw new ParseError(T('app.compressao_mobi_nao_reconhecida'),T('app.converta_o_arquivo_para_epub_em_um_pro'));
     }
     let huff=null;
     if(comp===17480){
-      if(!this.huffCount||!this.huffOffset)throw new ParseError('Arquivo MOBI incompleto.','As tabelas de compressão não foram encontradas.');
+      if(!this.huffCount||!this.huffOffset)throw new ParseError(T('app.arquivo_mobi_incompleto'),T('app.as_tabelas_de_compressao_nao_foram_enc'));
       huff=new MobiHuffman();
       huff.loadHuff(this.record(this.huffOffset));
       for(let i=1;i<this.huffCount;i++)huff.loadCdic(this.record(this.huffOffset+i));
-      if(!huff.dictionary.length)throw new ParseError('Arquivo MOBI incompleto.','O dicionário de compressão está vazio.');
+      if(!huff.dictionary.length)throw new ParseError(T('app.arquivo_mobi_incompleto'),T('app.o_dicionario_de_compressao_esta_vazio'));
     }
     const declared=Number(this.textLength)||0;
     const cap=Math.min(Math.max(declared,1)+131072,MobiFile.MAX_TEXT);
     const out=new Uint8Array(cap);
     let pos=0;
     const last=Math.min(this.textRecordCount,this.numRecords-1);
-    if(last<1)throw new ParseError('Arquivo MOBI sem texto.','Nenhum registro de conteúdo foi encontrado.');
+    if(last<1)throw new ParseError(T('app.arquivo_mobi_sem_texto'),T('app.nenhum_registro_de_conteudo_foi_encont'));
     let mark=performance.now();
     for(let i=1;i<=last;i++){
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
       const raw=this.trimRecord(this.record(i));
       if(raw.length){
         if(comp===2){
@@ -1164,7 +1261,7 @@ class MobiFile{
         await Utils.yieldToUI();
       }
     }
-    if(!pos)throw new ParseError('Não foi possível extrair o texto deste MOBI.','O arquivo pode estar corrompido. Tente convertê-lo para EPUB.');
+    if(!pos)throw new ParseError(T('app.nao_foi_possivel_extrair_o_texto_deste'),T('app.o_arquivo_pode_estar_corrompido_tente'));
     const end=declared>0&&declared<=pos?declared:pos;
     return out.subarray(0,end);
   }
@@ -1204,7 +1301,7 @@ class MobiFile{
        abrir a página de fora do app ao ser tocado. */
     html=DocUtils.stripLinks(html);
     html=html.replace(/(<br\s*\/?>\s*){4,}/gi,'<br><br>');
-    return html.trim()||DocUtils.notice('Livro sem texto legível','Não encontramos conteúdo para exibir neste arquivo.');
+    return html.trim()||DocUtils.notice(T('app.livro_sem_texto_legivel'),T('app.nao_encontramos_conteudo_para_exibir_n'));
   }
 }
 MobiFile.MAX_TEXT=48*1024*1024;
@@ -1216,12 +1313,12 @@ class MOBIParser{
     const onProgress=opts.onProgress||(()=>{});
     const signal=opts.signal||null;
     if(!MobiFile.isMobi(buffer)){
-      throw new ParseError('Este arquivo não é um MOBI válido.','Confira se a extensão corresponde ao conteúdo ou converta o livro para EPUB.');
+      throw new ParseError(T('app.este_arquivo_nao_e_um_mobi_valido'),T('app.confira_se_a_extensao_corresponde_ao_c'));
     }
     const file=new MobiFile(buffer).readHeader();
-    onProgress('Descompactando o livro',0);
-    const bytes=await file.readText(p=>onProgress('Descompactando o livro',p),signal);
-    onProgress('Organizando o texto',1);
+    onProgress(T('app.descompactando_o_livro'),0);
+    const bytes=await file.readText(p=>onProgress(T('app.descompactando_o_livro'),p),signal);
+    onProgress(T('app.organizando_o_texto'),1);
     await Utils.yieldToUI();
     return file.buildHtml(bytes);
   }
@@ -1293,7 +1390,7 @@ class EPUBParser{
       const path=Object.keys(zip.files).find(p=>/meta-inf\/container\.xml$/i.test(p));
       if(path)containerFile=zip.files[path];
     }
-    if(!containerFile)throw new Error('EPUB inválido: container.xml não encontrado.');
+    if(!containerFile)throw new Error(T('app.epub_invalido_container_xml_nao_encont'));
     const containerDoc=parser.parseFromString(await containerFile.async('text'),'text/xml');
     let rootfile=null;
     const cEls=containerDoc.getElementsByTagName('*');
@@ -1301,22 +1398,22 @@ class EPUBParser{
     let opfPath=rootfile?rootfile.getAttribute('full-path'):null;
     if(!opfPath||!EPUBParser.findFile(zip,opfPath)){
       const candidate=Object.keys(zip.files).find(p=>/\.opf$/i.test(p)&&!zip.files[p].dir);
-      if(!candidate)throw new Error('EPUB inválido: arquivo OPF não encontrado.');
+      if(!candidate)throw new Error(T('app.epub_invalido_arquivo_opf_nao_encontra'));
       opfPath=candidate;
     }
     const opfDir=opfPath.includes('/')?opfPath.substring(0,opfPath.lastIndexOf('/')+1):'';
     const opfDoc=parser.parseFromString(await EPUBParser.findFile(zip,opfPath).async('text'),'text/xml');
     const byLocal=name=>Array.from(opfDoc.getElementsByTagName('*')).filter(el=>el.localName===name);
     const getMeta=tagName=>{const els=byLocal(tagName);return els.length?els[0].textContent.trim():null};
-    const title=getMeta('title')||'Livro Sem Título';
-    const author=getMeta('creator')||'Autor Desconhecido';
+    const title=getMeta('title')||T('app.livro_sem_titulo');
+    const author=getMeta('creator')||Utils.SEM_AUTOR;
     const manifest={};
     byLocal('item').forEach(item=>{
       const id=item.getAttribute('id');const href=item.getAttribute('href');
       if(id&&href)manifest[id]={href,mediaType:item.getAttribute('media-type')||'',properties:item.getAttribute('properties')||''};
     });
     const spineIds=byLocal('itemref').map(ir=>ir.getAttribute('idref')).filter(Boolean);
-    if(spineIds.length===0)throw new Error('EPUB inválido: nenhum capítulo no spine.');
+    if(spineIds.length===0)throw new Error(T('app.epub_invalido_nenhum_capitulo_no_spine'));
     let coverBase64=null;
     try{
       let coverItem=null;
@@ -1334,7 +1431,7 @@ class EPUBParser{
         }
       }
     }catch(e){}
-    let toc=spineIds.map((_,i)=>`Capítulo ${i+1}`);
+    let toc=spineIds.map((_,i)=>T('app.capitulo_v',{v:i+1}));
     try{
       let tocItem=null;
       for(const it of Object.values(manifest)){
@@ -1376,7 +1473,7 @@ class EPUBParser{
         }
       }
     }catch(e){}
-    const missingHtml=`<div style="padding:20px;text-align:center;"><p>[Trecho ausente ou corrompido no arquivo original]</p></div>`;
+    const missingHtml=`<div style="padding:20px;text-align:center;"><p>${T('app.trecho_ausente_ou_corrompido_no_arquiv')}</p></div>`;
     return{
       metadata:{title,author,cover:coverBase64,format:'epub'},
       toc,totalChapters:spineIds.length,
@@ -1432,9 +1529,9 @@ class EPUBParser{
       const blocks=Array.from(d.body.querySelectorAll('p, h1, h2, h3, h4, li, blockquote, div'))
         .map(b=>(b.textContent||'').trim()).filter(Boolean);
       const text=blocks.length?blocks.join('\n\n'):(d.body.textContent||'').trim();
-      if(!text)return '<p>Este capítulo não pôde ser exibido.</p>';
+      if(!text)return `<p>${T('app.este_capitulo_nao_pode_ser_exibido')}</p>`;
       return text.split(/\n{2,}/).map(p=>`<p>${Utils.esc(p)}</p>`).join('');
-    }catch(e){return '<p>Este capítulo não pôde ser exibido.</p>'}
+    }catch(e){return `<p>${T('app.este_capitulo_nao_pode_ser_exibido')}</p>`}
   }
 }
 
@@ -1508,7 +1605,7 @@ class PDFParser{
   /* Abre a partir de um Blob, lendo por pedaços quando vale a pena.
      Devolve também o transporte, para o leitor poder encerrá-lo. */
   static async parseBlob(blob){
-    if(!blob)throw new Error('PDF indisponível.');
+    if(!blob)throw new Error(T('app.pdf_indisponivel'));
     const Transporte=montarBlobRange();
     if(blob.size<=PDFParser.LIMITE_INTEIRO||!Transporte){
       const pdf=await pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
@@ -1590,7 +1687,7 @@ class PDFParser{
       wrapNode.appendChild(inner);
     } catch(e) {
       console.error(e);
-      wrapNode.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>';
+      wrapNode.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">${T('app.nao_foi_possivel_carregar_esta_pagina')}</div>`;
     }
   }
   static async renderPageToDataURL(pdf, pageNumber, maxW, maxH, quality=0.7) {
@@ -1615,7 +1712,7 @@ class PDFParser{
 class TXTParser{
   static toHtml(text){
     const paras=String(text).replace(/\r\n/g,'\n').split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
-    if(!paras.length)return '<p>Arquivo vazio.</p>';
+    if(!paras.length)return `<p>${T('app.arquivo_vazio')}</p>`;
     return paras.map(p=>`<p>${Utils.esc(p).replace(/\n/g,'<br>')}</p>`).join('');
   }
 }
@@ -1772,14 +1869,14 @@ class MDParser{
     }
     flushPara();
     const html=out.join('');
-    return html||'<p>Arquivo vazio.</p>';
+    return html||`<p>${T('app.arquivo_vazio')}</p>`;
   }
   /* Mesma assinatura dos outros leitores (DOCXParser / MOBIParser). */
   static async parse(buffer,opts={}){
     const onProgress=opts.onProgress||(()=>{});
-    onProgress('Lendo o texto',.15);
+    onProgress(T('app.lendo_o_texto'),.15);
     const text=MDParser.decode(buffer);
-    onProgress('Convertendo o Markdown',.6);
+    onProgress(T('app.convertendo_o_markdown'),.6);
     await Utils.yieldToUI();
     return DocUtils.stripLinks(MDParser.toHtml(text));
   }
@@ -1939,8 +2036,8 @@ const LibArchiveLoader={
     if(this._promise)return this._promise;
     this._promise=new Promise((resolve,reject)=>{
       if(typeof WebAssembly!=='object'){
-        reject(new ParseError('Este navegador não consegue abrir arquivos CBR.',
-          'Converta o quadrinho para CBZ (ZIP) e importe novamente.'));
+        reject(new ParseError(T('app.este_navegador_nao_consegue_abrir_arqu'),
+          T('app.converta_o_quadrinho_para_cbz_zip_e_im')));
         return;
       }
       /* Script CLÁSSICO, de propósito: com o aplicativo aberto direto
@@ -1956,12 +2053,12 @@ const LibArchiveLoader={
         if(window.VeredasLibArchive&&window.VeredasLibArchive.disponivel()){
           resolve(window.VeredasLibArchive);
         }else{
-          reject(new ParseError('Este navegador não consegue abrir arquivos CBR.',
-            'Converta o quadrinho para CBZ (ZIP) e importe novamente.'));
+          reject(new ParseError(T('app.este_navegador_nao_consegue_abrir_arqu'),
+            T('app.converta_o_quadrinho_para_cbz_zip_e_im')));
         }
       };
-      tag.onerror=()=>reject(new ParseError('O leitor de CBR não foi encontrado.',
-        'A pasta vendor/libarchive precisa estar junto do index.html, com o arquivo libarchive-embutido.js dentro.'));
+      tag.onerror=()=>reject(new ParseError(T('app.o_leitor_de_cbr_nao_foi_encontrado'),
+        T('app.a_pasta_vendor_libarchive_precisa_esta')));
       document.head.appendChild(tag);
     }).catch(err=>{
       this._promise=null;
@@ -2072,7 +2169,7 @@ const ZipStream={
     /* O cabeçalho local repete o nome e pode trazer campos extras de
        tamanho diferente do índice; é dele que sai o começo dos dados. */
     const cab=new DataView(await blob.slice(item.offset,item.offset+30).arrayBuffer());
-    if(cab.getUint32(0,true)!==0x04034b50)throw new Error('Cabeçalho de item inválido.');
+    if(cab.getUint32(0,true)!==0x04034b50)throw new Error(T('app.cabecalho_de_item_invalido'));
     const inicio=item.offset+30+cab.getUint16(26,true)+cab.getUint16(28,true);
     const fatia=blob.slice(inicio,inicio+item.compresso);
     if(item.metodo===0)return new Blob([fatia],{type:tipo||''});
@@ -2095,8 +2192,8 @@ const ComicUnpacker={
       const {quota,usage}=await navigator.storage.estimate();
       if(quota&&usage!=null&&quota-usage<bytes*1.15){
         throw new ParseError(
-          'Não há espaço suficiente no aparelho para este quadrinho.',
-          `Ele ocupa cerca de ${Utils.fmtBytes(bytes)} e restam por volta de ${Utils.fmtBytes(Math.max(0,quota-usage))}. Libere espaço ou exclua livros da biblioteca.`
+          T('app.nao_ha_espaco_suficiente_no_aparelho_p_2'),
+          T('app.ele_ocupa_cerca_de_bytes_e_restam_por',{bytes:Utils.fmtBytes(bytes),v:Utils.fmtBytes(Math.max(0,quota-usage))})
         );
       }
     }catch(e){if(e instanceof ParseError)throw e}
@@ -2107,7 +2204,7 @@ const ComicUnpacker={
      gerar a miniatura. */
   async unpack(bookId,blob,{nome='quadrinho',signal=null,onStatus=()=>{},onProgress=null,db=null}={}){
     const banco=db||App.db;
-    const abortou=()=>{if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError')};
+    const abortou=()=>{if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError')};
     let kind=await ComicSupport.sniffBlob(blob);
     if(!kind){
       const ext=BookFormats.normalize(nome);
@@ -2136,8 +2233,8 @@ const ComicUnpacker={
     await descarregar();
     abortou();
     if(!estado.paginas){
-      throw new ParseError('Não encontramos páginas dentro deste quadrinho.',
-        'O arquivo precisa conter imagens (JPG, PNG, WEBP ou GIF).');
+      throw new ParseError(T('app.nao_encontramos_paginas_dentro_deste_q'),
+        T('app.o_arquivo_precisa_conter_imagens_jpg_p'));
     }
     return estado;
   },
@@ -2150,7 +2247,7 @@ const ComicUnpacker={
   },
 
   async _doZipFatiado(blob,itens,estado,guardar,{abortou,onStatus,onProgress}){
-    onStatus('Lendo o índice do quadrinho...');
+    onStatus(T('app.lendo_o_indice_do_quadrinho'));
     const info=itens.find(e=>/comicinfo\.xml$/i.test(e.nome)&&!ComicSupport.isJunk(e.nome));
     if(info){
       try{
@@ -2161,7 +2258,7 @@ const ComicUnpacker={
     const imagens=itens.filter(e=>ComicSupport.isImage(e.nome))
       .sort((a,b)=>ComicSupport.naturalCompare(a.nome,b.nome));
     const total=imagens.length;
-    onStatus(`Preparando ${total} página(s)...`);
+    onStatus(T('app.preparando_total_pagina_s',{total:total}));
     let ultimo=0;
     for(let i=0;i<total;i++){
       abortou();
@@ -2174,7 +2271,7 @@ const ComicUnpacker={
       const agora=Date.now();
       if(agora-ultimo>120||i===total-1){
         ultimo=agora;
-        onStatus(`Preparando as páginas (${i+1} de ${total})...`);
+        onStatus(T('app.preparando_as_paginas_v_de_total',{v:i+1,total:total}));
         onProgress&&onProgress(i+1,total);
         await Utils.yieldToUI();
       }
@@ -2182,12 +2279,12 @@ const ComicUnpacker={
   },
 
   async _doZipJSZip(blob,estado,guardar,{abortou,onStatus,onProgress}){
-    onStatus('Lendo o índice do quadrinho...');
+    onStatus(T('app.lendo_o_indice_do_quadrinho'));
     let zip;
     try{zip=await JSZip.loadAsync(blob)}
     catch(e){
-      throw new ParseError('Não foi possível ler este quadrinho.',
-        'O arquivo pode estar incompleto, protegido por senha ou corrompido.');
+      throw new ParseError(T('app.nao_foi_possivel_ler_este_quadrinho'),
+        T('app.o_arquivo_pode_estar_incompleto_proteg'));
     }
     const entradas=[];
     let infoEntry=null;
@@ -2202,7 +2299,7 @@ const ComicUnpacker={
     }
     entradas.sort((a,b)=>ComicSupport.naturalCompare(a.path,b.path));
     const total=entradas.length;
-    onStatus(`Preparando ${total} página(s)...`);
+    onStatus(T('app.preparando_total_pagina_s',{total:total}));
     let ultimo=0;
     for(let i=0;i<entradas.length;i++){
       abortou();
@@ -2216,7 +2313,7 @@ const ComicUnpacker={
       const agora=Date.now();
       if(agora-ultimo>120||i===total-1){
         ultimo=agora;
-        onStatus(`Preparando as páginas (${i+1} de ${total})...`);
+        onStatus(T('app.preparando_as_paginas_v_de_total',{v:i+1,total:total}));
         onProgress&&onProgress(i+1,total);
         await Utils.yieldToUI();
       }
@@ -2226,10 +2323,10 @@ const ComicUnpacker={
   },
 
   async _doLibArchive(blob,estado,guardar,{abortou,onStatus,onProgress,nome}){
-    onStatus('Preparando o leitor de CBR...');
+    onStatus(T('app.preparando_o_leitor_de_cbr'));
     const LA=await LibArchiveLoader.load();
     abortou();
-    onStatus('Lendo o arquivo...');
+    onStatus(T('app.lendo_o_arquivo'));
     let leitor;
     try{
       /* Os bytes são copiados aos poucos para dentro do WebAssembly.
@@ -2238,22 +2335,22 @@ const ComicUnpacker={
       leitor=await LA.abrirBlob(blob);
     }catch(e){
       console.error(e);
-      throw new ParseError('Não foi possível abrir este quadrinho.',
-        'O arquivo pode ser grande demais para a memória deste aparelho. Dividir o quadrinho em partes menores costuma resolver.');
+      throw new ParseError(T('app.nao_foi_possivel_abrir_este_quadrinho'),
+        T('app.o_arquivo_pode_ser_grande_demais_para'));
     }
     await Utils.yieldToUI();
     try{
-      onStatus('Lendo o índice do quadrinho...');
+      onStatus(T('app.lendo_o_indice_do_quadrinho'));
       let entradas=[];
       try{entradas=leitor.listar()}catch(e){console.warn(e)}
       const arquivos=entradas.filter(e=>e&&e.path&&!e.dir);
       if(!arquivos.length){
         const cifrado=leitor.temSenha();
         throw new ParseError(
-          cifrado?'Este quadrinho está protegido por senha.'
-                 :'Não foi possível ler este arquivo de quadrinho.',
-          cifrado?'Remova a senha do arquivo e importe de novo.'
-                 :'Ele pode estar incompleto, dividido em várias partes ou em uma variação de RAR que o aplicativo não reconhece. Converter para CBZ resolve.');
+          cifrado?T('app.este_quadrinho_esta_protegido_por_senh')
+                 :T('app.nao_foi_possivel_ler_este_arquivo_de_q'),
+          cifrado?T('app.remova_a_senha_do_arquivo_e_importe_de')
+                 :T('app.ele_pode_estar_incompleto_dividido_em'));
       }
       const infoEntrada=arquivos.find(e=>/comicinfo\.xml$/i.test(e.path));
       const imagens=arquivos.filter(e=>ComicSupport.isImage(e.path))
@@ -2263,7 +2360,7 @@ const ComicUnpacker={
       if(infoEntrada)querer.add(infoEntrada.path);
 
       const total=imagens.length;
-      onStatus(`Preparando ${total} página(s)...`);
+      onStatus(T('app.preparando_total_pagina_s',{total:total}));
       await Utils.yieldToUI();
       let ultimo=0,vistas=0;
       /* `aoExtrair` recebe cada página assim que ela sai e a grava na
@@ -2285,7 +2382,7 @@ const ComicUnpacker={
           const agora=Date.now();
           if(agora-ultimo>120||vistas===total){
             ultimo=agora;
-            onStatus(`Preparando as páginas (${vistas} de ${total})...`);
+            onStatus(T('app.preparando_as_paginas_vistas_de_total',{vistas:vistas,total:total}));
             onProgress&&onProgress(vistas,total);
           }
         }
@@ -2343,7 +2440,7 @@ class ComicArchive{
 
   /* Blob da página `i` — o formato decide de onde ele vem. */
   async pageBlob(i){
-    if(this._closed)throw new Error('Quadrinho fechado.');
+    if(this._closed)throw new Error(T('app.quadrinho_fechado'));
     const page=this.pages[i];
     if(!page)return null;
     if(this.kind==='store'){
@@ -2357,12 +2454,12 @@ class ComicArchive{
         return guardado;
       }
       const b=await App.db.getComicPage(this.bookId,i);
-      if(!b)throw new ParseError('Esta página não pôde ser descompactada.','');
+      if(!b)throw new ParseError(T('app.esta_pagina_nao_pode_ser_descompactada'),'');
       this._cache.set(i,b);
       while(this._cache.size>ComicArchive.LEMBRAR)this._cache.delete(this._cache.keys().next().value);
       return b;
     }
-    throw new ParseError('Esta página não está disponível.','');
+    throw new ParseError(T('app.esta_pagina_nao_esta_disponivel'),'');
   }
 
   /* Endereço temporário da imagem. O leitor devolve o que não usa
@@ -2519,7 +2616,7 @@ class DOMPaginator{
     textBox.style.cssText=`font-family:${fontFamily};font-size:${fontSize}px;line-height:${lineHeight};`;
     const footer=document.createElement('div');
     footer.className='page-number';
-    footer.textContent='Página';
+    footer.textContent=T('app.pagina');
     box.append(textBox,footer);
     document.body.appendChild(box);
 
@@ -2546,7 +2643,7 @@ class DOMPaginator{
       while((node=next())!==null){
         if(++guard>DOMPaginator.MAX_STEPS)break;
         if(pages.length>=DOMPaginator.MAX_PAGES)break;
-        if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+        if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
         /* Só nós de texto em branco são descartados: elementos vazios podem ser
            marcadores de capítulo, <br> ou espaçadores e precisam sobreviver. */
         if(node.nodeType===3&&!node.textContent.trim())continue;
@@ -2632,7 +2729,7 @@ const AudioFormats={
   kind:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).kind||'audio',
   icon:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).icon||'headphones',
   /* “audiolivro” x “vídeo”: usado nas mensagens para o usuário */
-  noun:f=>AudioFormats.isVideo(f)?'vídeo':'audiolivro',
+  noun:f=>AudioFormats.isVideo(f)?T('app.video_2'):T('app.audiolivro'),
   mime:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).mime||'audio/mpeg',
   label:f=>(AUDIO_FORMATS[String(f||'').toLowerCase()]||{}).label||String(f||'').toUpperCase()
 };
@@ -2657,11 +2754,15 @@ const AudioFmt={
   spoken(sec){
     sec=Math.max(0,Math.floor(Number.isFinite(sec)?sec:0));
     const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+    /* O próprio navegador sabe dizer "1 hora" e "2 minutos" em cada
+       língua, e juntar a lista com o "e" certo. */
+    const tag=(typeof Idiomas!=='undefined'&&Idiomas._tag)||'pt-BR';
+    const un=(n,u)=>{try{return new Intl.NumberFormat(tag,{style:'unit',unit:u,unitDisplay:'long'}).format(n)}catch(e){return `${n} ${u}`}};
     const parts=[];
-    if(h)parts.push(`${h} ${h===1?'hora':'horas'}`);
-    if(m)parts.push(`${m} ${m===1?'minuto':'minutos'}`);
-    if(s||!parts.length)parts.push(`${s} ${s===1?'segundo':'segundos'}`);
-    return parts.length>1?parts.slice(0,-1).join(', ')+' e '+parts[parts.length-1]:parts[0];
+    if(h)parts.push(un(h,'hour'));
+    if(m)parts.push(un(m,'minute'));
+    if(s||!parts.length)parts.push(un(s,'second'));
+    return typeof Idiomas!=='undefined'?Idiomas.lista(parts):parts.join(', ');
   }
 };
 
@@ -3049,7 +3150,7 @@ class MP4Reader{
       if(h.type==='moov'){moov=h;break}
       p=h.end;
     }
-    if(!moov)throw new Error('mp4: moov não encontrado');
+    if(!moov)throw new Error(T('app.mp4_moov_nao_encontrado'));
     const kids=await MP4Reader.children(blob,moov);
     const mvhd=kids.find(k=>k.type==='mvhd');
     if(mvhd){
@@ -3264,10 +3365,10 @@ const AudioChapters={
       out.push(c);
     }
     if(out.length<2)return[];
-    if(out[0].start>0.5)out.unshift({title:'Início',start:0});
+    if(out[0].start>0.5)out.unshift({title:T('app.inicio'),start:0});
     out.forEach((c,i)=>{
       c.end=i<out.length-1?out[i+1].start:(duration||c.start);
-      if(!c.title)c.title=`Capítulo ${i+1}`;
+      if(!c.title)c.title=T('app.capitulo_v',{v:i+1});
     });
     return out;
   }
@@ -3301,7 +3402,7 @@ const AudioCover={
     try{
       const img=await AudioCover.decode(blob);
       const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
-      if(!w||!h)throw new Error('imagem vazia');
+      if(!w||!h)throw new Error(T('app.imagem_vazia'));
       const scale=Math.min(1,AudioCover.MAX/Math.max(w,h));
       const cw=Math.max(1,Math.round(w*scale)),ch=Math.max(1,Math.round(h*scale));
       const canvas=document.createElement('canvas');
@@ -3324,9 +3425,9 @@ const AudioCover={
     return new Promise((resolve,reject)=>{
       const url=URL.createObjectURL(blob);
       const img=new Image();
-      const timer=setTimeout(()=>{URL.revokeObjectURL(url);reject(new Error('imagem demorou demais'))},8000);
+      const timer=setTimeout(()=>{URL.revokeObjectURL(url);reject(new Error(T('app.imagem_demorou_demais')))},8000);
       img.onload=()=>{clearTimeout(timer);URL.revokeObjectURL(url);resolve(img)};
-      img.onerror=()=>{clearTimeout(timer);URL.revokeObjectURL(url);reject(new Error('imagem inválida'))};
+      img.onerror=()=>{clearTimeout(timer);URL.revokeObjectURL(url);reject(new Error(T('app.imagem_invalida')))};
       img.src=url;
     });
   }
@@ -3423,8 +3524,8 @@ const AudioImport={
       catch(e){
         console.warn('Metadados ilegíveis:',e);
         throw new ParseError(
-          `Este arquivo não é um ${AudioFormats.label(format)} válido.`,
-          'Confira se a extensão corresponde ao conteúdo ou converta o áudio para MP3 ou M4B (AAC).'
+          T('app.este_arquivo_nao_e_um_format_valido',{format:AudioFormats.label(format)}),
+          T('app.confira_se_a_extensao_corresponde_ao_c_2')
         );
       }
       this.tagCache.set(file,t);
@@ -3442,8 +3543,8 @@ const AudioImport={
       const {quota,usage}=await navigator.storage.estimate();
       if(quota&&usage!=null&&quota-usage<bytes*1.05){
         throw new ParseError(
-          'Não há espaço suficiente no aparelho para este audiolivro.',
-          `O arquivo tem ${Utils.fmtBytes(bytes)} e restam cerca de ${Utils.fmtBytes(Math.max(0,quota-usage))}. Libere espaço ou exclua livros da biblioteca.`
+          T('app.nao_ha_espaco_suficiente_no_aparelho_p'),
+          T('app.o_arquivo_tem_bytes_e_restam_cerca_de',{bytes:Utils.fmtBytes(bytes),v:Utils.fmtBytes(Math.max(0,quota-usage))})
         );
       }
     }catch(e){if(e instanceof ParseError)throw e}
@@ -3474,15 +3575,15 @@ const AudioImport={
   },
   unplayable(tags,format){
     const video=AudioFormats.isVideo(format);
-    if(tags&&tags.drm)return new ParseError(`Este ${AudioFormats.noun(format)} está protegido por DRM.`,'Arquivos com proteção não podem ser reproduzidos aqui. Use uma cópia sem DRM.');
+    if(tags&&tags.drm)return new ParseError(T('app.este_format_esta_protegido_por_drm',{format:AudioFormats.noun(format)}),T('app.arquivos_com_protecao_nao_podem_ser_re'));
     if(tags&&/^(alac|ac-3|ec-3)$/i.test(tags.codec||''))return new ParseError(
-      'O navegador não reproduz o formato de áudio deste arquivo.',
-      video?'Converta o vídeo para MP4 com áudio AAC e vídeo H.264 e importe novamente.'
-           :'Converta o audiolivro para M4B com áudio AAC (ou para MP3) e importe novamente.');
+      T('app.o_navegador_nao_reproduz_o_formato_de'),
+      video?T('app.converta_o_video_para_mp4_com_audio_aa')
+           :T('app.converta_o_audiolivro_para_m4b_com_aud'));
     return new ParseError(
-      `Este ${AudioFormats.label(format)} não pode ser reproduzido neste navegador.`,
-      video?'O arquivo pode estar corrompido ou usar um codec sem suporte. Tente converter para MP4 com vídeo H.264 e áudio AAC.'
-           :'O arquivo pode estar corrompido ou usar um codec sem suporte. Tente converter para MP3 ou M4B (AAC).');
+      T('app.este_format_nao_pode_ser_reproduzido_n',{format:AudioFormats.label(format)}),
+      video?T('app.o_arquivo_pode_estar_corrompido_ou_usa_2')
+           :T('app.o_arquivo_pode_estar_corrompido_ou_usa'));
   },
 
   /* ---------- um arquivo = um audiolivro ---------- */
@@ -3490,16 +3591,16 @@ const AudioImport={
     const format=AudioFormats.ext(file.name);
     const video=AudioFormats.isVideo(format);
     const say=t=>{try{onStatus&&onStatus(t)}catch(e){}};
-    say('Lendo título, capítulos e capa...');
+    say(T('app.lendo_titulo_capitulos_e_capa'));
     const tags=await this.tags(file);
     if(tags.drm)throw this.unplayable(tags,format);
-    say(video?'Conferindo se o vídeo pode ser reproduzido...':'Conferindo se o áudio pode ser reproduzido...');
+    say(video?T('app.conferindo_se_o_video_pode_ser_reprodu'):T('app.conferindo_se_o_audio_pode_ser_reprodu'));
     const probe=await this.probe(file,format);
     if(probe.ok===false)throw this.unplayable(tags,format);
     let duration=tags.duration;
     if(probe.ok&&probe.duration&&(!duration||Math.abs(duration-probe.duration)>2))duration=probe.duration;
     if(!(duration>0)){
-      throw new ParseError(`Não foi possível descobrir a duração deste ${video?'vídeo':'áudio'}.`,'O arquivo pode estar incompleto. Tente baixá-lo novamente.');
+      throw new ParseError(T('app.nao_foi_possivel_descobrir_a_duracao_d_2',{v:video?T('app.video_2'):T('app.audio')}),T('app.o_arquivo_pode_estar_incompleto_tente'));
     }
     const base=this.cleanName(file.name);
     let title=tags.title;
@@ -3507,8 +3608,8 @@ const AudioImport={
       const generic=/^(cap[ií]tulo|chapter|parte|part|faixa|track|cd|disco)?\s*\d+/i.test(tags.title||'');
       if(!tags.title||generic||tags.title===tags.album)title=tags.album;
     }
-    title=Bin.clean(title)||base||(video?'Vídeo':'Audiolivro');
-    say('Preparando a capa...');
+    title=Bin.clean(title)||base||(video?T('app.video'):T('app.audiolivro_2'));
+    say(T('app.preparando_a_capa'));
     let cover=await AudioCover.fromBlob(tags.cover&&tags.cover.blob);
     /* MP4 sem capa nas etiquetas: usamos um quadro do próprio vídeo. */
     if(!cover&&video)cover=await VideoCover.fromFile(file,duration);
@@ -3516,7 +3617,7 @@ const AudioImport={
     const hash=fingerprint||await FileFingerprint.hashBlob(file);
     const mime=AudioFormats.mime(format);
     const meta={
-      id:Utils.id(),title,author:tags.author||'Autor Desconhecido',format,
+      id:Utils.id(),title,author:tags.author||Utils.SEM_AUTOR,format,
       sourceFileName:file.name,addedAt:Date.now(),
       cover:cover?cover.dataUrl:null,coverAspect:cover?cover.aspect:null,
       progress:null,status:'toread',favorite:false,
@@ -3535,8 +3636,8 @@ const AudioImport={
   chapterTitle(file,tags,index,useTags){
     let raw=useTags&&tags.title?tags.title:this.cleanName(file.name);
     raw=Bin.clean(raw);
-    if(/^\d{1,4}$/.test(raw))raw=`Capítulo ${parseInt(raw,10)}`;
-    return raw||`Capítulo ${index+1}`;
+    if(/^\d{1,4}$/.test(raw))raw=T('app.capitulo_v',{v:parseInt(raw,10)});
+    return raw||T('app.capitulo_v',{v:index+1});
   },
   sortFiles(files,tagsList){
     const items=files.map((f,i)=>({f,t:tagsList[i]}));
@@ -3582,7 +3683,7 @@ const AudioImport={
       const base=this.commonName(names);
       const shape=names.map(n=>n.replace(/\d+/g,'#'));
       if(base.length>=3){reason='nome';title=base}
-      else if(files.length>=3&&new Set(shape).size===1){reason='sequência';title=''}
+      else if(files.length>=3&&new Set(shape).size===1){reason=T('app.sequencia');title=''}
     }
     if(!reason)return null;
     const ordered=this.sortFiles(files,tags);
@@ -3603,7 +3704,7 @@ const AudioImport={
     const tracks=[],blobs=[],hashes=[];
     let offset=0;
     for(let i=0;i<files.length;i++){
-      say(`Lendo faixa ${i+1} de ${files.length}...`);
+      say(T('app.lendo_faixa_v_de_length',{v:i+1,length:files.length}));
       const f=files[i],t=tags[i];
       let duration=t.duration;
       if(!(duration>0)){
@@ -3611,18 +3712,18 @@ const AudioImport={
         if(p.ok===false)throw this.unplayable(t,'mp3');
         duration=p.duration;
       }
-      if(!(duration>0))throw new ParseError(`Não foi possível descobrir a duração de “${f.name}”.`,'Remova esse arquivo da seleção e tente de novo.');
+      if(!(duration>0))throw new ParseError(T('app.nao_foi_possivel_descobrir_a_duracao_d',{name:f.name}),T('app.remova_esse_arquivo_da_selecao_e_tente'));
       tracks.push({name:f.name,title:this.chapterTitle(f,t,i,useTags),size:f.size,mime:'audio/mpeg',duration,offset});
       blobs.push(f.slice(0,f.size,'audio/mpeg'));
       hashes.push(await FileFingerprint.hashBlob(f));
       offset+=duration;
     }
-    say('Preparando a capa...');
+    say(T('app.preparando_a_capa'));
     const withCover=tags.find(t=>t.cover&&t.cover.blob);
     const cover=await AudioCover.fromBlob(withCover&&withCover.cover.blob);
-    const finalTitle=Bin.clean(title)||plan.title||'Audiolivro';
+    const finalTitle=Bin.clean(title)||plan.title||T('app.audiolivro_2');
     const meta={
-      id:Utils.id(),title:finalTitle,author:Bin.clean(author)||plan.author||'Autor Desconhecido',format:'mp3',
+      id:Utils.id(),title:finalTitle,author:Bin.clean(author)||plan.author||Utils.SEM_AUTOR,format:'mp3',
       sourceFileName:`${files.length} arquivos MP3`,addedAt:Date.now(),
       cover:cover?cover.dataUrl:null,coverAspect:cover?cover.aspect:null,
       progress:null,status:'toread',favorite:false,
@@ -3645,7 +3746,7 @@ const AudioImport={
       await db.saveAudioBook(meta,blobs);
     }catch(err){
       if(err&&(err.name==='QuotaExceededError'||/quota/i.test(String(err.message||'')))){
-        throw new ParseError('O armazenamento do aparelho está cheio.','Libere espaço ou exclua livros da biblioteca e tente novamente.');
+        throw new ParseError(T('app.o_armazenamento_do_aparelho_esta_cheio'),T('app.libere_espaco_ou_exclua_livros_da_bibl'));
       }
       throw err;
     }
@@ -3663,17 +3764,17 @@ const AudioGroupDialog={
     if(!el)return Promise.resolve({action:'separate'});
     const $=id=>document.getElementById(id);
     const n=plan.files.length;
-    $('agm-sub').textContent=`${n} arquivos MP3 · ${Utils.fmtBytes(plan.totalSize)}`;
+    $('agm-sub').textContent=`${T('app.n_arquivos_mp3',{n})} · ${Utils.fmtBytes(plan.totalSize)}`;
     $('agm-lead').textContent=plan.reason==='album'
-      ?'Os arquivos têm o mesmo álbum nas etiquetas, então parecem ser capítulos de um mesmo audiolivro.'
-      :'Os nomes dos arquivos seguem uma sequência, então parecem ser capítulos de um mesmo audiolivro.';
+      ?T('app.os_arquivos_tem_o_mesmo_album_nas_etiq')
+      :T('app.os_nomes_dos_arquivos_seguem_uma_seque');
     $('agm-title-input').value=plan.title||'';
     $('agm-author-input').value=plan.author||'';
     const rows=plan.files.slice(0,6).map((f,i)=>{
       const d=plan.tags[i]&&plan.tags[i].duration;
       return `<li><span class="agm-n">${i+1}</span><span class="agm-name">${Utils.esc(f.name)}</span>${d?`<small>${AudioFmt.clock(d)}</small>`:''}</li>`;
     }).join('');
-    $('agm-list').innerHTML=`<ol>${rows}</ol>${n>6?`<p class="agm-more">e mais ${n-6} ${n-6===1?'arquivo':'arquivos'}, na ordem em que serão tocados</p>`:'<p class="agm-more">Na ordem em que serão tocados</p>'}`;
+    $('agm-list').innerHTML=`<ol>${rows}</ol>${n>6?`<p class="agm-more">${T('app.e_mais_n_arquivos',{n:n-6})}</p>`:`<p class="agm-more">${T('app.na_ordem_em_que_serao_tocados')}</p>`}`;
     el.classList.add('show');
     document.body.classList.add('modal-open');
     lucide.createIcons({root:el});
@@ -3919,11 +4020,11 @@ class AudioPlayer{
       const blobs=rec&&(rec.blobs||(rec.blob?[rec.blob]:null));
       const noun=AudioFormats.noun(book.format);
       if(!blobs||!blobs.length){
-        throw new ParseError(`O arquivo deste ${noun} não está mais salvo no aparelho.`,`Importe o arquivo novamente para continuar ${AudioFormats.isVideoBook(book)?'assistindo':'ouvindo'}.`);
+        throw new ParseError(T('app.o_arquivo_deste_noun_nao_esta_mais_sal',{noun:noun}),T('app.importe_o_arquivo_novamente_para_conti_2',{v:AudioFormats.isVideoBook(book)?'assistindo':'ouvindo'}));
       }
       const trackMeta=(meta.audio&&meta.audio.tracks)||[];
       if(!trackMeta.length||trackMeta.length!==blobs.length){
-        throw new ParseError(`Os dados deste ${noun} estão incompletos.`,'Exclua-o da biblioteca e importe o arquivo novamente.');
+        throw new ParseError(T('app.os_dados_deste_noun_estao_incompletos',{noun:noun}),T('app.exclua_o_da_biblioteca_e_importe_o_arq'));
       }
       this.book=meta;
       this.blobs=blobs;
@@ -4033,7 +4134,7 @@ class AudioPlayer{
     this.tracks.forEach(t=>{t.offset=acc;acc+=t.duration});
     this.duration=acc;
     if(this.tracks.length>1){
-      this.chapters=this.tracks.map((t,i)=>({title:t.title||`Capítulo ${i+1}`,start:t.offset,end:t.offset+t.duration}));
+      this.chapters=this.tracks.map((t,i)=>({title:t.title||T('app.capitulo_v',{v:i+1}),start:t.offset,end:t.offset+t.duration}));
     }else{
       const src=((this.book&&this.book.audio&&this.book.audio.chapters)||[]).map(c=>({...c}));
       if(src.length)src[src.length-1].end=Math.max(src[src.length-1].start,this.duration);
@@ -4075,7 +4176,7 @@ class AudioPlayer{
       await new Promise((resolve,reject)=>{
         const clean=()=>{el.removeEventListener('loadedmetadata',ok);el.removeEventListener('error',bad)};
         const ok=()=>{clean();resolve()};
-        const bad=()=>{clean();reject(el.error||new Error('Falha ao carregar o áudio.'))};
+        const bad=()=>{clean();reject(el.error||new Error(T('app.falha_ao_carregar_o_audio')))};
         el.addEventListener('loadedmetadata',ok);
         el.addEventListener('error',bad);
       });
@@ -4139,8 +4240,8 @@ class AudioPlayer{
     this.applyVolume();
     try{await this.el.play()}
     catch(e){
-      if(e&&e.name==='NotAllowedError')Utils.toast('Toque em reproduzir para começar.','play');
-      else if(!e||e.name!=='AbortError'){console.warn(e);Utils.toast(`Não foi possível reproduzir este ${this.isVideo?'vídeo':'áudio'}.`,'alert-triangle')}
+      if(e&&e.name==='NotAllowedError')Utils.toast(T('app.toque_em_reproduzir_para_comecar'),'play');
+      else if(!e||e.name!=='AbortError'){console.warn(e);Utils.toast(T('app.nao_foi_possivel_reproduzir_este_v',{v:this.isVideo?T('app.video_2'):T('app.audio')}),'alert-triangle')}
     }
   }
   pause(){try{this.el.pause()}catch(e){}}
@@ -4233,10 +4334,10 @@ class AudioPlayer{
     const code=e&&e.code;
     const v=this.isVideo;
     const msg=isParse?e.message
-      :code===4?`O navegador não consegue reproduzir este arquivo de ${v?'vídeo':'áudio'}.`
-      :code===3?`O ${v?'vídeo':'áudio'} está danificado neste ponto.`
-      :code===2?`Não foi possível ler o arquivo de ${v?'vídeo':'áudio'}.`
-      :`Não foi possível abrir este ${v?'vídeo':'audiolivro'}.`;
+      :code===4?T('app.o_navegador_nao_consegue_reproduzir_es',{v:v?T('app.video_2'):T('app.audio')})
+      :code===3?T('app.o_v_esta_danificado_neste_ponto',{v:v?T('app.video_2'):T('app.audio')})
+      :code===2?T('app.nao_foi_possivel_ler_o_arquivo_de_v',{v:v?T('app.video_2'):T('app.audio')})
+      :T('app.nao_foi_possivel_abrir_este_v',{v:v?T('app.video_2'):'audiolivro'});
     Utils.toast(msg,'alert-triangle');
     if(isParse&&e.hint)setTimeout(()=>Utils.toast(e.hint,'info'),900);
   }
@@ -4245,7 +4346,7 @@ class AudioPlayer{
     await this.persist({finished:true});
     this.updatePlayUi();
     this.render(true);
-    Utils.toast(video?'Vídeo concluído.':'Audiolivro concluído.','check-circle');
+    Utils.toast(video?T('app.video_concluido'):T('app.audiolivro_concluido'),'check-circle');
   }
 
   /* ============================================================
@@ -4301,21 +4402,21 @@ class AudioPlayer{
     const playing=!this.el.paused&&!this.el.ended;
     this.root.classList.toggle('is-playing',playing);
     this.mini.classList.toggle('is-playing',playing);
-    const label=playing?'Pausar':'Reproduzir';
+    const label=playing?T('app.pausar'):T('ui.reproduzir');
     this.ui.play.setAttribute('aria-label',label);
     this.ui.miniPlay.setAttribute('aria-label',label);
   }
   updateSkipLabels(){
     const b=this.skipBack,f=this.skipFwd;
     this.ui.backNum.textContent=String(b);this.ui.fwdNum.textContent=String(f);
-    this.ui.back.setAttribute('aria-label',`Voltar ${b} segundos`);
-    this.ui.fwd.setAttribute('aria-label',`Avançar ${f} segundos`);
-    this.ui.miniBack.setAttribute('aria-label',`Voltar ${b} segundos`);
+    this.ui.back.setAttribute('aria-label',T('app.voltar_n_segundos',{n:b}));
+    this.ui.fwd.setAttribute('aria-label',T('app.avancar_f_segundos',{f:f}));
+    this.ui.miniBack.setAttribute('aria-label',T('app.voltar_n_segundos',{n:b}));
     const mb=this.ui.miniBack.querySelector('text');if(mb)mb.textContent=String(b);
   }
   updateSpeedUi(){
     this.ui.speedVal.textContent=this.fmtRate(this.rate);
-    this.ui.speed.setAttribute('aria-label',`Velocidade de reprodução: ${this.fmtRate(this.rate)}`);
+    this.ui.speed.setAttribute('aria-label',T('app.velocidade_de_reproducao_rate',{rate:this.fmtRate(this.rate)}));
     this.ui.speed.classList.toggle('active',Math.abs(this.rate-1)>0.001);
   }
   paintBook(){
@@ -4324,13 +4425,13 @@ class AudioPlayer{
     const ui=this.ui;
     const video=AudioFormats.isVideoBook(b);
     const icon=AudioFormats.icon(b.format);
-    const fallbackName=video?'Vídeo':'Audiolivro';
+    const fallbackName=video?T('app.video'):T('app.audiolivro_2');
     ui.title.textContent=b.title||fallbackName;
     ui.miniTitle.textContent=b.title||fallbackName;
-    const author=b.author&&b.author!=='Autor Desconhecido'?b.author:'';
+    const author=b.author&&b.author!==Utils.SEM_AUTOR?b.author:'';
     ui.author.textContent=author;ui.author.hidden=!author;
     const narrator=b.audio&&b.audio.narrator;
-    ui.narrator.textContent=narrator?`Narrado por ${narrator}`:'';ui.narrator.hidden=!narrator;
+    ui.narrator.textContent=narrator?T('app.narrado_por_narrator',{narrator:narrator}):'';ui.narrator.hidden=!narrator;
     const fill=(host,big)=>{
       host.textContent='';
       if(b.cover){
@@ -4387,10 +4488,10 @@ class AudioPlayer{
     const sec=Math.floor(shown);
     if(this.cache.aria!==sec){
       this.cache.aria=sec;
-      ui.seek.setAttribute('aria-valuetext',`${AudioFmt.spoken(shown)} de ${AudioFmt.spoken(len)}`);
+      ui.seek.setAttribute('aria-valuetext',T('app.v_de_total',{v:AudioFmt.spoken(shown),total:AudioFmt.spoken(len)}));
     }
     const pct=dur>0?Math.round(t/dur*100):0;
-    this.setText('topMid',`${pct}% · restam ${AudioFmt.long(dur-t)}`);
+    this.setText('topMid',T('app.pct_restam',{pct:String(pct),tempo:AudioFmt.long(dur-t)}));
     const hasCh=this.chapters.length>1;
     ui.chapterBtn.hidden=!hasCh;
     ui.prev.hidden=!hasCh;ui.next.hidden=!hasCh;
@@ -4398,10 +4499,10 @@ class AudioPlayer{
     this.root.classList.toggle('has-chapters',hasCh);
     if(hasCh){
       this.setText('chapterName',ch?ch.title:'');
-      this.setText('scope',chapterScope?'Neste capítulo':'No livro todo');
+      this.setText('scope',chapterScope?T('ui.neste_capitulo'):T('app.no_livro_todo'));
     }
     ui.miniProgress.style.width=(dur>0?t/dur*100:0).toFixed(2)+'%';
-    this.setText('miniSub',hasCh&&ch?ch.title:(b.author&&b.author!=='Autor Desconhecido'?b.author:AudioFmt.long(dur-t)+' restantes'));
+    this.setText('miniSub',hasCh&&ch?ch.title:(b.author&&b.author!==Utils.SEM_AUTOR?b.author:AudioFmt.long(dur-t)+T('app.restantes')));
     if(this.sleep.mode==='time')this.setText('sleepLabel',AudioFmt.clock(Math.max(0,this.sleep.remaining/1000)));
     if(ci!==this.lastChapterIdx){
       this.lastChapterIdx=ci;
@@ -4440,7 +4541,7 @@ class AudioPlayer{
     if(!this.chapters.length)return;
     const list=this.ui.chapterList;
     list.textContent='';
-    this.ui.chapterSub.textContent=`${this.chapters.length} capítulos · toque para ir direto ao ponto.`;
+    this.ui.chapterSub.textContent=T('app.length_capitulos_toque_para_ir_direto',{length:this.chapters.length});
     this.chapters.forEach((c,i)=>{
       const btn=document.createElement('button');
       btn.type='button';btn.className='ap-ch';btn.dataset.i=String(i);
@@ -4512,18 +4613,18 @@ class AudioPlayer{
       list.appendChild(b);
     };
     if(s.mode!=='off'){
-      const txt=s.mode==='time'?`Faltam ${AudioFmt.clock(Math.max(0,s.remaining/1000))}`:'Pausa ao fim do capítulo';
+      const txt=s.mode==='time'?`Faltam ${AudioFmt.clock(Math.max(0,s.remaining/1000))}`:T('app.pausa_ao_fim_do_capitulo');
       const info=document.createElement('div');
       info.className='ap-sleep-now';
-      info.innerHTML=`<i data-lucide="moon"></i><div><strong>Timer ativo</strong><small>${Utils.esc(txt)}</small></div>`;
+      info.innerHTML=`<i data-lucide="moon"></i><div><strong>${T('app.timer_ativo')}</strong><small>${Utils.esc(txt)}</small></div>`;
       list.appendChild(info);
-      if(s.mode==='time')add('plus','Somar 10 minutos','',false,()=>{s.remaining+=600000;s.total+=600000;Utils.toast('Mais 10 minutos no timer.','moon');this.updateSleepUi()});
-      add('x','Desativar timer','',false,()=>this.clearSleep());
+      if(s.mode==='time')add('plus',T('app.somar_10_minutos'),'',false,()=>{s.remaining+=600000;s.total+=600000;Utils.toast(T('app.mais_10_minutos_no_timer'),'moon');this.updateSleepUi()});
+      add('x',T('app.desativar_timer'),'',false,()=>this.clearSleep());
     }
     [5,10,15,30,45,60].forEach(m=>{
-      add('timer',`${m} minutos`,'',s.mode==='time'&&Math.round(s.total/60000)===m,()=>this.setSleep('time',m));
+      add('timer',T('app.n_minutos',{n:m}),'',s.mode==='time'&&Math.round(s.total/60000)===m,()=>this.setSleep('time',m));
     });
-    if(this.chapters.length>1)add('list','Ao fim do capítulo','',s.mode==='chapter',()=>this.setSleep('chapter'));
+    if(this.chapters.length>1)add('list',T('app.ao_fim_do_capitulo'),'',s.mode==='chapter',()=>this.setSleep('chapter'));
     lucide.createIcons({root:list});
   }
   setSleep(mode,minutes=0){
@@ -4531,12 +4632,12 @@ class AudioPlayer{
     if(mode==='time'){
       const ms=minutes*60000;
       this.sleep={mode:'time',remaining:ms,total:ms,last:this.isPlaying()?performance.now():null,chapterEnd:0};
-      Utils.toast(`O áudio vai pausar em ${minutes} minutos.`,'moon');
+      Utils.toast(T('app.o_audio_vai_pausar_em_minutes_minutos',{minutes:minutes}),'moon');
     }else if(mode==='chapter'){
       const ch=this.chapters[this.chapterIndexAt(this.uiTime())];
-      if(!ch){Utils.toast('Este audiolivro não tem capítulos.','info');return}
+      if(!ch){Utils.toast(T('app.este_audiolivro_nao_tem_capitulos'),'info');return}
       this.sleep={mode:'chapter',remaining:0,total:0,last:null,chapterEnd:ch.end};
-      Utils.toast('O áudio vai pausar ao fim do capítulo.','moon');
+      Utils.toast(T('app.o_audio_vai_pausar_ao_fim_do_capitulo'),'moon');
     }
     this.updateSleepUi();
   }
@@ -4545,13 +4646,13 @@ class AudioPlayer{
     this.sleep={mode:'off',remaining:0,total:0,last:null,chapterEnd:0};
     if(this.el&&this.book)this.applyVolume();
     this.updateSleepUi();
-    if(was&&!silent)Utils.toast('Timer desativado.','moon');
+    if(was&&!silent)Utils.toast(T('app.timer_desativado'),'moon');
   }
   updateSleepUi(){
     const s=this.sleep;
     this.ui.sleep.classList.toggle('active',s.mode!=='off');
     this.cache.sleepLabel=undefined;
-    this.ui.sleepLabel.textContent=s.mode==='off'?'Timer':s.mode==='chapter'?'Fim do cap.':AudioFmt.clock(Math.max(0,s.remaining/1000));
+    this.ui.sleepLabel.textContent=s.mode==='off'?T('ui.timer'):s.mode==='chapter'?T('app.fim_do_cap'):AudioFmt.clock(Math.max(0,s.remaining/1000));
   }
   sleepTick(now){
     const s=this.sleep;
@@ -4576,7 +4677,7 @@ class AudioPlayer{
     this.clearSleep(true);
     this.applyVolume();
     if(seekTime!=null)this.seekTo(seekTime);
-    Utils.toast('Timer de sono encerrado.','moon');
+    Utils.toast(T('app.timer_de_sono_encerrado'),'moon');
   }
 
   /* ============================================================
@@ -4589,19 +4690,19 @@ class AudioPlayer{
     try{
       const cur=await this.db.getBook(this.book.id);
       if(cur&&cur.bookmarks.some(m=>m.kind==='audio'&&Math.abs(m.time-t)<3)){
-        Utils.toast('Já existe um marcador neste ponto.','bookmark');
+        Utils.toast(T('app.ja_existe_um_marcador_neste_ponto'),'bookmark');
         return;
       }
       const bm={id:Utils.id(),kind:'audio',time:t,title:'',chapter:ch?ch.title:'',addedAt:Date.now()};
       await this.db.patchBook(this.book.id,b=>{b.bookmarks.push(bm)});
       try{if(navigator.vibrate)navigator.vibrate(12)}catch(e){}
-      Utils.toast(`Marcador salvo em ${AudioFmt.clock(t)}.`,'bookmark');
+      Utils.toast(T('app.marcador_salvo_em_t',{t:AudioFmt.clock(t)}),'bookmark');
       this.ui.bmAdd.classList.remove('pulse');void this.ui.bmAdd.offsetWidth;this.ui.bmAdd.classList.add('pulse');
       if(document.getElementById('panel-audio-bookmarks').classList.contains('visible'))this.renderBookmarks();
       if(App.library)App.library.render();
     }catch(e){
       console.error(e);
-      Utils.toast('Não foi possível salvar o marcador.','alert-triangle');
+      Utils.toast(T('app.nao_foi_possivel_salvar_o_marcador'),'alert-triangle');
     }
   }
   async openBookmarks(){
@@ -4614,22 +4715,22 @@ class AudioPlayer{
     const list=(cur?cur.bookmarks:[]).filter(m=>m.kind==='audio').sort((a,b)=>a.time-b.time);
     box.textContent='';
     if(!list.length){
-      box.innerHTML=`<div class="empty"><i data-lucide="bookmark"></i><h3>Nenhum marcador ainda</h3><p>Toque em “Marcar agora” para guardar este ponto e voltar a ele quando quiser.</p></div>`;
+      box.innerHTML=`<div class="empty"><i data-lucide="bookmark"></i><h3>${T('app.nenhum_marcador_ainda')}</h3><p>${T('app.toque_em_marcar_agora_para_guardar_est')}</p></div>`;
       lucide.createIcons({root:box});
       return;
     }
     list.forEach(m=>{
       const row=document.createElement('div');
       row.className='ap-bm';
-      const label=m.title||m.chapter||'Marcador';
+      const label=m.title||m.chapter||T('app.marcador');
       row.innerHTML=`
-        <button type="button" class="ap-bm-go" aria-label="Ir para ${AudioFmt.spoken(m.time)}">
+        <button type="button" class="ap-bm-go" aria-label="${T('app.ir_para_tempo',{tempo:AudioFmt.spoken(m.time)})}">
           <span class="ap-bm-time">${AudioFmt.clock(m.time)}</span>
           <span class="ap-bm-label">${Utils.esc(label)}</span>
         </button>
         <div class="ap-bm-actions">
-          <button type="button" class="action-btn ap-bm-edit" title="Nomear" aria-label="Nomear marcador"><i data-lucide="edit-3"></i></button>
-          <button type="button" class="action-btn delete-btn ap-bm-del" title="Excluir" aria-label="Excluir marcador"><i data-lucide="trash"></i></button>
+          <button type="button" class="action-btn ap-bm-edit" title="${T('app.nomear')}" aria-label="${T('app.nomear_marcador')}"><i data-lucide="edit-3"></i></button>
+          <button type="button" class="action-btn delete-btn ap-bm-del" title="${T('app.excluir')}" aria-label="${T('app.excluir_marcador')}"><i data-lucide="trash"></i></button>
         </div>`;
       row.querySelector('.ap-bm-go').onclick=()=>{
         App.closePanels();
@@ -4638,10 +4739,10 @@ class AudioPlayer{
       };
       row.querySelector('.ap-bm-edit').onclick=()=>this.editBookmark(row,m);
       row.querySelector('.ap-bm-del').onclick=async()=>{
-        const ok=await AppModal.confirm({title:'Excluir marcador?',subtitle:AudioFmt.clock(m.time),message:'O marcador será removido deste audiolivro.',confirmText:'Excluir marcador',confirmIcon:'trash',danger:true});
+        const ok=await AppModal.confirm({title:T('app.excluir_marcador_2'),subtitle:AudioFmt.clock(m.time),message:T('app.o_marcador_sera_removido_deste_audioli'),confirmText:T('app.excluir_marcador'),confirmIcon:'trash',danger:true});
         if(!ok)return;
         await this.db.patchBook(this.book.id,b=>{b.bookmarks=b.bookmarks.filter(x=>x.id!==m.id)});
-        Utils.toast('Marcador excluído.','trash');
+        Utils.toast(T('app.marcador_excluido'),'trash');
         this.renderBookmarks();
         if(App.library)App.library.render();
       };
@@ -4652,8 +4753,8 @@ class AudioPlayer{
   editBookmark(row,m){
     const go=row.querySelector('.ap-bm-label');
     const input=document.createElement('input');
-    input.className='field ap-bm-input';input.value=m.title||'';input.placeholder=m.chapter||'Nome do marcador';
-    input.maxLength=120;input.setAttribute('aria-label','Nome do marcador');
+    input.className='field ap-bm-input';input.value=m.title||'';input.placeholder=m.chapter||T('app.nome_do_marcador');
+    input.maxLength=120;input.setAttribute('aria-label',T('app.nome_do_marcador'));
     go.replaceWith(input);
     input.focus();
     let closed=false;
@@ -4747,7 +4848,7 @@ class AudioPlayer{
       const ch=this.chapters[this.chapterIndexAt(this.uiTime())];
       const art=this.coverUrl?[{src:this.coverUrl,sizes:'512x512',type:'image/jpeg'}]:[];
       navigator.mediaSession.metadata=new MediaMetadata({
-        title:(this.chapters.length>1&&ch)?ch.title:(this.book.title||'Audiolivro'),
+        title:(this.chapters.length>1&&ch)?ch.title:(this.book.title||T('app.audiolivro_2')),
         artist:this.book.author||'Veredas Reader',
         album:this.book.title||'',
         artwork:art
@@ -4819,25 +4920,25 @@ class TextToSpeechController{
       const aPt=/^pt/i.test(a.lang)?0:1,bPt=/^pt/i.test(b.lang)?0:1;
       return aPt-bPt||a.name.localeCompare(b.name);
     });
-    select.innerHTML='<option value="">Voz padrão do sistema</option>';
+    select.innerHTML=`<option value="">${T('ui.voz_padrao_do_sistema')}</option>`;
     voices.forEach(v=>{
       const option=document.createElement('option');option.value=v.voiceURI;option.textContent=`${v.name} — ${v.lang}`;
       if(v.voiceURI===chosen)option.selected=true;select.appendChild(option);
     });
   }
   refreshPanel(){
-    const title=this.reader.currentBook?.title||'Livro';
+    const title=this.reader.currentBook?.title||T('ui.livro');
     document.getElementById('tts-book-title').textContent=title;
-    document.getElementById('tts-status').textContent=!this.supported?'Leitura em voz alta não disponível neste navegador':this.paused?'Em pausa':this.playing?`Lendo página ${this.pageIndex+1} de ${this.reader.pagesData.length}`:'Pronto para começar';
+    document.getElementById('tts-status').textContent=!this.supported?T('app.leitura_em_voz_alta_nao_disponivel_nes'):this.paused?T('app.em_pausa'):this.playing?T('app.lendo_pagina_v_de_length',{v:this.pageIndex+1,length:this.reader.pagesData.length}):T('ui.pronto_para_comecar');
     const btn=document.getElementById('btn-tts-play');
-    btn.disabled=!this.supported;btn.setAttribute('aria-label',this.playing&&!this.paused?'Pausar leitura':'Iniciar leitura');
+    btn.disabled=!this.supported;btn.setAttribute('aria-label',this.playing&&!this.paused?T('app.pausar_leitura'):T('ui.iniciar_leitura'));
     btn.innerHTML=`<i data-lucide="${this.playing&&!this.paused?'pause':'play'}"></i>`;
     document.getElementById('btn-reader-tts')?.classList.toggle('is-playing',this.playing&&!this.paused);
     document.querySelectorAll('[data-tts-rate]').forEach(x=>x.classList.toggle('active',Number(x.dataset.ttsRate)===Number(App.state.settings.ttsRate||1)));
     lucide.createIcons({root:document.getElementById('panel-tts')});
   }
   openPanel(){
-    if(!this.supported)Utils.toast('A leitura em voz alta não é suportada neste navegador.','alert-triangle');
+    if(!this.supported)Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');
     if(!this.playing)this.pageIndex=this.reader.currentPageIndex;
     this.populateVoices();this.refreshPanel();App.openPanel('panel-tts');
   }
@@ -4863,7 +4964,7 @@ class TextToSpeechController{
       if(!this.segments.length){this.advance();return}
       this.segmentIndex=Utils.clamp(this.segmentIndex,0,this.segments.length-1);
       this.speakSegment(run);
-    }catch(e){console.error(e);this.stop();Utils.toast('Não foi possível preparar este trecho para áudio.','alert-triangle')}
+    }catch(e){console.error(e);this.stop();Utils.toast(T('app.nao_foi_possivel_preparar_este_trecho'),'alert-triangle')}
   }
   segmentText(text){
     const normalized=(text||'').replace(/\s+/g,' ').trim();if(!normalized)return[];
@@ -4887,12 +4988,12 @@ class TextToSpeechController{
       this.segmentIndex++;
       if(this.segmentIndex<this.segments.length)this.speakSegment(run);else this.advance();
     };
-    utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled'){console.warn(e);this.stop();Utils.toast('A voz foi interrompida pelo navegador.','alert-triangle')}};
+    utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled'){console.warn(e);this.stop();Utils.toast(T('app.a_voz_foi_interrompida_pelo_navegador'),'alert-triangle')}};
     speechSynthesis.speak(utterance);
   }
   advance(){
     if(!this.playing)return;
-    if(this.pageIndex>=this.reader.pagesData.length-1){this.stop();Utils.toast('Leitura concluída.','check-circle');return}
+    if(this.pageIndex>=this.reader.pagesData.length-1){this.stop();Utils.toast(T('app.leitura_concluida'),'check-circle');return}
     this.pageIndex++;this.segmentIndex=0;this.reader.turnToPage(this.pageIndex,{fromTts:true});this.refreshPanel();this.loadPageAndSpeak();
   }
   skip(direction){
@@ -4909,7 +5010,7 @@ class TextToSpeechController{
     if(App.player&&App.player.isActive())return;   /* os controles do sistema pertencem ao audiolivro */
     try{
       navigator.mediaSession.playbackState=state;
-      navigator.mediaSession.metadata=new MediaMetadata({title:this.reader.currentBook?.title||'Leitura',artist:'Veredas Reader'});
+      navigator.mediaSession.metadata=new MediaMetadata({title:this.reader.currentBook?.title||T('app.leitura'),artist:'Veredas Reader'});
       navigator.mediaSession.setActionHandler('play',()=>this.toggle());
       navigator.mediaSession.setActionHandler('pause',()=>this.toggle());
       navigator.mediaSession.setActionHandler('nexttrack',()=>this.skip(1));
@@ -5313,7 +5414,7 @@ class ReaderEngine{
     this.comicFit='page';this.comicSpread=true;this.comicRatio=null;
     this.comicWideZoom=1;this.comicFlow=null;this.comicPinching=false;
     this.comicZoom={scale:1,x:0,y:0};
-    this.rtl=false;
+    this.rtl=false;this.bookRtl=false;
     this.selectionFrame=null;this.pdfZoom=Number(state.settings.pdfZoom)||1;this.pdfMode=state.settings.pdfReadingMode||'lateral';
     this.persistProgressDebounced=Utils.debounce(i=>this.persistProgress(i),900);
     this.bind();
@@ -5322,8 +5423,11 @@ class ReaderEngine{
   bind(){
     document.addEventListener('keydown',e=>{
       if(!document.getElementById('view-reader').classList.contains('active'))return;
-      if(e.key==='ArrowRight')this.flip(1);
-      else if(e.key==='ArrowLeft')this.flip(-1);
+      /* A seta aponta para onde a página vai: no livro da direita para
+         a esquerda (e no mangá), avançar é a seta da esquerda — igual
+         aos toques nas bordas e ao arraste. */
+      if(e.key==='ArrowRight')this.flip(this.rtl?-1:1);
+      else if(e.key==='ArrowLeft')this.flip(this.rtl?1:-1);
       else if(e.key==='Escape'){this.hideUI();App.closePanels()}
     });
     document.getElementById('btn-close-reader').onclick=async()=>{
@@ -5415,7 +5519,7 @@ class ReaderEngine{
       }
     },ehQuadrinho?ReaderEngine.OPEN_TIMEOUT_COMIC:ReaderEngine.OPEN_TIMEOUT);
     this.openTimedOut=false;
-    Utils.showLoader('Abrindo livro','Preparando sua leitura...',{
+    Utils.showLoader(T('app.abrindo_livro'),T('app.preparando_sua_leitura'),{
       progress:true,
       onCancel:()=>{this.openCancelled=true;ctrl.abort()}
     });
@@ -5430,7 +5534,7 @@ class ReaderEngine{
       /* Quadrinho já descompactado não tem mais arquivo guardado: as
          páginas é que estão no banco. */
       const paginasProntas=isComic?await this.db.countComicPages(book.id):0;
-      if(!fonte&&!paginasProntas)throw new ParseError('O arquivo deste livro não está mais salvo no aparelho.','Importe o arquivo novamente para continuar a leitura.');
+      if(!fonte&&!paginasProntas)throw new ParseError(T('app.o_arquivo_deste_livro_nao_esta_mais_sa'),T('app.importe_o_arquivo_novamente_para_conti'));
       /* Livro guardado como ArrayBuffer (versões anteriores) passa a
          ficar como Blob. É uma troca só, silenciosa, e a partir dela
          o arquivo deixa de desembarcar inteiro na memória a cada
@@ -5440,7 +5544,7 @@ class ReaderEngine{
         this.db.saveBook(book,fonte).catch(e=>console.warn('Não foi possível converter o arquivo deste livro',e));
       }
       this.destroy();
-      document.getElementById('reader-title').textContent=book.title||'Livro';
+      document.getElementById('reader-title').textContent=book.title||T('ui.livro');
       this.pdfMode=this.readingMode;
       this.pdfZoom=Utils.clamp(Number(this.state.settings.pdfZoom)||1,.75,3);
       App.switchView('reader');
@@ -5462,6 +5566,12 @@ class ReaderEngine{
         else                         start=await this.openEpub(buffer,book,w,h,start,signal);
       }
       
+      /* Sentido do LIVRO, não da interface: um livro em árabe ou hebraico
+         é lido da direita para a esquerda seja qual for o idioma do
+         aplicativo, e um livro em português continua da esquerda para a
+         direita mesmo com a interface em árabe. PDF e quadrinho ficam de
+         fora: o PDF é imagem pronta, e o quadrinho tem o modo mangá. */
+      this.bookRtl=!isComic&&book.format!=='pdf'&&ReaderEngine.sentidoDoTexto(this.pagesData)==='rtl';
       if(!this.pagesData.length){
         this.pagesData=['<p></p>'];
         this.pageMeta=[{globalPage:0,chapter:0,localPage:0,title:book.title}];
@@ -5473,7 +5583,7 @@ class ReaderEngine{
         if(m.globalPage==null){
           const gp=(this.chapterStarts[m.chapter??0]??0)+(m.pageIndex??0);
           changedLegacy=true;
-          return{...m,globalPage:gp,title:m.title||this.pageMeta[gp]?.title||`Página ${gp+1}`};
+          return{...m,globalPage:gp,title:m.title||this.pageMeta[gp]?.title||T('app.pagina_v',{v:gp+1})};
         }
         return m;
       });
@@ -5489,21 +5599,21 @@ class ReaderEngine{
       this.currentBook.totalPages=this.pagesData.length;
       if(changedLegacy)await this.db.updateBook(this.currentBook);
       
-      Utils.setLoaderProgress(100,'Quase lá...');
+      Utils.setLoaderProgress(100,T('app.quase_la'));
       await this.initSliderBook(start);
       this.showUI();
     }catch(e){
       if(Utils.isAbort(e)){
         if(this.openTimedOut){
-          Utils.toast('O livro demorou demais para abrir e foi interrompido.','alert-triangle');
+          Utils.toast(T('app.o_livro_demorou_demais_para_abrir_e_fo'),'alert-triangle');
         }else if(this.openCancelled){
-          Utils.toast('Abertura cancelada.','x');
+          Utils.toast(T('app.abertura_cancelada'),'x');
         }
         this.close();
       }else{
         console.error(e);
         const isParse=e instanceof ParseError;
-        Utils.toast(isParse?e.message:'Não foi possível abrir este livro.','alert-triangle');
+        Utils.toast(isParse?e.message:T('app.nao_foi_possivel_abrir_este_livro'),'alert-triangle');
         if(isParse&&e.hint)setTimeout(()=>Utils.toast(e.hint,'info'),900);
         this.close();
       }
@@ -5514,6 +5624,30 @@ class ReaderEngine{
       this.navigating=false;
     }
   }
+  /* Qual o sentido de escrita de um livro, olhando o próprio texto.
+
+     Conta as letras de escrita da direita para a esquerda (árabe,
+     hebraico, siríaco, thaana, n'ko) contra as demais letras, nas
+     primeiras ~20 mil letras do livro. Vale a maioria: um livro em
+     árabe com nomes latinos no meio continua árabe, e um livro em
+     português com uma citação em hebraico continua português.
+     Olhar o texto, e não os metadados, é o que funciona para todos os
+     formatos (EPUB, MOBI, DOCX, TXT, MD) e também para as páginas que
+     voltam prontas do cache, sem o arquivo original aberto. */
+  static sentidoDoTexto(paginas){
+    const RTL=/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+    const LETRA=/\p{L}/u;
+    let rtl=0,outras=0;
+    for(const pagina of paginas||[]){
+      const texto=String(pagina).replace(/<[^>]*>/g,' ').replace(/&[#\w]+;/g,' ');
+      for(const c of texto){
+        if(RTL.test(c))rtl++;
+        else if(LETRA.test(c))outras++;
+      }
+      if(rtl+outras>20000)break;
+    }
+    return rtl>outras?'rtl':'ltr';
+  }
   /* Repassa o andamento da paginação para a barra de progresso. */
   paginationOpts(signal,floor=15,ceiling=98){
     return{
@@ -5521,7 +5655,7 @@ class ReaderEngine{
       onProgress:(done,total,pagesSoFar)=>{
         const ratio=total?Math.min(1,done/total):0;
         Utils.setLoaderProgress(floor+ratio*(ceiling-floor),
-          pagesSoFar?`Montando as páginas — ${pagesSoFar} prontas`:'Montando as páginas...');
+          pagesSoFar?T('app.montando_as_paginas_pagessofar_prontas',{pagesSoFar:pagesSoFar}):T('app.montando_as_paginas'));
       }
     };
   }
@@ -5534,7 +5668,7 @@ class ReaderEngine{
   buildChapterMeta(chapters,fallbackTitle){
     const count=chapters.length;
     this.totalChapters=count;
-    this.chapterTitles=chapters.map((c,i)=>c.title||`Parte ${i+1}`);
+    this.chapterTitles=chapters.map((c,i)=>c.title||T('app.parte_n',{n:i+1}));
     const starts=Array(count).fill(-1);
     let active=0;
     this.pageMeta=this.pagesData.map((page,globalPage)=>{
@@ -5577,12 +5711,12 @@ class ReaderEngine{
     this.pdfDoc=pdf;
     this.pdfTransporte=transporte;
     this.totalChapters=numPages;
-    this.chapterTitles=Array.from({length:numPages},(_,i)=>`Página ${i+1}`);
+    this.chapterTitles=Array.from({length:numPages},(_,i)=>T('app.pagina_v',{v:i+1}));
     this.chapterStarts=Array.from({length:numPages},(_,i)=>i);
     this.pagesData=Array.from({length:numPages},(_,i)=>
-      `<div class="pdf-page-wrap" data-pdf-page="${i+1}"><div class="pdf-loading"><div class="spinner"></div><span>Carregando página ${i+1}...</span></div></div>`
+      `<div class="pdf-page-wrap" data-pdf-page="${i+1}"><div class="pdf-loading"><div class="spinner"></div><span>${T('app.carregando_pagina_n',{n:i+1})}</span></div></div>`
     );
-    this.pageMeta=this.pagesData.map((_,i)=>({globalPage:i,chapter:i,localPage:0,title:`Página ${i+1}`}));
+    this.pageMeta=this.pagesData.map((_,i)=>({globalPage:i,chapter:i,localPage:0,title:T('app.pagina_v',{v:i+1})}));
     if(start===null)start=book.progress?.pageIndex??0;
     return start;
   }
@@ -5595,7 +5729,7 @@ class ReaderEngine{
      uma página sozinha ou, no modo revista aberta, duas lado a lado.
      ============================================================ */
   async openComic(source,book,start,signal,paginasProntas=0){
-    Utils.setLoaderProgress(8,'Abrindo o quadrinho...');
+    Utils.setLoaderProgress(8,T('app.abrindo_o_quadrinho'));
     const nome=book.sourceFileName||`${book.title||'quadrinho'}.${book.format}`;
     let arquivo;
 
@@ -5611,14 +5745,14 @@ class ReaderEngine{
          como pacote. É descompactado agora, uma vez só, e a partir da
          próxima abertura entra pelo caminho de cima. O usuário vê a
          mesma barra de progresso da importação. */
-      Utils.setLoaderText('Preparando o quadrinho','Isto acontece só desta vez.');
+      Utils.setLoaderText(T('app.preparando_o_quadrinho'),T('app.isto_acontece_so_desta_vez'));
       const resultado=await ComicUnpacker.unpack(book.id,source,{
         nome,signal,db:this.db,
         onStatus:texto=>Utils.setLoaderText(null,texto),
         onProgress:(feitas,total)=>Utils.setLoaderProgress(
-          total?Math.round(feitas/total*90):0,`${feitas} de ${total}`)
+          total?Math.round(feitas/total*90):0,T('app.v_de_total',{v:feitas,total}))
       });
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
       /* Agora que as páginas estão gravadas, o pacote original só
          ocupa espaço. Sai, e o livro passa a ser do tipo novo. */
       try{
@@ -5643,7 +5777,7 @@ class ReaderEngine{
       arquivo=ComicArchive.fromStore(book.id,resultado.paginas,resultado.info);
     }
 
-    if(signal&&signal.aborted){arquivo.close();throw new DOMException('Cancelado','AbortError')}
+    if(signal&&signal.aborted){arquivo.close();throw new DOMException(T('app.cancelado'),'AbortError')}
     this.comic=arquivo;
     const s=this.state.settings;
     /* Sentido de leitura: o livro manda; depois o ComicInfo.xml do
@@ -5652,7 +5786,7 @@ class ReaderEngine{
     this.comicFit=book.comicFit||s.comicFit||'page';
     this.comicSpread=book.comicSpread!=null?!!book.comicSpread:(s.comicSpread!==false);
     this.comicZoom={scale:1,x:0,y:0};
-    Utils.setLoaderProgress(92,`${arquivo.length} página(s) prontas`);
+    Utils.setLoaderProgress(92,T('app.length_pagina_s_prontas',{length:arquivo.length}));
     this.buildComicViews();
     if(start===null){
       const guardada=book.progress?.comicPage;
@@ -5681,7 +5815,7 @@ class ReaderEngine{
     }
     this.comicViews=views;
     this.pagesData=views.map((v,i)=>this.comicViewHtml(v,i));
-    this.chapterTitles=views.map(v=>v.length>1?`Páginas ${v[0]+1}–${v[1]+1}`:`Página ${v[0]+1}`);
+    this.chapterTitles=views.map(v=>v.length>1?T('app.paginas_v_v2',{v:v[0]+1,v2:v[1]+1}):T('app.pagina_v',{v:v[0]+1}));
     this.chapterStarts=views.map((_,i)=>i);
     this.totalChapters=views.length;
     this.pageMeta=views.map((v,i)=>({globalPage:i,chapter:i,localPage:0,
@@ -5754,7 +5888,7 @@ class ReaderEngine{
         if(!url||!slot.isConnected)continue;
         const img=document.createElement('img');
         img.className='comic-img';
-        img.alt=`Página ${p+1}`;
+        img.alt=T('app.pagina_v',{v:p+1});
         img.decoding='async';
         img.draggable=false;
         img.addEventListener('load',()=>{
@@ -5763,7 +5897,7 @@ class ReaderEngine{
         },{once:true});
         img.addEventListener('error',()=>{
           slot.classList.add('ready');
-          slot.innerHTML='<div class="comic-error">Esta página não pôde ser exibida.</div>';
+          slot.innerHTML=`<div class="comic-error">${T('app.esta_pagina_nao_pode_ser_exibida')}</div>`;
         },{once:true});
         img.src=url;
         slot.innerHTML='';
@@ -5771,7 +5905,7 @@ class ReaderEngine{
       }catch(err){
         console.warn(err);
         slot.classList.add('ready');
-        slot.innerHTML=`<div class="comic-error">${Utils.esc(err&&err.message?err.message:'Página indisponível.')}</div>`;
+        slot.innerHTML=`<div class="comic-error">${Utils.esc(err&&err.message?err.message:T('app.pagina_indisponivel'))}</div>`;
       }
     }
     this.trimComicMemory();
@@ -5835,24 +5969,24 @@ class ReaderEngine{
       if(start===null)start=book.progress?.pageIndex??0;
       return start;
     }
-    const label=format==='docx'?'Lendo o documento':format==='md'?'Lendo o Markdown':'Lendo o livro';
+    const label=format==='docx'?T('app.lendo_o_documento'):format==='md'?T('app.lendo_o_markdown'):T('app.lendo_o_livro');
     Utils.setLoaderProgress(4,label+'...');
     const parser=format==='docx'?DOCXParser:format==='md'?MDParser:MOBIParser;
     const html=await parser.parse(buffer,{
       signal,
       onProgress:(text,ratio)=>Utils.setLoaderProgress(4+(Number(ratio)||0)*10,text+'...')
     });
-    if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
-    Utils.setLoaderProgress(15,'Separando os capítulos...');
+    if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
+    Utils.setLoaderProgress(15,T('app.separando_os_capitulos'));
     await Utils.yieldToUI();
-    const chapters=DocUtils.splitChapters(html,book.title||'Livro');
+    const chapters=DocUtils.splitChapters(html,book.title||T('ui.livro'));
     this.pagesData=await DOMPaginator.paginateHtml(
       this.markChapters(chapters),w,h,
       this.state.settings.fontSize,this.state.settings.fontFamily,
       this.state.settings.lineHeight,this.state.settings.margin,
       this.paginationOpts(signal)
     );
-    this.buildChapterMeta(chapters,book.title||'Livro');
+    this.buildChapterMeta(chapters,book.title||T('ui.livro'));
     await this.cachePages(sig,format);
     if(start===null)start=book.progress?.pageIndex??0;
     return start;
@@ -5897,12 +6031,12 @@ class ReaderEngine{
       const parsed=await EPUBParser.parse(buffer);
       this.currentExtractor=parsed.extractor;
       this.totalChapters=parsed.totalChapters;
-      this.chapterTitles=parsed.toc||Array.from({length:this.totalChapters},(_,i)=>`Capítulo ${i+1}`);
+      this.chapterTitles=parsed.toc||Array.from({length:this.totalChapters},(_,i)=>T('app.capitulo_v',{v:i+1}));
       const chapterHtml=[];
       for(let ch=0;ch<this.totalChapters;ch++){
-        if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+        if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
         if(ch%4===0){
-          Utils.setLoaderProgress(2+((ch+1)/Math.max(1,this.totalChapters))*13,`Organizando capítulo ${ch+1} de ${this.totalChapters}`);
+          Utils.setLoaderProgress(2+((ch+1)/Math.max(1,this.totalChapters))*13,T('app.organizando_capitulo_v_de_totalchapter',{v:ch+1,totalChapters:this.totalChapters}));
           await Utils.yieldToUI();
         }
         const raw=await parsed.extractor(ch);
@@ -5921,7 +6055,7 @@ class ReaderEngine{
         const markers=[...page.matchAll(/data-epub-chapter-marker="(\d+)"/g)].map(match=>Number(match[1]));
         markers.forEach(ch=>{if(chapterStarts[ch]===-1)chapterStarts[ch]=globalPage;});
         if(markers.length)activeChapter=markers[markers.length-1];
-        return {globalPage,chapter:activeChapter,localPage:0,title:this.chapterTitles[activeChapter]||`Capítulo ${activeChapter+1}`};
+        return {globalPage,chapter:activeChapter,localPage:0,title:this.chapterTitles[activeChapter]||T('app.capitulo_v',{v:activeChapter+1})};
       });
       let lastChapterStart=0;
       this.chapterStarts=chapterStarts.map(start=>{
@@ -5957,15 +6091,21 @@ class ReaderEngine{
     const verticalReading=this.isVerticalReading();
     this.readingMode=verticalReading?'vertical':'horizontal';
     const pdfVertical=isPdf&&verticalReading;
-    /* Sentido do gesto: só o quadrinho em modo mangá lê da direita
-       para a esquerda. */
-    this.rtl=isComic&&this.comicRtl&&!verticalReading;
+    /* Sentido do gesto: o quadrinho em modo mangá e o livro escrito da
+       direita para a esquerda (árabe, hebraico...) viram as páginas ao
+       contrário. Todo o resto — inclusive qualquer livro em português,
+       com a interface em qualquer língua — segue da esquerda para a
+       direita, exatamente como antes. */
+    const livroRtl=!isComic&&!isPdf&&!!this.bookRtl;
+    this.rtl=((isComic&&this.comicRtl)||livroRtl)&&!verticalReading;
     this.container.classList.toggle('reading-vertical',verticalReading);
     this.container.classList.toggle('reading-horizontal',!verticalReading);
     this.container.classList.toggle('pdf-vertical',pdfVertical);
     this.container.classList.toggle('comic-book',isComic);
     this.container.classList.toggle('comic-vertical',isComic&&verticalReading);
-    this.container.classList.toggle('comic-rtl',this.rtl);
+    this.container.classList.toggle('comic-rtl',isComic&&this.rtl);
+    this.container.classList.toggle('livro-rtl',livroRtl);
+    document.getElementById('reader-ui')?.classList.toggle('livro-rtl',livroRtl);
     this.container.classList.toggle('fit-width',isComic&&(verticalReading||this.comicFit==='width'));
     /* Palco novo, zoom novo. Sem isto, um zoom aplicado antes de girar o
        aparelho (ou de trocar o modo de leitura) continuava "valendo" num
@@ -6000,7 +6140,7 @@ class ReaderEngine{
 
       d.innerHTML = (isPdf||isComic)
         ? html
-        : `<div class="page-content"><div class="page-text" style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">Página ${i+1} de ${this.pagesData.length}</div></div>`;
+        : `<div class="page-content"><div class="page-text"${livroRtl?' dir="rtl"':''} style="font-family:${Utils.esc(this.state.settings.fontFamily)};font-size:${this.state.settings.fontSize}px;line-height:${this.state.settings.lineHeight};">${html}</div><div class="page-number">${T('app.pagina_page_de_totalpages',{page:i+1,totalPages:this.pagesData.length})}</div></div>`;
 
       destino.appendChild(d);
     });
@@ -6467,7 +6607,7 @@ class ReaderEngine{
       this.applyAnnotationsToRenderedPage(pageIndex);
     }catch(e){
       console.error(e);
-      wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Não foi possível carregar esta página.</div>`;
+      wrap.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">${T('app.nao_foi_possivel_carregar_esta_pagina')}</div>`;
     }
   }
   /* Padrão de fábrica de cada formato: horizontal para EPUB, MOBI, quadrinhos, TXT e
@@ -6513,8 +6653,8 @@ class ReaderEngine{
     const vertical=this.isVerticalReading();
     btn.innerHTML=`<i data-lucide="${vertical?'arrow-up-down':'arrow-left-right'}"></i>`;
     btn.title=this.comic
-      ? (vertical?'Voltar para página a página':'Rolagem contínua (estilo webtoon)')
-      : (vertical?'Mudar para leitura horizontal':'Mudar para rolagem vertical');
+      ? (vertical?T('app.voltar_para_pagina_a_pagina'):T('app.rolagem_continua_estilo_webtoon'))
+      : (vertical?T('app.mudar_para_leitura_horizontal'):T('app.mudar_para_rolagem_vertical'));
     btn.setAttribute('aria-label',btn.title);
     btn.classList.toggle('active',vertical);
     lucide.createIcons({root:btn});
@@ -6545,13 +6685,13 @@ class ReaderEngine{
     App.syncReadingModeUi();
     if(this.comic){
       Utils.toast(next==='vertical'
-        ?'Rolagem contínua ativada neste quadrinho.'
-        :'Leitura página a página ativada neste quadrinho.','book-image');
+        ?T('app.rolagem_continua_ativada_neste_quadrin')
+        :T('app.leitura_pagina_a_pagina_ativada_neste'),'book-image');
       return;
     }
     Utils.toast(next==='vertical'
-      ?'Rolagem vertical ativada neste livro.'
-      :'Leitura horizontal ativada neste livro.','file-text');
+      ?T('app.rolagem_vertical_ativada_neste_livro')
+      :T('app.leitura_horizontal_ativada_neste_livro'),'file-text');
   }
   async togglePdfReadingMode(){return this.toggleReadingMode()}
   setupContinuousReadingScroll(){
@@ -6745,8 +6885,8 @@ class ReaderEngine{
     const dica=document.getElementById('comic-settings-tip');
     if(dica){
       dica.textContent=this.comicSpreadActive()
-        ? 'Agora em revista aberta: duas páginas lado a lado, com a capa sozinha.'
-        : 'Gire o aparelho para a horizontal para ver duas páginas lado a lado.';
+        ? T('app.agora_em_revista_aberta_duas_paginas_l')
+        : T('ui.gire_o_aparelho_para_a_horizontal_para');
     }
   }
   setupPdfContinuousScroll(){return this.setupContinuousReadingScroll()}
@@ -6791,7 +6931,7 @@ class ReaderEngine{
     this.container.classList.toggle('pdf-zoomed',this.pdfZoom>1.02);
     this.container.querySelectorAll('.pdf-page-wrap').forEach(wrap=>{
       wrap.dataset.rendered='';
-      wrap.innerHTML=`<div class="pdf-loading"><div class="spinner"></div><span>Aplicando zoom...</span></div>`;
+      wrap.innerHTML=`<div class="pdf-loading"><div class="spinner"></div><span>${T('app.aplicando_zoom')}</span></div>`;
     });
     this.renderPdfPageIfNeeded(this.currentPageIndex);
     if(this.isPdfVertical())this.renderPdfPageIfNeeded(this.currentPageIndex+1);
@@ -6813,9 +6953,9 @@ class ReaderEngine{
     if(!this.sliderBook||this.navigating)return;
     const index = this.currentPageIndex + dir;
     if(index >= this.pagesData.length){
-      Utils.toast(this.comic?'Você chegou ao fim do quadrinho.':'Você chegou ao fim do livro.','check-circle');return;
+      Utils.toast(this.comic?T('app.voce_chegou_ao_fim_do_quadrinho'):T('app.voce_chegou_ao_fim_do_livro'),'check-circle');return;
     }
-    if(index < 0){Utils.toast(this.comic?'Esta é a primeira página.':'Este é o início do livro.','info');return;}
+    if(index < 0){Utils.toast(this.comic?T('app.esta_e_a_primeira_pagina'):T('app.este_e_o_inicio_do_livro'),'info');return;}
     const motor=this.turnEngine();
     if(motor&&motor.animate(dir))return;
     this.turnToPage(index);
@@ -6844,7 +6984,7 @@ class ReaderEngine{
       globalPage:i,chapter:meta.chapter,pageIndex:meta.localPage,
       title:meta.title,preview:this.previewText(i)
     }).then(added=>{
-      Utils.toast(added?'Página adicionada aos marcadores.':'Marcador removido desta página.',added?'bookmark':'bookmark-x');
+      Utils.toast(added?T('app.pagina_adicionada_aos_marcadores'):T('app.marcador_removido_desta_pagina'),added?'bookmark':'bookmark-x');
       this.showAnnotations();
     });
   }
@@ -6904,20 +7044,20 @@ class ReaderEngine{
     const pop=document.getElementById('annotation-pop');
     pop.innerHTML='';
     const label=document.createElement('div');label.className='annotation-pop-label';
-    label.textContent=annotation.type==='note'?'Comentário':'Grifo';
+    label.textContent=annotation.type==='note'?T('app.comentario'):T('app.grifo');
     const quote=document.createElement('div');quote.className='annotation-pop-quote';
     quote.textContent=`“${annotation.text||''}”`;
     pop.append(label,quote);
     if(annotation.type==='note'){
-      const note=document.createElement('div');note.className='annotation-pop-note';note.textContent=annotation.note||'Sem comentário';pop.appendChild(note);
+      const note=document.createElement('div');note.className='annotation-pop-note';note.textContent=annotation.note||T('app.sem_comentario');pop.appendChild(note);
     }
     const actions=document.createElement('div');actions.className='annotation-pop-actions';
     if(annotation.type==='note'){
-      const edit=document.createElement('button');edit.type='button';edit.textContent='Editar';
+      const edit=document.createElement('button');edit.type='button';edit.textContent=T('app.editar');
       edit.onclick=()=>this.editAnnotationFromPopover(annotation);actions.appendChild(edit);
     }
     const remove=document.createElement('button');remove.type='button';remove.className='danger';
-    remove.textContent=annotation.type==='note'?'Apagar':'Remover grifo';
+    remove.textContent=annotation.type==='note'?T('app.apagar'):T('app.remover_grifo');
     remove.onclick=()=>this.deleteAnnotationFromPopover(annotation);actions.appendChild(remove);
     pop.appendChild(actions);
     const width=Math.min(330,window.innerWidth-28);
@@ -6927,19 +7067,19 @@ class ReaderEngine{
   }
   editAnnotationFromPopover(annotation){
     this.hideAnnotationPopover();
-    document.getElementById('selected-preview').innerHTML=`<div class="item-type">Trecho comentado</div><div class="item-text">“${Utils.esc(annotation.text)}”</div><div class="item-meta">Página ${annotation.pageIndex+1} de ${this.pagesData.length}</div>`;
+    document.getElementById('selected-preview').innerHTML=`<div class="item-type">${T('app.trecho_comentado')}</div><div class="item-text">“${Utils.esc(annotation.text)}”</div><div class="item-meta">${T('app.pagina_page_de_totalpages',{page:annotation.pageIndex+1,totalPages:this.pagesData.length})}</div>`;
     document.getElementById('note-text').value=annotation.note||'';
     const save=document.getElementById('btn-save-note');
     save.dataset.editId=annotation.id;save.dataset.bookId=this.currentBook.id;
     App.openPanel('panel-note');
   }
   async deleteAnnotationFromPopover(annotation){
-    const message=annotation.type==='note'?'Apagar este comentário?':'Remover este grifo?';
+    const message=annotation.type==='note'?T('app.apagar_este_comentario'):T('app.remover_este_grifo');
     const ok=await AppModal.confirm({
-      title:annotation.type==='note'?'Apagar comentário?':'Remover grifo?',
-      subtitle:this.currentBook?.title||'Livro',
+      title:annotation.type==='note'?T('app.apagar_comentario_2'):T('app.remover_grifo_2'),
+      subtitle:this.currentBook?.title||T('ui.livro'),
       message,
-      confirmText:annotation.type==='note'?'Apagar comentário':'Remover grifo',
+      confirmText:annotation.type==='note'?T('app.apagar_comentario'):T('app.remover_grifo'),
       confirmIcon:'trash',danger:true
     });
     if(!ok)return;
@@ -6947,7 +7087,7 @@ class ReaderEngine{
     this.currentBook=await this.db.getBook(this.currentBook.id);
     this.hideAnnotationPopover();
     this.applyAnnotationsToRenderedPage(annotation.pageIndex);
-    Utils.toast(annotation.type==='note'?'Comentário apagado.':'Grifo removido.','trash');
+    Utils.toast(annotation.type==='note'?T('app.comentario_apagado'):T('app.grifo_removido'),'trash');
   }
   async saveSelection(type){
     if(!this.pendingSelection||!this.currentBook)return;
@@ -6962,16 +7102,16 @@ class ReaderEngine{
     });
     this.currentBook=await this.db.getBook(this.currentBook.id);
     this.applyAnnotationsToRenderedPage(s.pageIndex);
-    Utils.toast(type==='highlight'?'Trecho grifado.':'Citação salva.',type==='highlight'?'highlighter':'quote');
+    Utils.toast(type==='highlight'?T('app.trecho_grifado'):T('app.citacao_salva'),type==='highlight'?'highlighter':'quote');
   }
   async shareSelection(){
     if(!this.pendingSelection)return;
     const text=this.pendingSelection.text;
     try{
-      if(navigator.share){await navigator.share({title:this.currentBook?.title||'Trecho',text});Utils.toast('Trecho compartilhado.','share-2')}
-      else if(navigator.clipboard){await navigator.clipboard.writeText(text);Utils.toast('Trecho copiado.','copy')}
-      else Utils.toast('Compartilhamento indisponível.','info');
-    }catch(e){if(e?.name!=='AbortError')Utils.toast('Não foi possível compartilhar.','alert-triangle')}
+      if(navigator.share){await navigator.share({title:this.currentBook?.title||T('ui.trecho'),text});Utils.toast(T('app.trecho_compartilhado'),'share-2')}
+      else if(navigator.clipboard){await navigator.clipboard.writeText(text);Utils.toast(T('app.trecho_copiado'),'copy')}
+      else Utils.toast(T('app.compartilhamento_indisponivel_2'),'info');
+    }catch(e){if(e?.name!=='AbortError')Utils.toast(T('app.nao_foi_possivel_compartilhar'),'alert-triangle')}
   }
   openNoteForSelection(){
     if(!this.pendingSelection)return;
@@ -6979,7 +7119,7 @@ class ReaderEngine{
     this.hideSelectionPop();
     window.getSelection()?.removeAllRanges();
     document.getElementById('selected-preview').innerHTML=
-      `<div class="item-type">Trecho selecionado</div><div class="item-text">“${Utils.esc(s.text)}”</div><div class="item-meta">Página ${s.pageIndex+1} de ${this.pagesData.length}</div>`;
+      `<div class="item-type">${T('app.trecho_selecionado')}</div><div class="item-text">“${Utils.esc(s.text)}”</div><div class="item-meta">${T('app.pagina_page_de_totalpages',{page:s.pageIndex+1,totalPages:this.pagesData.length})}</div>`;
     document.getElementById('note-text').value='';
     document.getElementById('btn-save-note').dataset.editId = '';
     document.getElementById('btn-save-note').dataset.bookId = '';
@@ -6988,14 +7128,14 @@ class ReaderEngine{
   async saveNote(){
     const btn = document.getElementById('btn-save-note');
     const note = document.getElementById('note-text').value.trim();
-    if(!note){Utils.toast('Escreva uma nota antes de salvar.','edit-3');return}
+    if(!note){Utils.toast(T('app.escreva_uma_nota_antes_de_salvar'),'edit-3');return}
     
     const editId = btn.dataset.editId;
     const bId = btn.dataset.bookId || this.currentBook?.id;
 
     if (editId && bId) {
         await App.db.updateNote(bId, editId, note);
-        Utils.toast('Anotação atualizada.', 'check');
+        Utils.toast(T('app.anotacao_atualizada'), 'check');
         btn.dataset.editId = '';
         btn.dataset.bookId = '';
         App.closePanels();
@@ -7020,7 +7160,7 @@ class ReaderEngine{
     this.currentBook=await this.db.getBook(this.currentBook.id);
     App.closePanels();
     this.applyAnnotationsToRenderedPage(s.pageIndex);
-    Utils.toast('Anotação salva.','sticky-note');
+    Utils.toast(T('app.anotacao_salva'),'sticky-note');
   }
   applyAnnotationsToRenderedPage(pageIndex){
     const page=document.querySelector(`.page[data-page="${pageIndex}"] .page-text`) || document.querySelector(`.page[data-page="${pageIndex}"] .pdf-text-layer`);
@@ -7078,7 +7218,7 @@ class ReaderEngine{
         const el=document.createElement(annotation.type==='note'?'button':'span');
         if(annotation.type==='note'){
           el.type='button';el.className='pdf-note-indicator';
-          el.dataset.annotationId=annotation.id;el.setAttribute('aria-label','Abrir comentário');
+          el.dataset.annotationId=annotation.id;el.setAttribute('aria-label',T('app.abrir_comentario'));
           el.style.left=`${rect.right-rootRect.left-8}px`;el.style.top=`${rect.top-rootRect.top-8}px`;
         }else{
           el.className=annotation.type==='highlight'?'pdf-annotation-highlight':'pdf-annotation-quote';
@@ -7095,7 +7235,7 @@ class ReaderEngine{
     /* Quadrinho não tem tipografia para recalcular: basta rearranjar. */
     if(this.comic)return this.refreshComicLayout();
     const old=this.currentPageIndex||0;
-    Utils.showLoader('Ajustando leitura','Recalculando páginas...',{progress:true});
+    Utils.showLoader(T('app.ajustando_leitura'),T('app.recalculando_paginas'),{progress:true});
     try{
       await this.openBook({...this.currentBook,progress:{...(this.currentBook.progress||{}),globalPage:old}});
     }finally{Utils.hideLoader()}
@@ -7106,7 +7246,7 @@ class ReaderEngine{
     this.chapterTitles.forEach((t,i)=>{
       const b=document.createElement('button');
       b.className='nav-item';b.style.width='100%';b.style.justifyContent='flex-start';
-      b.innerHTML=`<i data-lucide="chevron-right" style="width:16px;height:16px"></i><span style="flex:1;text-align:left">${Utils.esc(t||`Capítulo ${i+1}`)}</span><span class="count">${(this.chapterStarts[i]??0)+1}</span>`;
+      b.innerHTML=`<i data-lucide="chevron-right" style="width:16px;height:16px"></i><span style="flex:1;text-align:start">${Utils.esc(t||T('app.capitulo_v',{v:i+1}))}</span><span class="count">${(this.chapterStarts[i]??0)+1}</span>`;
       b.onclick=()=>{this.closeToc();this.turnToPage(this.chapterStarts[i]||0)};
       list.appendChild(b);
     });
@@ -7148,7 +7288,7 @@ class ReaderEngine{
     if(this.pdfTransporte){try{this.pdfTransporte.abort()}catch(e){}this.pdfTransporte=null}
     /* Fechar o quadrinho devolve à memória todas as páginas abertas. */
     if(this.comic){try{this.comic.close()}catch(e){console.warn(e)}this.comic=null}
-    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.comicRatio=null;
+    this.comicViews=[];this.comicZoom={scale:1,x:0,y:0};this.rtl=false;this.bookRtl=false;this.comicRatio=null;
     this.comicWideZoom=1;this.comicFlow=null;this.comicPinching=false;
     this.updateComicControls();
     this.currentExtractor=null;
@@ -7261,21 +7401,21 @@ const ConversionDialog = {
   },
   open(book) {
     if (!this.el) this.init();
-    this.title.textContent='Converter PDF para EPUB';
-    this.subtitle.textContent=book.title || 'Livro em PDF';
+    this.title.textContent=T('ui.converter_pdf_para_epub');
+    this.subtitle.textContent=book.title || T('app.livro_em_pdf');
     this.body.innerHTML=`
-      <p>O EPUB é melhor para livros com texto selecionável, porque permite ajustar fonte, tamanho, margens e modo de leitura.</p>
+      <p>${T('app.o_epub_e_melhor_para_livros_com_texto')}</p>
       <div class="conversion-warning">
         <i data-lucide="triangle-alert"></i>
         <div>
-          <strong>Funcionalidade indicada apenas para livros</strong>
-          <div>Revistas, apostilas complexas, formulários, documentos com muitas tabelas ou PDFs escaneados podem perder parte do layout original.</div>
+          <strong>${T('app.funcionalidade_indicada_apenas_para_li')}</strong>
+          <div>${T('app.revistas_apostilas_complexas_formulari')}</div>
         </div>
       </div>
-      <p style="margin-top:12px">O PDF original <strong>não será apagado da pasta do usuário</strong>. Apenas a cópia desse PDF será retirada da biblioteca depois que o EPUB for salvo com sucesso.</p>
+      <p style="margin-top:12px">${T('app.pdf_preservado')}</p>
     `;
     this.footer.style.display='flex';
-    this.confirm.innerHTML='<i data-lucide="file-output"></i>Converter para EPUB';
+    this.confirm.innerHTML=`<i data-lucide="file-output"></i>${T('app.converter_para_epub')}`;
     this.confirm.disabled=false;
     this.cancel.disabled=false;
     this.el.classList.add('show');
@@ -7299,14 +7439,14 @@ const ConversionDialog = {
     if(r)r(result);
   },
   showWorking() {
-    this.title.textContent='Convertendo livro';
-    this.subtitle.textContent='Processamento local no navegador';
+    this.title.textContent=T('app.convertendo_livro');
+    this.subtitle.textContent=T('app.processamento_local_no_navegador');
     this.body.innerHTML=`
-      <p>O arquivo está sendo lido e reconstruído. Livros grandes podem levar alguns instantes.</p>
+      <p>${T('app.o_arquivo_esta_sendo_lido_e_reconstrui')}</p>
       <div class="conversion-status show">
         <div class="spinner"></div>
         <div class="conversion-status-text">
-          <strong id="conversion-live-stage">Preparando…</strong>
+          <strong id="conversion-live-stage">${T('app.preparando')}</strong>
           <small id="conversion-live-detail">0%</small>
         </div>
       </div>
@@ -7318,46 +7458,46 @@ const ConversionDialog = {
   updateProgress(percent,message) {
     const stage=document.getElementById('conversion-live-stage');
     const detail=document.getElementById('conversion-live-detail');
-    if(stage)stage.textContent=message || 'Processando…';
+    if(stage)stage.textContent=message || T('app.processando');
     if(detail)detail.textContent=`${Utils.clamp(Math.round(percent||0),0,100)}%`;
   },
   showFallbackFolder(book) {
-    this.title.textContent='Escolha a pasta do PDF';
-    this.subtitle.textContent='Necessário para salvar o EPUB ao lado do original';
+    this.title.textContent=T('app.escolha_a_pasta_do_pdf');
+    this.subtitle.textContent=T('app.necessario_para_salvar_o_epub_ao_lado');
     this.body.innerHTML=`
-      <p>Para gravar o EPUB <strong>na mesma pasta do PDF</strong>, o navegador precisa de permissão para acessar essa pasta.</p>
+      <p>${T('app.gravar_epub_mesma_pasta')}</p>
       <div class="conversion-warning">
         <i data-lucide="folder-open"></i>
         <div>
-          <strong>Selecione a pasta que contém o PDF</strong>
-          <div>Essa permissão é dada somente a esta aplicação e evita que o arquivo original seja alterado.</div>
+          <strong>${T('app.selecione_a_pasta_que_contem_o_pdf')}</strong>
+          <div>${T('app.essa_permissao_e_dada_somente_a_esta_a')}</div>
         </div>
       </div>
-      <p style="margin-top:12px;font-size:11px;color:var(--muted)">Em navegadores sem suporte a acesso direto ao sistema de arquivos, o EPUB será baixado como alternativa.</p>
+      <p style="margin-top:12px;font-size:11px;color:var(--muted)">${T('app.em_navegadores_sem_suporte_a_acesso_di')}</p>
     `;
     this.footer.style.display='flex';
-    this.confirm.innerHTML='<i data-lucide="folder-open"></i>Selecionar pasta e continuar';
-    this.cancel.textContent='Cancelar';
+    this.confirm.innerHTML=`<i data-lucide="folder-open"></i>${T('app.selecionar_pasta_e_continuar')}`;
+    this.cancel.textContent=T('ui.cancelar');
     this.confirm.disabled=false;
     this.cancel.disabled=false;
     lucide.createIcons({root:this.el});
   },
   showSuccess(result, savedInfo) {
-    this.title.textContent='Conversão concluída';
-    this.subtitle.textContent=result.meta?.title || 'EPUB pronto';
+    this.title.textContent=T('app.conversao_concluida');
+    this.subtitle.textContent=result.meta?.title || T('app.epub_pronto');
     const stats=result.stats||{};
     this.body.innerHTML=`
       <p><strong>${Utils.esc(savedInfo.message)}</strong></p>
       <div class="conversion-details">
-        <div class="conversion-detail"><strong>${stats.pdfPages||0}</strong><span>Páginas do PDF</span></div>
+        <div class="conversion-detail"><strong>${stats.pdfPages||0}</strong><span>${T('app.paginas_do_pdf')}</span></div>
         <div class="conversion-detail"><strong>${stats.words||0}</strong><span>Palavras</span></div>
-        <div class="conversion-detail"><strong>${stats.imagePages||0}</strong><span>Páginas como imagem</span></div>
+        <div class="conversion-detail"><strong>${stats.imagePages||0}</strong><span>${T('app.paginas_como_imagem')}</span></div>
       </div>
-      <p style="margin-top:12px">O PDF original permanece intacto na pasta do usuário.</p>
+      <p style="margin-top:12px">${T('app.o_pdf_original_permanece_intacto_na_pa')}</p>
     `;
     this.footer.style.display='flex';
-    this.confirm.innerHTML='<i data-lucide="book-open"></i>Ler agora';
-    this.cancel.textContent='Concluir';
+    this.confirm.innerHTML=`<i data-lucide="book-open"></i>${T('app.ler_agora')}`;
+    this.cancel.textContent=T('app.concluir');
     this.confirm.disabled=false;
     this.cancel.disabled=false;
     lucide.createIcons({root:this.el});
@@ -7705,12 +7845,12 @@ class LibraryManager{
     const body=document.getElementById('sort-options');
     if(!body)return;
     const options=[
-      {value:'custom',label:'Minha Ordem',desc:'Use a ordem manual da sua estante.',icon:'arrow-down-up'},
-      {value:'author',label:'Agrupar por Autor',desc:'Organiza e separa os livros por autor.',icon:'users'},
-      {value:'format',label:'Tipo de arquivo',desc:'Separa em prateleiras de EPUB, PDF, DOCX, audiolivros, vídeos…',icon:'file-stack'},
-      {value:'title',label:'Título',desc:'Ordem alfabética pelo título.',icon:'type'},
-      {value:'recent',label:'Recentes',desc:'Livros adicionados ou lidos mais recentemente.',icon:'clock-3'},
-      {value:'progress',label:'Progresso',desc:'Do maior para o menor progresso de leitura.',icon:'chart-no-axes-column-increasing'}
+      {value:'custom',label:T('app.minha_ordem'),desc:T('app.pressione_o_livro_e_mova_o'),icon:'arrow-down-up'},
+      {value:'author',label:T('app.agrupar_por_autor'),desc:T('app.organiza_e_separa_os_livros_por_autor'),icon:'users'},
+      {value:'format',label:T('app.tipo_de_arquivo'),desc:T('app.separa_em_prateleiras_de_epub_pdf_docx'),icon:'file-stack'},
+      {value:'title',label:T('ui.titulo'),desc:T('app.ordem_alfabetica_pelo_titulo'),icon:'type'},
+      {value:'recent',label:T('app.recentes'),desc:T('app.livros_adicionados_ou_lidos_mais_recen'),icon:'clock-3'},
+      {value:'progress',label:T('app.progresso'),desc:T('app.do_maior_para_o_menor_progresso_de_lei'),icon:'chart-no-axes-column-increasing'}
     ];
     const current=App.state.settings.sort||'custom';
     body.innerHTML='';
@@ -7725,7 +7865,7 @@ class LibraryManager{
         App.state.settings.groupAuthors=opt.value==='author';
         await App.persistSettings();
         App.closePanels();
-        Utils.toast(`Agrupamento: ${opt.label}.`,'check');
+        Utils.toast(T('app.agrupamento_v',{v:opt.label}),'check');
         await this.render();
       };
       body.appendChild(button);
@@ -7799,38 +7939,38 @@ class LibraryManager{
     const content=document.getElementById('library-content');
     content.innerHTML='';
     if(this.currentFilter==='bookmarks'){
-      title.textContent='Marcadores';
-      sub.textContent='Páginas salvas para voltar rapidamente.';
+      title.textContent=T('ui.marcadores');
+      sub.textContent=T('app.paginas_salvas_para_voltar_rapidamente');
       this.renderBookmarks(content);
       return;
     }
     if(this.currentFilter==='notes'||this.currentFilter==='quotes'){
       const singular=Utils.normalizeType(this.currentFilter);
-      title.textContent=singular==='note'?'Anotações':'Citações';
-      sub.textContent=singular==='note'?'Comentários vinculados a trechos selecionados.':'Trechos salvos separadamente dos marcadores.';
+      title.textContent=singular==='note'?T('app.anotacoes'):T('app.citacoes');
+      sub.textContent=singular==='note'?T('app.comentarios_vinculados_a_trechos_selec'):T('app.trechos_salvos_separadamente_dos_marca');
       this.renderAnnotationsList(content,singular);
       return;
     }
     const b=this.sortedBooks(this.baseBooks());
     title.textContent=
-      this.currentFilter==='all'?'Sua Biblioteca':
-      this.currentFilter==='audio'?'Áudio e vídeo':
-      this.currentFilter==='favorite'?'Favoritos':
-      this.currentFilter==='reading'?'Lendo agora':
-      this.currentFilter==='read'?'Lidos':
-      this.currentFilter==='toread'?'Para ler':'Pausados';
+      this.currentFilter==='all'?T('ui.sua_biblioteca'):
+      this.currentFilter==='audio'?T('app.audio_e_video'):
+      this.currentFilter==='favorite'?T('ui.favoritos'):
+      this.currentFilter==='reading'?T('app.lendo_agora'):
+      this.currentFilter==='read'?T('ui.lidos'):
+      this.currentFilter==='toread'?T('app.para_ler_2'):T('ui.pausados');
     sub.textContent=this.search
-      ?`${b.length} resultado(s) para “${this.search}”`
-      :(this.currentFilter==='audio'?'Toque para continuar de onde parou.'
-        :App.state.settings.sort==='author'?'Autores agrupados em ordem alfabética.'
-        :App.state.settings.sort==='format'?'Uma prateleira para cada tipo de arquivo.'
-        :App.state.settings.sort==='custom'?'Ordem manual da sua estante.'
-        :'Livros organizados pela opção selecionada.');
+      ?T('app.length_resultado_s_para_search',{length:b.length,search:this.search})
+      :(this.currentFilter==='audio'?T('app.toque_para_continuar_de_onde_parou')
+        :App.state.settings.sort==='author'?T('app.autores_agrupados_em_ordem_alfabetica')
+        :App.state.settings.sort==='format'?T('app.uma_prateleira_para_cada_tipo_de_arqui')
+        :App.state.settings.sort==='custom'?T('app.ordem_manual_da_sua_estante')
+        :T('app.livros_organizados_pela_opcao_selecion'));
     this.renderHero();
     if(!b.length){
       content.innerHTML=this.currentFilter==='audio'&&!this.search
-        ?`<div class="empty"><i data-lucide="headphones"></i><h3>Nada para ouvir ou assistir ainda</h3><p>Toque em + e escolha arquivos MP3, M4B ou MP4. Vários MP3 de capítulos podem virar um único audiolivro.</p></div>`
-        :`<div class="empty"><i data-lucide="library"></i><h3>Nada por aqui ainda</h3><p>Importe um livro ou ajuste seus filtros de organização.</p></div>`;
+        ?`<div class="empty"><i data-lucide="headphones"></i><h3>${T('app.nada_para_ouvir_ou_assistir_ainda')}</h3><p>${T('app.toque_em_e_escolha_arquivos_mp3_m4b_ou')}</p></div>`
+        :`<div class="empty"><i data-lucide="library"></i><h3>${T('app.nada_por_aqui_ainda')}</h3><p>${T('app.importe_um_livro_ou_ajuste_seus_filtro')}</p></div>`;
       lucide.createIcons({root:content});
       return;
     }
@@ -7838,15 +7978,15 @@ class LibraryManager{
       const hint=document.createElement('div');
       hint.className='shelf-reorder-hint';
       hint.id='shelf-reorder-hint';
-      hint.innerHTML=`<i data-lucide="arrow-down-up"></i><span>Arraste um livro para reposicioná-lo: a estante passa para Minha Ordem e guarda a sequência.</span>`;
+      hint.innerHTML=`<i data-lucide="arrow-down-up"></i><span>${T('app.arraste_um_livro_para_reposiciona_lo_a')}</span>`;
       content.appendChild(hint);
     }
     const modo=App.state.settings.sort;
     const grouped=new Map();
     b.forEach(book=>{
-      const key=modo==='author'?(book.author||'Autor desconhecido')
+      const key=modo==='author'?Utils.autorVisivel(book.author)
         :modo==='format'?BookFormats.groupName(book.format)
-        :'Sua estante';
+        :T('app.sua_estante');
       if(!grouped.has(key))grouped.set(key,[]);
       grouped.get(key).push(book);
     });
@@ -7855,7 +7995,7 @@ class LibraryManager{
       shelf.className='shelf';
       const icone=modo==='format'?`<i data-lucide="${BookFormats.icon(books[0].format)}" class="shelf-icon"></i>`:'';
       const unidade=books.length===1?'item':'itens';
-      shelf.innerHTML=`<div class="shelf-head"><h3>${icone}${Utils.esc(name)}</h3><span>${books.length} ${modo==='format'?unidade:(books.length===1?'livro':'livros')}</span></div><div class="book-grid"></div>`;
+      shelf.innerHTML=`<div class="shelf-head"><h3>${icone}${Utils.esc(name)}</h3><span>${modo==='format'?`${books.length} ${unidade}`:T('app.n_livros',{n:books.length})}</span></div><div class="book-grid"></div>`;
       const grid=shelf.querySelector('.book-grid');
       books.forEach(book=>grid.appendChild(this.card(book)));
       content.appendChild(shelf);
@@ -7899,11 +8039,11 @@ class LibraryManager{
     };
     const statRow=()=>`
       <div class="stat-row">
-        ${statChip('library','livros',total,'all')}
-        ${statChip('bookmark-plus','para ler',toRead,'toread')}
-        ${statChip('book-open','lendo',readingCount,'reading')}
-        ${statChip('circle-check','lidos',finished,'read')}
-        ${statChip('gauge','no total',`${avg}%`)}
+        ${statChip('library',T('app.livros'),total,'all')}
+        ${statChip('bookmark-plus',T('app.para_ler'),toRead,'toread')}
+        ${statChip('book-open',T('app.lendo'),readingCount,'reading')}
+        ${statChip('circle-check',T('app.lidos'),finished,'read')}
+        ${statChip('gauge',T('app.no_total'),`${avg}%`)}
       </div>`;
     /* A capa de verdade no cartão de destaque. Quando o livro não
        tem capa própria, entra a capa desenhada — a mesma da
@@ -7916,11 +8056,11 @@ class LibraryManager{
       hero.innerHTML=`
         <div class="hero-card">
           <div>
-            <div class="hero-label">Sua biblioteca</div>
-            <div class="hero-title">Tudo pronto para a próxima leitura.</div>
-            <div class="hero-meta">Adicione livros e acompanhe o que está por ler, o que está em andamento e seu progresso.</div>
+            <div class="hero-label">${T('app.sua_biblioteca')}</div>
+            <div class="hero-title">${T('app.tudo_pronto_para_a_proxima_leitura')}</div>
+            <div class="hero-meta">${T('app.adicione_livros_e_acompanhe_o_que_esta')}</div>
           </div>
-          <button class="soft-btn" id="hero-import"><i data-lucide="plus"></i>Adicionar livro</button>
+          <button class="soft-btn" id="hero-import"><i data-lucide="plus"></i>${T('app.adicionar_livro')}</button>
         </div>
         ${total?statRow():''}`;
       lucide.createIcons({root:hero});
@@ -7936,21 +8076,21 @@ class LibraryManager{
     const isAudio=AudioFormats.isAudioBook(b);
     const verbo=AudioFormats.isVideoBook(b)?'assistindo':isAudio?'ouvindo':'lendo';
     const chamada=comecar
-      ?(AudioFormats.isVideoBook(b)?'Comece a assistir':isAudio?'Comece a ouvir':'Comece por aqui')
-      :(AudioFormats.isVideoBook(b)?'Continue assistindo':isAudio?'Continue ouvindo':'Continue lendo');
+      ?(AudioFormats.isVideoBook(b)?T('app.comece_a_assistir'):isAudio?T('app.comece_a_ouvir'):T('app.comece_por_aqui'))
+      :(AudioFormats.isVideoBook(b)?T('app.continue_assistindo'):isAudio?T('app.continue_ouvindo'):T('app.continue_lendo'));
     const footLeft=comecar
-      ?(Number.isFinite(Number(totalPages))?`${totalPages} páginas`:'Ainda não começado')
+      ?(Number.isFinite(Number(totalPages))?T('app.totalpages_paginas',{totalPages:totalPages}):T('app.ainda_nao_comecado'))
       :isAudio
-        ?(pct>=100?'Concluído':`${AudioFmt.long(Math.max(0,(b.audio?.duration||0)-(b.progress?.position||0)))} restantes`)
-        :`Página ${page} de ${totalPages}`;
+        ?(pct>=100?T('app.concluido'):T('app.tempo_restante',{tempo:AudioFmt.long(Math.max(0,(b.audio?.duration||0)-(b.progress?.position||0)))}))
+        :T('app.pagina_page_de_totalpages',{page:page,totalPages:totalPages});
     hero.innerHTML=`
-      <div class="hero-card com-capa" id="hero-continue" role="button" tabindex="0" aria-label="${comecar?'Abrir':'Continuar '+verbo} ${Utils.esc(b.title)}">
+      <div class="hero-card com-capa" id="hero-continue" role="button" tabindex="0" aria-label="${Utils.esc(T(comecar?'app.abrir_titulo':verbo==='assistindo'?'app.continuar_assistindo_titulo':verbo==='ouvindo'?'app.continuar_ouvindo_titulo':'app.continuar_lendo_titulo',{titulo:b.title||''}))}">
         <div class="hero-cover">${heroCapa(b)}</div>
         <div class="hero-body">
           <div>
             <div class="hero-label">${chamada}</div>
             <div class="hero-title">${Utils.esc(b.title)}</div>
-            <div class="hero-meta">${Utils.esc(b.author||'Autor desconhecido')}</div>
+            <div class="hero-meta">${Utils.esc(Utils.autorVisivel(b.author))}</div>
           </div>
           <div>
             ${comecar?'':`<div class="hero-progress"><span style="width:${pct}%"></span></div>`}
@@ -8010,10 +8150,10 @@ class LibraryManager{
     const badge=`<span class="badge fmt-badge ${fmt}-badge${media?' audio-badge':''}">${comIcone?`<i data-lucide="${mediaIcon}"></i>`:''}${BookFormats.label(fmt)}</span>`;
     el.innerHTML=`
       <div class="book-menu-wrap">
-        ${fmt==='pdf'?'<button class="book-menu convert-btn" title="Converter para EPUB" aria-label="Converter PDF para EPUB"><i data-lucide="file-output"></i></button>':''}
-        ${BookFormats.canShare(fmt)?'<button class="book-menu share-btn" title="Compartilhar livro" aria-label="Compartilhar livro"><i data-lucide="share-2"></i></button>':''}
-        <button class="book-menu organize-btn" title="Organizar livro" aria-label="Organizar livro"><i data-lucide="more-horizontal"></i></button>
-        <button class="book-delete" title="Excluir da biblioteca" aria-label="Excluir da biblioteca"><i data-lucide="trash-2"></i></button>
+        ${fmt==='pdf'?`<button class="book-menu convert-btn" title="${T('app.converter_para_epub')}" aria-label="${T('ui.converter_pdf_para_epub')}"><i data-lucide="file-output"></i></button>`:''}
+        ${BookFormats.canShare(fmt)?`<button class="book-menu share-btn" title="${T('app.compartilhar_livro')}" aria-label="${T('app.compartilhar_livro')}"><i data-lucide="share-2"></i></button>`:''}
+        <button class="book-menu organize-btn" title="${T('ui.organizar_livro')}" aria-label="${T('ui.organizar_livro')}"><i data-lucide="more-horizontal"></i></button>
+        <button class="book-delete" title="${T('app.excluir_da_biblioteca')}" aria-label="${T('app.excluir_da_biblioteca')}"><i data-lucide="trash-2"></i></button>
       </div>
       <div class="book-cover${media?' is-audio':''}${video?' is-video':''}${squareCover?' cover-square':''}">
         ${squareCover?'<div class="cover-blur" aria-hidden="true"></div>':''}
@@ -8021,14 +8161,14 @@ class LibraryManager{
         <div class="cover-format-badge">${badge}</div>
         <div class="cover-badges">
           ${book.favorite?'<span class="badge">♥</span>':''}
-          ${book.status==='read'?'<span class="badge">Lido</span>':''}
+          ${book.status==='read'?`<span class="badge">${T('app.lido')}</span>`:''}
         </div>
         ${media?`<span class="cover-duration"><i data-lucide="clock-3"></i>${AudioFmt.long(book.audio?.duration||0)}</span><span class="cover-eq" aria-hidden="true"><i></i><i></i><i></i></span>`:''}
         ${video?'<span class="cover-play" aria-hidden="true"><i data-lucide="play"></i></span>':''}
       </div>
       <div class="book-info">
         <div class="book-title">${Utils.esc(book.title)}</div>
-        <div class="book-author">${Utils.esc(book.author||'Autor desconhecido')}</div>
+        <div class="book-author">${Utils.esc(Utils.autorVisivel(book.author))}</div>
         <div class="book-progress"><span style="width:${pct}%"></span></div>
         <div class="book-sub"><span>${pct}%</span><span>${subRight}</span></div>
       </div>`;
@@ -8057,8 +8197,8 @@ class LibraryManager{
   /* Texto à direita da barra de progresso do card: quanto falta para terminar. */
   audioSubText(book){
     const dur=book.audio?.duration||0,pos=book.progress?.position||0,pct=book.progress?.percentage||0;
-    if(pct>=100)return 'Concluído';
-    if(pos>1)return `${AudioFmt.long(Math.max(0,dur-pos))} restantes`;
+    if(pct>=100)return T('app.concluido');
+    if(pos>1)return T('app.tempo_restante',{tempo:AudioFmt.long(Math.max(0,dur-pos))});
     return AudioFmt.long(dur);
   }
   /* O player grava o progresso de tempos em tempos; a estante acompanha sem redesenhar tudo. */
@@ -8082,14 +8222,14 @@ async shareBook(book){
   if(!book)return;
   if(!BookFormats.canShare(book.format)){
     await AppModal.alert({
-      title:'Compartilhamento indisponível',
-      subtitle:'Formato protegido',
+      title:T('app.compartilhamento_indisponivel'),
+      subtitle:T('app.formato_protegido'),
       message:AudioFormats.isAudioBook(book)
-        ?'Audiolivros e vídeos ficam guardados somente no seu aparelho e não podem ser compartilhados por este aplicativo.'
+        ?T('app.audiolivros_e_videos_ficam_guardados_s')
         :BookFormats.isComic(book.format)
-        ?'Quadrinhos ficam guardados somente no seu aparelho e não podem ser compartilhados por este aplicativo.'
-        :'Para manter a política de compartilhamento da biblioteca, arquivos EPUB e MOBI não podem ser compartilhados por este aplicativo.',
-      confirmText:'Entendi',
+        ?T('app.quadrinhos_ficam_guardados_somente_no')
+        :T('app.para_manter_a_politica_de_compartilham'),
+      confirmText:T('app.entendi'),
       confirmIcon:'lock'
     });
     return;
@@ -8097,7 +8237,7 @@ async shareBook(book){
   try{
     const rec=await this.db.getFile(book.id);
     const origem=DBManager.recordBlob(rec);
-    if(!origem)throw new Error('A cópia deste livro não está disponível na biblioteca.');
+    if(!origem)throw new Error(T('app.a_copia_deste_livro_nao_esta_disponive'));
     const mime=BookFormats.mime(book.format);
     const safeTitle=(book.title||'livro').replace(/[\\/:*?"<>|]+/g,'-').trim()||'livro';
     const name=book.sourceFileName||`${safeTitle}.${book.format}`;
@@ -8105,11 +8245,11 @@ async shareBook(book){
 
     if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
       await navigator.share({
-        title:book.title||'Livro',
-        text:`${book.title||'Livro'} — ${book.author||'Autor desconhecido'}`,
+        title:book.title||T('ui.livro'),
+        text:`${book.title||T('app.livro')} — ${Utils.autorVisivel(book.author)}`,
         files:[file]
       });
-      Utils.toast('Livro compartilhado.','share-2');
+      Utils.toast(T('app.livro_compartilhado'),'share-2');
       return;
     }
 
@@ -8123,11 +8263,11 @@ async shareBook(book){
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
-    Utils.toast('O arquivo foi preparado para você compartilhar em outro aplicativo.','download');
+    Utils.toast(T('app.o_arquivo_foi_preparado_para_voce_comp'),'download');
   }catch(err){
     if(err?.name==='AbortError')return;
     console.error(err);
-    Utils.toast(err?.message||'Não foi possível compartilhar o livro.','alert-triangle');
+    Utils.toast(err?.message||T('app.nao_foi_possivel_compartilhar_o_livro'),'alert-triangle');
   }
 }
 
@@ -8138,12 +8278,12 @@ async convertPdf(book){
   if(!accepted)return;
 
   ConversionDialog.showWorking();
-  Utils.showLoader('Convertendo PDF','Reconstruindo o livro localmente.',{progress:true});
+  Utils.showLoader(T('app.convertendo_pdf'),T('app.reconstruindo_o_livro_localmente'),{progress:true});
 
   try{
     const rec=await this.db.getFile(book.id);
     const origem=DBManager.recordBlob(rec);
-    if(!origem)throw new Error('A cópia do PDF não está disponível na biblioteca.');
+    if(!origem)throw new Error(T('app.a_copia_do_pdf_nao_esta_disponivel_na'));
 
     const sourceName=book.sourceFileName || `${book.title||'livro'}.pdf`;
     const sourceFile=new File([origem],sourceName,{type:'application/pdf'});
@@ -8158,14 +8298,14 @@ async convertPdf(book){
       }
     });
 
-    Utils.setLoaderProgress(98,'Preparando salvamento…');
-    ConversionDialog.updateProgress(98,'Preparando salvamento…');
+    Utils.setLoaderProgress(98,T('app.preparando_salvamento'));
+    ConversionDialog.updateProgress(98,T('app.preparando_salvamento'));
     Utils.hideLoader();
 
     const saveResult=await this.saveConvertedEpub(result,book);
     if(!saveResult?.saved){
       ConversionDialog.close(false);
-      Utils.toast('Conversão cancelada. O PDF original permanece na biblioteca.','info');
+      Utils.toast(T('app.conversao_cancelada_o_pdf_original_per'),'info');
       return;
     }
 
@@ -8173,7 +8313,7 @@ async convertPdf(book){
       ...Utils.normalizeBook({
         id:Utils.id(),
         title:result.meta?.title||book.title,
-        author:result.meta?.author||book.author||'Autor Desconhecido',
+        author:result.meta?.author||book.author||Utils.SEM_AUTOR,
         format:'epub',
         addedAt:Date.now(),
         cover:result.coverDataUrl||book.cover||null,
@@ -8221,9 +8361,9 @@ async convertPdf(book){
     console.error(err);
     ConversionDialog.close(false);
     if(err?.name==='NotAllowedError'){
-      Utils.toast('A permissão para salvar o arquivo foi cancelada. Nenhum item da biblioteca foi alterado.','info');
+      Utils.toast(T('app.a_permissao_para_salvar_o_arquivo_foi'),'info');
     }else{
-      Utils.toast(`Falha ao converter o PDF: ${err.message||'erro desconhecido'}`,'alert-circle');
+      Utils.toast(T('app.falha_ao_converter_o_pdf_v',{v:err.message||T('app.erro_desconhecido')}),'alert-circle');
     }
   }finally{
     Utils.hideLoader();
@@ -8236,7 +8376,7 @@ async saveConvertedEpub(result,book){
     if(typeof window.showSaveFilePicker!=='function')return null;
     const handle=await window.showSaveFilePicker({
       suggestedName:outputName,
-      types:[{description:'Livro EPUB',accept:{'application/epub+zip':['.epub']}}],
+      types:[{description:T('app.livro_epub'),accept:{'application/epub+zip':['.epub']}}],
       excludeAcceptAllOption:false
     });
     const writable=await handle.createWritable();
@@ -8246,17 +8386,17 @@ async saveConvertedEpub(result,book){
 
   // Primeiro caminho: salvamento explícito em qualquer pasta/arquivo escolhido.
   if(typeof window.showSaveFilePicker==='function'){
-    ConversionDialog.title.textContent='Salvar EPUB';
-    ConversionDialog.subtitle.textContent='Escolha livremente onde o arquivo será gravado.';
+    ConversionDialog.title.textContent=T('app.salvar_epub');
+    ConversionDialog.subtitle.textContent=T('app.escolha_livremente_onde_o_arquivo_sera');
     ConversionDialog.body.innerHTML=`
-      <p>O EPUB já foi convertido. Agora você pode escolher <strong>qualquer pasta do computador</strong> para salvar o arquivo.</p>
+      <p>${T('app.epub_pronto_qualquer_pasta')}</p>
       <div class="conversion-warning">
         <i data-lucide="folder-open"></i>
-        <div><strong>O PDF original não precisa estar nessa pasta</strong><div>A gravação é independente da localização do PDF e não altera o arquivo original.</div></div>
+        <div><strong>${T('app.o_pdf_original_nao_precisa_estar_nessa')}</strong><div>${T('app.a_gravacao_e_independente_da_localizac')}</div></div>
       </div>`;
     ConversionDialog.footer.style.display='flex';
-    ConversionDialog.confirm.innerHTML='<i data-lucide="save"></i>Escolher local';
-    ConversionDialog.cancel.textContent='Baixar automaticamente';
+    ConversionDialog.confirm.innerHTML=`<i data-lucide="save"></i>${T('app.escolher_local')}`;
+    ConversionDialog.cancel.textContent=T('app.baixar_automaticamente');
     ConversionDialog.confirm.disabled=false;ConversionDialog.cancel.disabled=false;
     lucide.createIcons({root:ConversionDialog.el});
 
@@ -8271,7 +8411,7 @@ async saveConvertedEpub(result,book){
     if(choice==='picker'){
       try{
         const fileName=await pickFile();
-        return {saved:true,outputName:fileName,message:`EPUB salvo em ${fileName}.`};
+        return {saved:true,outputName:fileName,message:T('app.epub_salvo_em_filename',{fileName:fileName})};
       }catch(err){
         if(err?.name==='AbortError')return {saved:false};
         throw err;
@@ -8294,7 +8434,7 @@ downloadConvertedEpub(result,outputName){
   const url=URL.createObjectURL(result.blob);
   const a=document.createElement('a');a.href=url;a.download=outputName;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
-  return {saved:true,outputName,message:`EPUB baixado como ${outputName}.`};
+  return {saved:true,outputName,message:T('app.epub_baixado_como',{nome:outputName})};
 }
 
   /* Grava a ordem que está na tela. Se a estante estava agrupada,
@@ -8318,7 +8458,7 @@ downloadConvertedEpub(result,outputName){
       for(const b of changed)await this.db.patchBook(b.id,{order:b.order,manualOrder:true});
     }catch(e){
       console.error(e);
-      Utils.toast('Não foi possível salvar a nova ordem.','alert-triangle');
+      Utils.toast(T('app.nao_foi_possivel_salvar_a_nova_ordem'),'alert-triangle');
       await this.render();
       return;
     }
@@ -8327,16 +8467,16 @@ downloadConvertedEpub(result,outputName){
     App.state.settings.groupAuthors=false;
     await App.persistSettings();
     if(wasCustom){
-      if(changed.length)Utils.toast('Nova ordem salva.','check');
+      if(changed.length)Utils.toast(T('app.nova_ordem_salva'),'check');
       this.updateShelfHint();
     }else{
-      Utils.toast('Agrupamento alterado para Minha Ordem.','arrow-down-up');
+      Utils.toast(T('app.agrupamento_alterado_para_minha_ordem'),'arrow-down-up');
       await this.render();
     }
   }
   updateShelfHint(){
     const sub=document.getElementById('section-subtitle');
-    if(sub&&!this.search)sub.textContent='Ordem manual da sua estante.';
+    if(sub&&!this.search)sub.textContent=T('app.ordem_manual_da_sua_estante');
     const hint=document.getElementById('shelf-reorder-hint');
     if(hint)hint.remove();
   }
@@ -8349,15 +8489,15 @@ downloadConvertedEpub(result,outputName){
     App.state.settings.sort='custom';
     App.state.settings.groupAuthors=false;
     await App.persistSettings();
-    Utils.toast('Ordem personalizada salva.','move');
+    Utils.toast(T('app.ordem_personalizada_salva'),'move');
     await this.render();
   }
   async deleteBook(book){
     const ok=await AppModal.confirm({
-      title:'Excluir livro?',
-      subtitle:book.title||'Livro',
-      message:'Isso remove apenas a cópia armazenada pela biblioteca, além do progresso, marcadores e anotações. O arquivo original da pasta do usuário não será apagado.',
-      confirmText:'Excluir livro',confirmIcon:'trash-2',danger:true
+      title:T('app.excluir_livro_2'),
+      subtitle:book.title||T('ui.livro'),
+      message:T('app.isso_remove_apenas_a_copia_armazenada'),
+      confirmText:T('app.excluir_livro'),confirmIcon:'trash-2',danger:true
     });
     if(!ok)return;
     try{
@@ -8365,11 +8505,11 @@ downloadConvertedEpub(result,outputName){
       if(App.player?.book?.id===book.id)await App.player.close();
       await this.db.deleteBook(book.id);
       await this.db.clearBookCache(book.id);
-      Utils.toast('Livro excluído da biblioteca.','trash-2');
+      Utils.toast(T('app.livro_excluido_da_biblioteca'),'trash-2');
       await this.render();
     }catch(e){
       console.error(e);
-      Utils.toast('Não foi possível excluir o livro.','alert-triangle');
+      Utils.toast(T('app.nao_foi_possivel_excluir_o_livro'),'alert-triangle');
     }
   }
   renderBookmarks(container){
@@ -8377,7 +8517,7 @@ downloadConvertedEpub(result,outputName){
     this.allBooks.forEach(b=>b.bookmarks.forEach(m=>items.push({book:b,m})));
     items.sort((a,b)=>(b.m.addedAt||0)-(a.m.addedAt||0));
     if(!items.length){
-      container.innerHTML=`<div class="empty"><i data-lucide="bookmark"></i><h3>Nenhum marcador ainda</h3><p>No leitor, toque no ícone de marcador para salvar a página.</p></div>`;
+      container.innerHTML=`<div class="empty"><i data-lucide="bookmark"></i><h3>${T('app.nenhum_marcador_ainda')}</h3><p>${T('app.no_leitor_toque_no_icone_de_marcador_p')}</p></div>`;
       lucide.createIcons({root:container});
       return;
     }
@@ -8388,13 +8528,13 @@ downloadConvertedEpub(result,outputName){
       c.className='bookmark-card';
       c.innerHTML=`
         <div class="item-head">
-          <div class="item-type">Marcador</div>
+          <div class="item-type">${T('app.marcador')}</div>
           <i data-lucide="${isVideoBm?'film':isAudioBm?'headphones':'bookmark'}" class="bookmark-icon" style="width:16px;height:16px"></i>
         </div>
-        <div class="item-text">${Utils.esc(isAudioBm?(m.title||m.chapter||(isVideoBm?'Marcador de vídeo':'Marcador de áudio')):(m.title||'Página salva'))}</div>
-        <div class="item-meta">${Utils.esc(book.title)} · ${isAudioBm?`${isVideoBm?'assistir':'ouvir'} a partir de ${AudioFmt.clock(m.time)}`:`página ${(m.globalPage??m.pageIndex??0)+1}`}${!isAudioBm&&m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>
+        <div class="item-text">${Utils.esc(isAudioBm?(m.title||m.chapter||(isVideoBm?T('app.marcador_de_video'):T('app.marcador_de_audio'))):(m.title||T('app.pagina_salva')))}</div>
+        <div class="item-meta">${Utils.esc(book.title)} · ${isAudioBm?T(isVideoBm?'app.assistir_a_partir_de':'app.ouvir_a_partir_de',{tempo:AudioFmt.clock(m.time)}):T('app.pagina_n_minuscula',{n:(m.globalPage??m.pageIndex??0)+1})}${!isAudioBm&&m.preview?' · '+Utils.esc(m.preview.slice(0,80)):''}</div>
         <div class="item-actions">
-           <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+           <button class="action-btn delete-btn" title="${T('app.excluir')}"><i data-lucide="trash"></i></button>
         </div>`;
       
       c.onclick=()=>isAudioBm
@@ -8403,9 +8543,9 @@ downloadConvertedEpub(result,outputName){
       
       c.querySelector('.delete-btn').onclick = async (e) => {
         e.stopPropagation();
-        if(await AppModal.confirm({title:'Excluir marcador?',message:'O marcador será removido da biblioteca, mas o arquivo do livro permanecerá intacto.',confirmText:'Excluir marcador',confirmIcon:'trash',danger:true})) {
+        if(await AppModal.confirm({title:T('app.excluir_marcador_2'),message:T('app.o_marcador_sera_removido_da_biblioteca'),confirmText:T('app.excluir_marcador'),confirmIcon:'trash',danger:true})) {
            await App.db.deleteBookmark(book.id, m.id);
-           Utils.toast('Marcador excluído.', 'trash');
+           Utils.toast(T('app.marcador_excluido'), 'trash');
            this.render();
         }
       };
@@ -8420,7 +8560,7 @@ downloadConvertedEpub(result,outputName){
     items.sort((a,b)=>(b.a.createdAt||0)-(a.a.createdAt||0));
     if(!items.length){
       const isNote=type==='note';
-      container.innerHTML=`<div class="empty"><i data-lucide="${isNote?'sticky-note':'quote'}"></i><h3>Nenhum registro ainda</h3><p>Selecione um trecho durante a leitura para criar ${isNote?'uma anotação':'uma citação'}.</p></div>`;
+      container.innerHTML=`<div class="empty"><i data-lucide="${isNote?'sticky-note':'quote'}"></i><h3>${T('app.nenhum_registro_ainda')}</h3><p>${T('app.selecione_trecho_para_criar',{oque:isNote?T('app.uma_anotacao'):T('app.uma_citacao')})}</p></div>`;
       lucide.createIcons({root:container});
       return;
     }
@@ -8430,24 +8570,24 @@ downloadConvertedEpub(result,outputName){
       c.className='annotation-card';
       c.innerHTML=`
         <div class="item-head">
-          <div class="item-type">${isNote?'Anotação':'Citação'}</div>
+          <div class="item-type">${isNote?T('app.anotacao_2'):T('app.citacao_2')}</div>
           <i data-lucide="${isNote?'sticky-note':'quote'}" style="width:16px;height:16px;color:var(--accent)"></i>
         </div>
         <div class="item-text">“${Utils.esc(a.text)}”</div>
         ${a.note?`<div class="item-note">${Utils.esc(a.note)}</div>`:''}
-        <div class="item-meta">${Utils.esc(book.title)} · página ${(a.pageIndex||0)+1}</div>
+        <div class="item-meta">${Utils.esc(book.title)} · ${T('app.pagina_n_minuscula',{n:(a.pageIndex||0)+1})}</div>
         <div class="item-actions">
-           ${isNote ? `<button class="action-btn edit-btn" title="Editar"><i data-lucide="edit-3"></i></button>` : ''}
-           <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+           ${isNote ? `<button class="action-btn edit-btn" title="${T('app.editar')}"><i data-lucide="edit-3"></i></button>` : ''}
+           <button class="action-btn delete-btn" title="${T('app.excluir')}"><i data-lucide="trash"></i></button>
         </div>`;
       
       c.onclick=()=>App.reader.openBook({...book,progress:{...(book.progress||{}),globalPage:a.pageIndex||0}});
       
       c.querySelector('.delete-btn').onclick = async (e) => {
         e.stopPropagation();
-        if(await AppModal.confirm({title:`Excluir ${isNote ? 'anotação' : 'citação'}?`,message:'Este registro será removido permanentemente da biblioteca.',confirmText:`Excluir ${isNote ? 'anotação' : 'citação'}`,confirmIcon:'trash',danger:true})) {
+        if(await AppModal.confirm({title:T('app.excluir_oque_pergunta',{oque:isNote ? T('app.anotacao') : T('app.citacao')}),message:T('app.este_registro_sera_removido_permanente'),confirmText:T('app.excluir_oque',{oque:isNote ? T('app.anotacao') : T('app.citacao')}),confirmIcon:'trash',danger:true})) {
            await App.db.deleteAnnotation(book.id, a.id);
-           Utils.toast('Item excluído.', 'trash');
+           Utils.toast(T('app.item_excluido'), 'trash');
            this.render();
         }
       };
@@ -8456,7 +8596,7 @@ downloadConvertedEpub(result,outputName){
          c.querySelector('.edit-btn').onclick = (e) => {
             e.stopPropagation();
             document.getElementById('selected-preview').innerHTML = 
-                `<div class="item-type">Trecho original</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">Página ${(a.pageIndex||0)+1}</div>`;
+                `<div class="item-type">${T('app.trecho_original')}</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">${T('app.pagina_v',{v:(a.pageIndex||0)+1})}</div>`;
             document.getElementById('note-text').value = a.note;
             document.getElementById('btn-save-note').dataset.editId = a.id;
             document.getElementById('btn-save-note').dataset.bookId = book.id;
@@ -8470,7 +8610,7 @@ downloadConvertedEpub(result,outputName){
   }
   openOrganizer(book){
     if(!book){
-      if(!this.allBooks.length)return Utils.toast('Importe um livro primeiro.','book-open');
+      if(!this.allBooks.length)return Utils.toast(T('app.importe_um_livro_primeiro'),'book-open');
       book=this.allBooks[0];
     }
     this.selectedBookId=book.id;
@@ -8478,37 +8618,37 @@ downloadConvertedEpub(result,outputName){
     const cols=book.collections.join(', ');
     document.getElementById('organize-body').innerHTML=`
       <div class="form-grid">
-        <div class="form-group"><label class="form-label" for="org-title">Nome do livro</label>
-          <input class="field" id="org-title" placeholder="Nome do livro" value="${Utils.esc(book.title||'')}">
+        <div class="form-group"><label class="form-label" for="org-title">${T('app.nome_do_livro')}</label>
+          <input class="field" id="org-title" placeholder="${T('app.nome_do_livro')}" value="${Utils.esc(book.title||'')}">
         </div>
-        <div class="form-group"><label class="form-label" for="org-author">Autor</label>
-          <input class="field" id="org-author" placeholder="Nome do autor" value="${Utils.esc(book.author||'')}">
+        <div class="form-group"><label class="form-label" for="org-author">${T('ui.autor')}</label>
+          <input class="field" id="org-author" placeholder="${T('ui.nome_do_autor')}" value="${Utils.esc(book.author||'')}">
         </div>
-        <div class="form-group"><label class="form-label">Status</label>
+        <div class="form-group"><label class="form-label">${T('app.status')}</label>
           <select class="field" id="org-status">
-            <option value="reading">Lendo</option>
-            <option value="read">Lido</option>
-            <option value="toread">Para ler</option>
-            <option value="paused">Pausado</option>
+            <option value="reading">${T('ui.lendo')}</option>
+            <option value="read">${T('app.lido')}</option>
+            <option value="toread">${T('app.para_ler_2')}</option>
+            <option value="paused">${T('app.pausado')}</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Favorito</label>
-          <label class="toggle-row"><span class="toggle-label"><strong>Favorito</strong><small>Aparece em Favoritos.</small></span><span class="toggle"><input type="checkbox" id="org-fav"><span></span></span></label>
+        <div class="form-group"><label class="form-label">${T('app.favorito')}</label>
+          <label class="toggle-row"><span class="toggle-label"><strong>${T('app.favorito')}</strong><small>${T('app.aparece_em_favoritos')}</small></span><span class="toggle"><input type="checkbox" id="org-fav"><span></span></span></label>
         </div>
-        <div class="form-group"><label class="form-label">Série</label>
-          <input class="field" id="org-series" placeholder="Ex.: Trilogia..." value="${Utils.esc(book.series)}">
+        <div class="form-group"><label class="form-label">${T('app.serie')}</label>
+          <input class="field" id="org-series" placeholder="${T('app.ex_trilogia')}" value="${Utils.esc(book.series)}">
         </div>
-        <div class="form-group"><label class="form-label">Pasta / estante</label>
-          <input class="field" id="org-folder" placeholder="Ex.: Estudos, Ficção..." value="${Utils.esc(book.folder)}">
+        <div class="form-group"><label class="form-label">${T('app.pasta_estante')}</label>
+          <input class="field" id="org-folder" placeholder="${T('app.ex_estudos_ficcao')}" value="${Utils.esc(book.folder)}">
         </div>
-        <div class="form-group full"><label class="form-label">Coleções</label>
-          <input class="field" id="org-cols" placeholder="Separe por vírgulas" value="${Utils.esc(cols)}">
+        <div class="form-group full"><label class="form-label">${T('app.colecoes')}</label>
+          <input class="field" id="org-cols" placeholder="${T('app.separe_por_virgulas')}" value="${Utils.esc(cols)}">
         </div>
-        <div class="form-group full"><label class="form-label">Tags</label>
-          <input class="field" id="org-tags" placeholder="Separe por vírgulas" value="${Utils.esc(tags)}">
+        <div class="form-group full"><label class="form-label">${T('ui.tags')}</label>
+          <input class="field" id="org-tags" placeholder="${T('app.separe_por_virgulas')}" value="${Utils.esc(tags)}">
         </div>
       </div>
-      <div class="drag-tip">Arraste um livro para outra posição na estante para salvar uma ordem manual. A ordem manual passa a ter prioridade sobre o agrupamento por autor.</div>`;
+      <div class="drag-tip">${T('app.arraste_um_livro_para_outra_posicao_na')}</div>`;
     document.getElementById('org-status').value=book.status;
     document.getElementById('org-fav').checked=book.favorite;
     App.openPanel('panel-organize');
@@ -8521,12 +8661,12 @@ downloadConvertedEpub(result,outputName){
     const newTitle=titleField?.value.trim()||'';
     const newAuthor=authorField?.value.trim()||'';
     if(!newTitle){
-      await AppModal.alert({title:'Nome do livro obrigatório',subtitle:'Organizar livro',message:'Informe um nome para o livro antes de salvar.',confirmText:'Entendi'});
+      await AppModal.alert({title:T('app.nome_do_livro_obrigatorio'),subtitle:T('ui.organizar_livro'),message:T('app.informe_um_nome_para_o_livro_antes_de'),confirmText:T('app.entendi')});
       titleField?.focus();
       return;
     }
     book.title=newTitle;
-    book.author=newAuthor||'Autor Desconhecido';
+    book.author=newAuthor||Utils.SEM_AUTOR;
     book.status=document.getElementById('org-status').value;
     book.favorite=document.getElementById('org-fav').checked;
     book.series=document.getElementById('org-series').value.trim();
@@ -8540,14 +8680,14 @@ downloadConvertedEpub(result,outputName){
     });
     App.player?.syncMeta(book);
     App.closePanels();
-    Utils.toast('Organização salva.','check');
+    Utils.toast(T('app.organizacao_salva'),'check');
     await this.render();
   }
   openDimensionPanel(type){
     const body=document.getElementById('filter-panel-body');
     const title=document.getElementById('filter-panel-title');
     const keyMap={collections:'collections',series:'series',authors:'author',tags:'tags'};
-    title.textContent={collections:'Coleções',series:'Séries',authors:'Autores',tags:'Tags'}[type];
+    title.textContent={collections:T('app.colecoes'),series:T('app.series'),authors:T('ui.autores'),tags:T('ui.tags')}[type];
     const key=keyMap[type];
     const vals=new Map();
     this.allBooks.forEach(b=>{
@@ -8556,14 +8696,14 @@ downloadConvertedEpub(result,outputName){
     });
     body.innerHTML='';
     if(!vals.size){
-      body.innerHTML=`<div class="empty"><h3>Ainda não há itens</h3><p>Use “Organizar” em um livro para criar ${title.textContent.toLowerCase()}.</p></div>`;
+      body.innerHTML=`<div class="empty"><h3>${T('app.ainda_nao_ha_itens')}</h3><p>${T('app.use_organizar_para_criar',{botao:T('ui.organizar_livro'),oque:title.textContent.toLowerCase()})}</p></div>`;
       App.openPanel('panel-library-filter');
       return;
     }
     Array.from(vals.entries()).sort((a,b)=>a[0].localeCompare(b[0],'pt')).forEach(([v,count])=>{
       const btn=document.createElement('button');
       btn.className='nav-item';btn.style.width='100%';
-      btn.innerHTML=`<i data-lucide="${type==='authors'?'user':type==='tags'?'tag':'layers-3'}" style="width:17px;height:17px"></i><span style="flex:1;text-align:left">${Utils.esc(v)}</span><span class="count">${count}</span>`;
+      btn.innerHTML=`<i data-lucide="${type==='authors'?'user':type==='tags'?'tag':'layers-3'}" style="width:17px;height:17px"></i><span style="flex:1;text-align:start">${Utils.esc(v)}</span><span class="count">${count}</span>`;
       btn.onclick=()=>{
         this.search=v.toLowerCase();
         document.getElementById('library-search-input').value=v;
@@ -8601,7 +8741,7 @@ downloadConvertedEpub(result,outputName){
           multiple:true,
           excludeAcceptAllOption:false,
           types:[{
-            description:'Livros, quadrinhos, documentos, audiolivros e vídeos',
+            description:T('app.livros_quadrinhos_documentos_audiolivr'),
             accept:{
               'application/epub+zip':['.epub'],
               'application/x-mobipocket-ebook':['.mobi','.prc'],
@@ -8651,19 +8791,19 @@ downloadConvertedEpub(result,outputName){
     if(!batch&&arquivos.length===1&&!grupos.length)return this.importSingle(arquivos[0]);
     if(!batch&&!arquivos.length&&grupos.length===1)return this.importSingle(null,grupos[0]);
     const list=[
-      ...grupos.map(g=>({group:g,name:g.title||'Audiolivro'})),
+      ...grupos.map(g=>({group:g,name:g.title||T('app.audiolivro_2')})),
       ...arquivos.map(f=>({file:f,name:f.name}))
     ];
 
     let importados=0,repetidos=0,falhas=0,cancelado=false;
     const erros=[];
     const ctrl=new AbortController();
-    Utils.showLoader('Importando livros',`0 de ${list.length}`,{progress:true,onCancel:()=>ctrl.abort()});
+    Utils.showLoader(T('app.importando_livros'),T('app.v_de_total',{v:0,total:list.length}),{progress:true,onCancel:()=>ctrl.abort()});
     try{
       for(let i=0;i<list.length;i++){
         if(ctrl.signal.aborted){cancelado=true;break}
         const job=list[i];
-        Utils.setLoaderProgress(Math.round((i/list.length)*100),`${i} de ${list.length} · ${job.name}`);
+        Utils.setLoaderProgress(Math.round((i/list.length)*100),`${T('app.v_de_total',{v:i,total:list.length})} · ${job.name}`);
         await Utils.yieldToUI();
         /* Progresso de cada arquivo na legenda; a barra continua contando o lote. */
         const meter=job.file?new TransferMeter(job.file.name,job.file.size,{mode:'text',prefix:`${i+1}/${list.length} · `}):null;
@@ -8673,27 +8813,27 @@ downloadConvertedEpub(result,outputName){
         if(result.status==='cancelled'){cancelado=true;break}
         if(result.status==='ok')importados++;
         else if(result.status==='duplicate')repetidos++;
-        else{falhas++;erros.push(`${job.name}: ${result.message||'não foi possível ler o arquivo'}`)}
+        else{falhas++;erros.push(`${job.name}: ${result.message||T('app.nao_foi_possivel_ler_o_arquivo_2')}`)}
       }
-      if(!cancelado)Utils.setLoaderProgress(100,'Finalizando…');
+      if(!cancelado)Utils.setLoaderProgress(100,T('app.finalizando'));
     }finally{
       Utils.hideLoader();
     }
 
     await this.render();
     const linhas=[
-      `${importados} livro(s) adicionado(s) à estante.`,
-      repetidos?`${repetidos} já estavam na biblioteca e foram ignorados.`:'',
-      falhas?`${falhas} arquivo(s) não puderam ser lidos.`:'',
-      cancelado?'A importação foi interrompida; o que já tinha entrado continua na estante.':''
+      T('app.importados_livro_s_adicionado_s_a_esta',{importados:importados}),
+      repetidos?T('app.repetidos_ja_estavam_na_biblioteca_e_f',{repetidos:repetidos}):'',
+      falhas?T('app.falhas_arquivo_s_nao_puderam_ser_lidos',{falhas:falhas}):'',
+      cancelado?T('app.a_importacao_foi_interrompida_o_que_ja'):''
     ].filter(Boolean);
     if(erros.length)console.warn('Falhas na importação:',erros);
     await AppModal.alert({
-      title:cancelado?'Importação interrompida':'Importação concluída',
-      subtitle:`${list.length} arquivo(s) processado(s)`,
+      title:cancelado?T('app.importacao_interrompida'):T('app.importacao_concluida'),
+      subtitle:T('app.n_arquivos_processados',{n:list.length}),
       message:linhas.join('\n'),
       icon:importados?'library-big':'info',
-      confirmText:'Ver estante'
+      confirmText:T('app.ver_estante')
     });
   }
 
@@ -8701,8 +8841,8 @@ downloadConvertedEpub(result,outputName){
     const ctrl=new AbortController();
     const meter=file?new TransferMeter(file.name,file.size,{mode:'bar'}):null;
     Utils.showLoader(
-      group?'Importando audiolivro':'Preparando o arquivo',
-      group?`${group.plan.files.length} arquivos de áudio...`:file.name,
+      group?T('app.importando_audiolivro'):T('app.preparando_o_arquivo'),
+      group?T('app.length_arquivos_de_audio',{length:group.plan.files.length}):file.name,
       {progress:!group,onCancel:group?null:()=>ctrl.abort()}
     );
     let result;
@@ -8715,38 +8855,38 @@ downloadConvertedEpub(result,outputName){
     }
 
     if(result.status==='cancelled'){
-      Utils.toast('Importação cancelada.','x');
+      Utils.toast(T('app.importacao_cancelada'),'x');
       return;
     }
 
     if(result.status==='ok'){
       const v=AudioFormats.isVideoBook(result.book);
-      Utils.toast(v?'Vídeo importado e salvo no dispositivo.'
-        :AudioFormats.isAudioBook(result.book)?'Audiolivro importado e salvo no dispositivo.'
-        :BookFormats.isComic(result.book.format)?'Quadrinho importado e salvo no dispositivo.'
-        :'Livro importado e salvo no dispositivo.','check');
+      Utils.toast(v?T('app.video_importado_e_salvo_no_dispositivo')
+        :AudioFormats.isAudioBook(result.book)?T('app.audiolivro_importado_e_salvo_no_dispos')
+        :BookFormats.isComic(result.book.format)?T('app.quadrinho_importado_e_salvo_no_disposi')
+        :T('app.livro_importado_e_salvo_no_dispositivo'),'check');
       await this.render();
       return;
     }
 
     if(result.status==='duplicate'){
       const book=result.book||{};
-      const titulo=book.title||(file?file.name:(group&&group.title)||'Audiolivro');
+      const titulo=book.title||(file?file.name:(group&&group.title)||T('app.audiolivro_2'));
       if(result.exact){
         await AppModal.alert({
-          title:'Este livro já está na estante',
+          title:T('app.este_livro_ja_esta_na_estante'),
           subtitle:titulo,
-          message:`“${titulo}” já foi importado antes e continua disponível na sua biblioteca. Nenhuma cópia nova foi criada.`,
+          message:T('app.titulo_ja_foi_importado_antes_e_contin',{titulo:titulo}),
           icon:'library-big',
-          confirmText:'Entendi'
+          confirmText:T('app.entendi')
         });
         return;
       }
       const seguir=await AppModal.confirm({
-        title:'Parece que este livro já está na estante',
+        title:T('app.parece_que_este_livro_ja_esta_na_estan'),
         subtitle:titulo,
-        message:`Você já tem “${titulo}”${book.author?` de ${book.author}`:''} na biblioteca, embora o arquivo seja diferente. Deseja importar mesmo assim?`,
-        confirmText:'Importar mesmo assim',
+        message:book.author?T('app.voce_ja_tem_titulo_de_autor',{titulo,autor:book.author}):T('app.voce_ja_tem_titulo',{titulo}),
+        confirmText:T('app.importar_mesmo_assim'),
         confirmIcon:'plus'
       });
       const ehQuadrinho=!!(result.pending&&(result.pending.comicPages||result.pending.comicBlob));
@@ -8760,19 +8900,19 @@ downloadConvertedEpub(result,outputName){
         }
         return;
       }
-      Utils.showLoader('Importando livro','Salvando na sua estante...');
+      Utils.showLoader(T('app.importando_livro'),T('app.salvando_na_sua_estante_2'));
       try{
         if(result.pending.comicPages)await this.db.saveComicBook(result.pending.meta);
         else if(result.pending.comicBlob)await this.db.saveComicBook(result.pending.meta,result.pending.comicBlob);
         else if(result.pending.blobs)await AudioImport.save(this.db,result.pending.meta,result.pending.blobs);
         else await this.db.saveBook(result.pending.meta,result.pending.blob||result.pending.buffer);
-        Utils.toast(ehQuadrinho?'Quadrinho importado e salvo no dispositivo.'
-          :result.pending.blobs?'Audiolivro importado e salvo no dispositivo.'
-          :'Livro importado e salvo no dispositivo.','check');
+        Utils.toast(ehQuadrinho?T('app.quadrinho_importado_e_salvo_no_disposi')
+          :result.pending.blobs?T('app.audiolivro_importado_e_salvo_no_dispos')
+          :T('app.livro_importado_e_salvo_no_dispositivo'),'check');
         await this.render();
       }catch(err){
         console.error(err);
-        Utils.toast(err instanceof ParseError?err.message:'Falha ao salvar o livro na biblioteca.','alert-circle');
+        Utils.toast(err instanceof ParseError?err.message:T('app.falha_ao_salvar_o_livro_na_biblioteca'),'alert-circle');
       }finally{
         Utils.hideLoader();
       }
@@ -8783,7 +8923,7 @@ downloadConvertedEpub(result,outputName){
       Utils.toast(result.error.message,'alert-circle');
       if(result.error.hint)setTimeout(()=>Utils.toast(result.error.hint,'info'),900);
     }else{
-      Utils.toast(result.message||'Falha ao processar o arquivo.','alert-circle');
+      Utils.toast(result.message||T('app.falha_ao_processar_o_arquivo'),'alert-circle');
     }
   }
 
@@ -8793,8 +8933,8 @@ downloadConvertedEpub(result,outputName){
     if(AudioFormats.has(ext))return this.importAudioFile(file,{quiet,meter,signal});
     if(BookFormats.isComic(ext))return this.importComicFile(file,{quiet,meter,signal});
     if(!BookFormats.TEXT.includes(ext)){
-      if(!quiet)Utils.toast('Formato não suportado.','alert-triangle');
-      return {status:'error',message:'Formato não suportado.'};
+      if(!quiet)Utils.toast(T('app.formato_nao_suportado'),'alert-triangle');
+      return {status:'error',message:T('app.formato_nao_suportado')};
     }
 
     /* ------------------------------------------------------------
@@ -8823,7 +8963,7 @@ downloadConvertedEpub(result,outputName){
     }catch(err){
       if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
-      return {status:'error',message:'Não foi possível ler o arquivo.',error:err};
+      return {status:'error',message:T('app.nao_foi_possivel_ler_o_arquivo'),error:err};
     }
 
     const fileHash=await FileFingerprint.hash(buffer);
@@ -8833,7 +8973,7 @@ downloadConvertedEpub(result,outputName){
     const meta={
       id:Utils.id(),
       title:file.name.replace(/\.[^/.]+$/,''),
-      author:'Autor Desconhecido',
+      author:Utils.SEM_AUTOR,
       format:ext,
       sourceFileName:file.name,
       addedAt:Date.now(),
@@ -8851,12 +8991,12 @@ downloadConvertedEpub(result,outputName){
         meta.cover=parsed.metadata.cover;
       }else if(ext==='mobi'){
         if(!MobiFile.isMobi(buffer)){
-          throw new ParseError('Este arquivo não é um MOBI válido.','Confira se a extensão corresponde ao conteúdo ou converta o livro para EPUB.');
+          throw new ParseError(T('app.este_arquivo_nao_e_um_mobi_valido'),T('app.confira_se_a_extensao_corresponde_ao_c'));
         }
         const info=MOBIParser.metadata(buffer);
         if(info){
           if(info.drm){
-            throw new ParseError('Este arquivo está protegido por DRM.','Livros com proteção da Amazon não podem ser abertos aqui. Use uma cópia sem DRM ou converta o livro para EPUB.');
+            throw new ParseError(T('app.este_arquivo_esta_protegido_por_drm'),T('app.livros_com_protecao_da_amazon_nao_pode'));
           }
           if(info.title)meta.title=info.title;
           if(info.author)meta.author=info.author;
@@ -8865,7 +9005,7 @@ downloadConvertedEpub(result,outputName){
       }else if(ext==='docx'){
         const head=new Uint8Array(buffer,0,Math.min(4,buffer.byteLength));
         if(!(head[0]===0x50&&head[1]===0x4B)){
-          throw new ParseError('Este arquivo não é um .docx válido.','Se for um .doc antigo, abra no Word e salve como .docx antes de importar.');
+          throw new ParseError(T('app.este_arquivo_nao_e_um_docx_valido'),T('app.se_for_um_doc_antigo_abra_no_word_e_sa'));
         }
       }else if(ext==='md'){
         /* O primeiro "# Título" do arquivo costuma ser o nome do livro. */
@@ -8876,7 +9016,7 @@ downloadConvertedEpub(result,outputName){
       }
     }catch(err){
       console.error(err);
-      return {status:'error',message:err?.message||'Falha ao processar o arquivo.',error:err};
+      return {status:'error',message:err?.message||T('app.falha_ao_processar_o_arquivo'),error:err};
     }
 
     /* Se este livro já esteve aqui e o backup guardou o progresso
@@ -8890,7 +9030,7 @@ downloadConvertedEpub(result,outputName){
       await this.db.saveBook(meta,buffer);
     }catch(err){
       console.error(err);
-      return {status:'error',message:'Não foi possível salvar o livro na biblioteca.',error:err};
+      return {status:'error',message:T('app.nao_foi_possivel_salvar_o_livro_na_bib'),error:err};
     }
     /* Mantem a lista em memoria atualizada para que dois arquivos iguais
        dentro da mesma importacao em lote nao entrem duas vezes. */
@@ -8919,9 +9059,9 @@ downloadConvertedEpub(result,outputName){
         arquivo=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
         meter?.finish();
       }
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
 
-      Utils.setLoaderText(null,'Lendo o PDF...');
+      Utils.setLoaderText(null,T('app.lendo_o_pdf'));
       const fileHash=await FileFingerprint.hashOf(arquivo);
       await Utils.yieldToUI();
       const identico=await this.findByHash(fileHash,arquivo.size);
@@ -8930,7 +9070,7 @@ downloadConvertedEpub(result,outputName){
       meta={
         id:Utils.id(),
         title:file.name.replace(/\.[^/.]+$/,''),
-        author:'Autor Desconhecido',
+        author:Utils.SEM_AUTOR,
         format:'pdf',
         sourceFileName:file.name,
         addedAt:Date.now(),
@@ -8959,7 +9099,7 @@ downloadConvertedEpub(result,outputName){
     }catch(err){
       if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
-      return {status:'error',message:err?.message||'Não foi possível ler o PDF.',error:err};
+      return {status:'error',message:err?.message||T('app.nao_foi_possivel_ler_o_pdf'),error:err};
     }
 
     try{await Backup.casarPendente(meta)}catch(e){console.warn(e)}
@@ -8970,7 +9110,7 @@ downloadConvertedEpub(result,outputName){
       await this.db.saveBook(meta,arquivo);
     }catch(err){
       console.error(err);
-      return {status:'error',message:'Não foi possível salvar o livro na biblioteca.',error:err};
+      return {status:'error',message:T('app.nao_foi_possivel_salvar_o_livro_na_bib'),error:err};
     }
     this.allBooks.push(Utils.normalizeBook(meta));
     return {status:'ok',book:meta};
@@ -8999,7 +9139,7 @@ downloadConvertedEpub(result,outputName){
         arquivo=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
         meter?.finish();
       }
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
       /* Descompactar precisa de espaço livre do tamanho do quadrinho.
          Melhor avisar agora do que na página 150. */
       await ComicUnpacker.conferirEspaco(arquivo.size);
@@ -9009,12 +9149,12 @@ downloadConvertedEpub(result,outputName){
       const identico=await this.findByHash(impressao,arquivo.size);
       if(identico)return {status:'duplicate',book:identico,exact:true};
 
-      Utils.setLoaderText(null,'Lendo o quadrinho...');
+      Utils.setLoaderText(null,T('app.lendo_o_quadrinho'));
       const resultado=await ComicUnpacker.unpack(id,arquivo,{
         nome:file.name,signal,db:this.db,
         onStatus:texto=>Utils.setLoaderText(null,texto),
         onProgress:(feitas,total)=>Utils.setLoaderProgress(
-          total?Math.round(feitas/total*100):0,`${feitas} de ${total}`)
+          total?Math.round(feitas/total*100):0,T('app.v_de_total',{v:feitas,total}))
       });
       let capa=null;
       try{
@@ -9026,7 +9166,7 @@ downloadConvertedEpub(result,outputName){
         meta:{
           id,
           title:ComicSupport.buildTitle(info,base)||base,
-          author:(info&&info.author)||'Autor Desconhecido',
+          author:(info&&info.author)||T('app.autor_desconhecido'),
           format:ext,
           sourceFileName:file.name,
           addedAt:Date.now(),
@@ -9051,7 +9191,7 @@ downloadConvertedEpub(result,outputName){
       try{await this.db.deleteComicPages(id)}catch(e){}
       if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
-      return {status:'error',message:err?.message||'Falha ao processar o quadrinho.',error:err};
+      return {status:'error',message:err?.message||T('app.falha_ao_processar_o_quadrinho'),error:err};
     }
     try{await Backup.casarPendente(construido.meta)}catch(e){console.warn(e)}
     const parecido=this.findSimilar(construido.meta);
@@ -9064,11 +9204,11 @@ downloadConvertedEpub(result,outputName){
   }
   async saveComicResult({meta}){
     try{
-      Utils.setLoaderText('Salvando na sua estante','Quase lá...');
+      Utils.setLoaderText(T('app.salvando_na_sua_estante'),T('app.quase_la'));
       await this.db.saveComicBook(meta);
     }catch(err){
       console.error(err);
-      return {status:'error',message:err?.message||'Não foi possível salvar o quadrinho.',error:err};
+      return {status:'error',message:err?.message||T('app.nao_foi_possivel_salvar_o_quadrinho'),error:err};
     }
     this.allBooks.push(Utils.normalizeBook(meta));
     return {status:'ok',book:meta};
@@ -9091,7 +9231,7 @@ downloadConvertedEpub(result,outputName){
         file=await FileTransfer.localCopy(file,{onProgress:meter?meter.handler():null,signal});
         meter?.finish();
       }
-      if(signal&&signal.aborted)throw new DOMException('Cancelado','AbortError');
+      if(signal&&signal.aborted)throw new DOMException(T('app.cancelado'),'AbortError');
       const impressao=await FileFingerprint.hashBlob(file);
       const identico=await this.findByHash(impressao,file.size);
       if(identico)return {status:'duplicate',book:identico,exact:true};
@@ -9102,7 +9242,7 @@ downloadConvertedEpub(result,outputName){
     }catch(err){
       if(Utils.isAbort(err))return {status:'cancelled'};
       console.error(err);
-      return {status:'error',message:err?.message||'Falha ao processar o arquivo.',error:err};
+      return {status:'error',message:err?.message||T('app.falha_ao_processar_o_arquivo'),error:err};
     }
     try{await Backup.casarPendente(built.meta)}catch(e){console.warn(e)}
     const parecido=this.findSimilar(built.meta);
@@ -9120,7 +9260,7 @@ downloadConvertedEpub(result,outputName){
       if(identico)return {status:'duplicate',book:identico,exact:true};
     }catch(err){
       console.error(err);
-      return {status:'error',message:err?.message||'Falha ao processar os arquivos.',error:err};
+      return {status:'error',message:err?.message||T('app.falha_ao_processar_os_arquivos'),error:err};
     }
     const parecido=this.findSimilar(built.meta);
     if(parecido)return {status:'duplicate',book:parecido,exact:false,pending:{meta:built.meta,blobs:built.blobs}};
@@ -9128,18 +9268,18 @@ downloadConvertedEpub(result,outputName){
   }
   async saveAudioResult({meta,blobs}){
     try{
-      Utils.setLoaderText('Salvando na sua estante','Audiolivros grandes podem levar alguns instantes...');
+      Utils.setLoaderText(T('app.salvando_na_sua_estante'),T('app.audiolivros_grandes_podem_levar_alguns'));
       await AudioImport.save(this.db,meta,blobs);
     }catch(err){
       console.error(err);
-      return {status:'error',message:err?.message||'Não foi possível salvar o audiolivro.',error:err};
+      return {status:'error',message:err?.message||T('app.nao_foi_possivel_salvar_o_audiolivro'),error:err};
     }
     this.allBooks.push(Utils.normalizeBook(meta));
     return {status:'ok',book:meta};
   }
   /* Vários MP3 juntos: se parecem capítulos de um livro, pergunta antes de agrupar. */
   async decideAudioGroup(files){
-    Utils.showLoader('Analisando os arquivos','Verificando se são partes do mesmo audiolivro...');
+    Utils.showLoader(T('app.analisando_os_arquivos'),T('app.verificando_se_sao_partes_do_mesmo_aud'));
     let plan=null;
     try{plan=await AudioImport.analyzeGroup(files)}
     catch(e){console.warn(e)}
@@ -9237,7 +9377,7 @@ const AppModal={
     this.el?.addEventListener('click',e=>{if(e.target===this.el)cancel()});
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&this.el?.classList.contains('show'))cancel()});
   },
-  alert({title='Aviso',subtitle='',message='',confirmText='Entendi',icon='circle-alert'}={}){
+  alert({title=T('app.aviso'),subtitle='',message='',confirmText=T('app.entendi'),icon='circle-alert'}={}){
     if(!this.el)this.init();
     this.close(false);
     this.title.textContent=title;
@@ -9259,7 +9399,7 @@ const AppModal={
      sensata, "Cancelar" diz menos do que dizer o que vai acontecer
      ("Manter ligado"), e o ícone certo prepara a pessoa para o
      assunto antes de ela ler uma linha. */
-  confirm({title='Confirmação',subtitle='',message='',confirmText='Confirmar',confirmIcon='check',cancelText='Cancelar',icon='',danger=false}={}){
+  confirm({title=T('ui.confirmacao'),subtitle='',message='',confirmText=T('ui.confirmar'),confirmIcon='check',cancelText=T('ui.cancelar'),icon='',danger=false}={}){
     if(!this.el)this.init();
     this.close(false);
     this.title.textContent=title;this.subtitle.textContent=subtitle;
@@ -9284,8 +9424,8 @@ const AppModal={
   /* Um confirmar com corpo próprio: serve quando a pergunta não
      cabe numa frase e o usuário precisa escolher algo antes de
      responder. Devolve o que `aoConfirmar` ler da tela, ou false. */
-  custom({title='Confirmação',subtitle='',html='',confirmText='Confirmar',confirmIcon='check',
-          cancelText='Cancelar',icon='circle-alert',danger=false,aoAbrir=null,aoConfirmar=null}={}){
+  custom({title=T('ui.confirmacao'),subtitle='',html='',confirmText=T('ui.confirmar'),confirmIcon='check',
+          cancelText=T('ui.cancelar'),icon='circle-alert',danger=false,aoAbrir=null,aoConfirmar=null}={}){
     if(!this.el)this.init();
     this.close(false);
     this.title.textContent=title;
@@ -9489,7 +9629,7 @@ const Backup={
      `capas:true` existe só para os testes. */
   async gerar({onStatus,capas:comCapas=false}={}){
     const aviso=onStatus||(()=>{});
-    aviso('Reunindo a sua estante...');
+    aviso(T('app.reunindo_a_sua_estante'));
     const livros=(App.library&&App.library.allBooks&&App.library.allBooks.length)
       ? App.library.allBooks
       : await App.db.getBooks();
@@ -9507,7 +9647,7 @@ const Backup={
       }
       registros.push(reg);
       if(i%20===0){
-        aviso(`Reunindo a sua estante (${i+1} de ${livros.length})...`);
+        aviso(T('app.reunindo_a_sua_estante_v_de_length',{v:i+1,length:livros.length}));
         await Utils.yieldToUI();
       }
     }
@@ -9533,26 +9673,26 @@ const Backup={
     };
     zip.file(this.NOME_JSON,JSON.stringify(dados,null,1));
     zip.file('LEIA-ME.txt',[
-      'Backup do Veredas Reader',
+      T('app.backup_do_veredas_reader'),
       '========================',
       '',
-      `Criado em ${new Date().toLocaleString('pt-BR')}`,
-      `${conta.livros} livro(s) · ${conta.marcacoes} marcação(ões)`,
+      T('app.criado_em_v',{v:new Date().toLocaleString(Idiomas._tag)}),
+      T('app.livros_livro_s_marcacoes_marcacao_oes',{livros:conta.livros,marcacoes:conta.marcacoes}),
       '',
-      'Este arquivo guarda o seu progresso de leitura, os grifos, as citações,',
-      'as notas, os marcadores e a organização da sua estante.',
+      T('app.este_arquivo_guarda_o_seu_progresso_de'),
+      T('app.as_notas_os_marcadores_e_a_organizacao'),
       '',
-      'Ele NAO contem os arquivos dos livros. Para restaurar por completo,',
-      'importe os livros normalmente no aplicativo: ao reconhecer cada arquivo,',
-      'o Veredas devolve sozinho as marcacoes e o ponto onde voce parou.',
+      T('app.ele_nao_contem_os_arquivos_dos_livros'),
+      T('app.importe_os_livros_normalmente_no_aplic'),
+      T('app.o_veredas_devolve_sozinho_as_marcacoes'),
       '',
-      'Para restaurar: menu lateral > Backup e restauracao > Restaurar backup.'
+      T('app.para_restaurar_menu_lateral_backup_e_r')
     ].join('\n'));
 
-    aviso('Compactando...');
+    aviso(T('app.compactando'));
     const blob=await zip.generateAsync(
       {type:'blob',compression:'DEFLATE',compressionOptions:{level:6}},
-      meta=>{if(meta&&meta.percent!=null)Utils.setLoaderProgress(meta.percent,'Compactando...')}
+      meta=>{if(meta&&meta.percent!=null)Utils.setLoaderProgress(meta.percent,T('app.compactando'))}
     );
     const dia=new Date().toISOString().slice(0,10);
     return{blob,nome:`Veredas Reader - backup ${dia}.zip`,resumo:conta};
@@ -9569,26 +9709,26 @@ const Backup={
     try{
       zip=await JSZip.loadAsync(file);
     }catch(e){
-      throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
-        'Escolha o .zip salvo pelo Veredas ou o .txt recebido pelo compartilhamento.');
+      throw new ParseError(T('app.este_arquivo_nao_parece_ser_um_backup'),
+        T('app.escolha_o_zip_salvo_pelo_veredas_ou_o'));
     }
     const entrada=zip.file(this.NOME_JSON)||zip.file(new RegExp(`${this.NOME_JSON}$`))[0];
     if(!entrada){
-      throw new ParseError('Este arquivo não parece ser um backup do Veredas.',
-        'Falta o arquivo biblioteca.json lá dentro.');
+      throw new ParseError(T('app.este_arquivo_nao_parece_ser_um_backup'),
+        T('app.falta_o_arquivo_biblioteca_json_la_den'));
     }
     let dados;
     try{
       dados=JSON.parse(await entrada.async('text'));
     }catch(e){
-      throw new ParseError('O backup está corrompido.','O conteúdo interno não pôde ser lido.');
+      throw new ParseError(T('app.o_backup_esta_corrompido'),T('app.o_conteudo_interno_nao_pode_ser_lido'));
     }
     if(!dados||dados.tipo!=='backup-biblioteca'||!Array.isArray(dados.livros)){
-      throw new ParseError('Este arquivo não é um backup de biblioteca do Veredas.','');
+      throw new ParseError(T('app.este_arquivo_nao_e_um_backup_de_biblio'),'');
     }
     if(Number(dados.versao)>this.VERSAO){
-      throw new ParseError('Este backup foi feito numa versão mais nova do aplicativo.',
-        'Atualize o Veredas Reader e tente de novo.');
+      throw new ParseError(T('app.este_backup_foi_feito_numa_versao_mais'),
+        T('app.atualize_o_veredas_reader_e_tente_de_n'));
     }
     return{dados,zip};
   },
@@ -9731,7 +9871,7 @@ const Backup={
       const reg=dados.livros[i];
       if(i%10===0){
         Utils.setLoaderProgress(Math.round((i/Math.max(1,dados.livros.length))*90),
-          `Restaurando (${i+1} de ${dados.livros.length})...`);
+          T('app.restaurando_v_de_length',{v:i+1,length:dados.livros.length}));
         await Utils.yieldToUI();
       }
       const alvo=this.procurarNaEstante(reg,estante);
@@ -9758,7 +9898,7 @@ const Backup={
     if(pendentes.length)await this.guardarPendentes(pendentes);
 
     if(preferencias&&dados.preferencias){
-      Utils.setLoaderProgress(94,'Aplicando as suas preferências...');
+      Utils.setLoaderProgress(94,T('app.aplicando_as_suas_preferencias'));
       const manter={
         consent:App.state.settings.consent,
         scanInvited:App.state.settings.scanInvited,
@@ -9770,7 +9910,7 @@ const Backup={
       try{await App.persistSettings()}catch(e){console.warn(e)}
       App.applySettings();
     }
-    Utils.setLoaderProgress(100,'Pronto.');
+    Utils.setLoaderProgress(100,T('app.pronto'));
     return conta;
   },
 
@@ -9831,8 +9971,8 @@ const Backup={
     await this.removerPendente(achado);
     const marcas=(meta.annotations||[]).length+(meta.bookmarks||[]).length;
     setTimeout(()=>Utils.toast(
-      marcas?`Progresso e ${marcas} marcação(ões) restaurados neste livro.`
-            :'Progresso de leitura restaurado neste livro.','history'),700);
+      marcas?T('app.progresso_e_marcas_marcacao_oes_restau',{marcas:marcas})
+            :T('app.progresso_de_leitura_restaurado_neste'),'history'),700);
     return true;
   }
 };
@@ -9875,22 +10015,22 @@ Object.assign(Backup,{
      Devolve true se os lembretes acabaram desligados. */
   async desligarLembretes(){
     const ok=await AppModal.confirm({
-      title:'Desligar os lembretes de backup?',
-      subtitle:'Leia antes de confirmar',
-      message:'A sua estante existe só neste aparelho. Não há cópia em servidor nenhum, e por isso não há como recuperá-la para você.\n\n'+
-        'Limpar os dados do navegador, desinstalar o aplicativo, trocar de celular ou uma pane no aparelho apagam tudo de forma definitiva: progresso, grifos, citações, notas e marcadores.\n\n'+
-        'O lembrete é o único aviso que existe. Desligando-o, lembrar de fazer backup passa a ser só seu.\n\n'+
-        'O botão de salvar continua onde sempre esteve, em Backup e restauração.',
-      confirmText:'Desligar assim mesmo',
+      title:T('app.desligar_os_lembretes_de_backup'),
+      subtitle:T('app.leia_antes_de_confirmar'),
+      message:T('app.a_sua_estante_existe_so_neste_aparelho')+
+        T('app.limpar_os_dados_do_navegador_desinstal')+
+        T('app.o_lembrete_e_o_unico_aviso_que_existe')+
+        T('app.o_botao_de_salvar_continua_onde_sempre'),
+      confirmText:T('app.desligar_assim_mesmo'),
       confirmIcon:'bell-off',
-      cancelText:'Manter ligado',
+      cancelText:T('app.manter_ligado'),
       icon:'shield-alert',
       danger:true
     });
     if(!ok)return false;
     await App.updateSetting('backupLembretes',false);
     this.esconderLembrete();
-    Utils.toast('Lembretes desligados.','bell-off');
+    Utils.toast(T('app.lembretes_desligados'),'bell-off');
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
     return true;
   },
@@ -9905,7 +10045,7 @@ Object.assign(Backup,{
      a restauração. */
   arquivoDeTransporte(pacote){
     if(!pacote||!pacote.blob)return null;
-    const nomeZip=String(pacote.nome||'Veredas Reader - backup.zip');
+    const nomeZip=String(pacote.nome||T('app.veredas_reader_backup_zip'));
     const nomeTxt=nomeZip.replace(/\.zip$/i,'')+'.txt';
     return new File([pacote.blob],nomeTxt,{type:'text/plain',lastModified:Date.now()});
   },
@@ -9940,67 +10080,67 @@ Object.assign(Backup,{
 
     corpo.innerHTML=`
       <div class="backup-stats">
-        <div class="backup-stat"><strong>${conta.livros}</strong><small>livro(s)</small></div>
-        <div class="backup-stat"><strong>${conta.grifos+conta.citacoes+conta.notas}</strong><small>grifos, citações e notas</small></div>
-        <div class="backup-stat"><strong>${conta.marcadores}</strong><small>marcador(es)</small></div>
+        <div class="backup-stat"><strong>${conta.livros}</strong><small>${T('app.livros_unidade',{n:conta.livros})}</small></div>
+        <div class="backup-stat"><strong>${conta.grifos+conta.citacoes+conta.notas}</strong><small>${T('app.grifos_citacoes_e_notas')}</small></div>
+        <div class="backup-stat"><strong>${conta.marcadores}</strong><small>${T('app.marcadores_unidade',{n:conta.marcadores})}</small></div>
       </div>
 
       <div class="backup-status ${ultimo?'ok':'alerta'}">
         <i data-lucide="${ultimo?'shield-check':'shield-alert'}"></i>
         <div>${ultimo
-          ?`Último backup em <strong>${Utils.esc(ultimo)}</strong>.`
-          :'<strong>Você ainda não fez nenhum backup.</strong>'}</div>
+          ?T('app.ultimo_backup_em',{data:Utils.esc(ultimo)})
+          :`<strong>${T('app.voce_ainda_nao_fez_nenhum_backup')}</strong>`}</div>
       </div>
 
       <div class="setting-section">
-        <h4>Guardar</h4>
+        <h4>${T('app.guardar')}</h4>
         <div class="backup-actions">
-          <button class="soft-btn primary" id="backup-save"><i data-lucide="download"></i>Salvar backup</button>
-          ${this.podeCompartilhar()?'<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>Enviar para outro app</button>':''}
+          <button class="soft-btn primary" id="backup-save"><i data-lucide="download"></i>${T('app.salvar_backup')}</button>
+          ${this.podeCompartilhar()?`<button class="soft-btn" id="backup-share"><i data-lucide="share-2"></i>${T('app.enviar_para_outro_app')}</button>`:''}
         </div>
-        <div class="drag-tip">O backup original é um ZIP. Em <strong>Enviar para outro app</strong>, o navegador exige um formato permitido para compartilhamento: o Veredas envia os <strong>mesmos bytes do ZIP</strong> com extensão <code>.txt</code>. Ao receber, o próprio Veredas reconhece o conteúdo e restaura normalmente. O arquivo guarda o seu progresso, os grifos, as citações, as notas, os marcadores e a organização da estante — não os livros em si, nem as capas.${
+        <div class="drag-tip">${T('app.backup_explicacao')}${
           this.podeCompartilhar()?''
           :(typeof isSecureContext!=='undefined'&&isSecureContext===false)
-            ?'<br><br>O envio direto para outro aplicativo não aparece porque esta página está aberta por um endereço <code>http://</code> comum. Navegadores só liberam esse recurso em endereços seguros (<code>https://</code>) ou em <code>localhost</code>.'
-            :'<br><br>Este navegador não oferece o envio direto para outro aplicativo. Salve o arquivo e anexe-o pelo aplicativo que preferir.'}</div>
+            ?`<br><br>${T('app.envio_direto_exige_endereco_seguro')}`
+            :`<br><br>${T('app.este_navegador_nao_oferece_o_envio_dir')}`}</div>
       </div>
 
       <div class="setting-section">
-        <h4>Restaurar</h4>
+        <h4>${T('app.restaurar')}</h4>
         <div class="backup-actions">
-          <button class="soft-btn" id="backup-restore"><i data-lucide="upload"></i>Restaurar backup</button>
+          <button class="soft-btn" id="backup-restore"><i data-lucide="upload"></i>${T('app.restaurar_backup')}</button>
         </div>
-        <div class="drag-tip">O aplicativo mostra o que tem dentro do arquivo antes de mexer em qualquer coisa. Livros que ainda não estiverem na estante ficam esperando: quando você importar o arquivo deles, as marcações voltam sozinhas.</div>
+        <div class="drag-tip">${T('app.livros_que_ainda_nao_estiverem_na_esta')}</div>
       </div>
 
       <div class="setting-section">
-        <h4>Lembretes</h4>
+        <h4>${T('app.lembretes')}</h4>
         <label class="toggle-row" for="backup-lembretes">
           <span class="toggle-label">
-            <strong>Avisar quando fizer tempo sem backup</strong>
-            <small>Uma faixa discreta na estante depois de ${this.LEMBRETE_DIAS} dias sem cópia de segurança. Nunca interrompe a leitura.</small>
+            <strong>${T('app.avisar_quando_fizer_tempo_sem_backup')}</strong>
+            <small>${T('app.uma_faixa_discreta_depois_de_n_dias',{n:this.LEMBRETE_DIAS})}</small>
           </span>
           <span class="toggle"><input type="checkbox" id="backup-lembretes"${lembretesLigados?' checked':''}><span></span></span>
         </label>
         ${lembretesLigados?'':`
         <div class="backup-status alerta" style="margin-top:12px;margin-bottom:0">
           <i data-lucide="bell-off"></i>
-          <div>Os lembretes estão <strong>desligados</strong>. Fazer backup passou a depender só de você.</div>
+          <div>${T('app.lembretes_desligados_frase')}</div>
         </div>`}
       </div>
 
       ${espera.length?`
       <div class="setting-section">
-        <h4>Esperando o arquivo</h4>
+        <h4>${T('app.esperando_o_arquivo')}</h4>
         <div class="backup-waiting">
           <i data-lucide="hourglass"></i>
-          <div><strong>${espera.length} livro(s)</strong> com progresso e marcações guardados, à espera de serem importados de novo.</div>
+          <div>${T('app.n_livros_aguardando',{n:espera.length})}</div>
         </div>
         <div class="backup-waiting-list">${espera.slice(0,12).map(x=>
-          `<span class="backup-chip">${Utils.esc(x.title||'Sem título')}</span>`).join('')}
+          `<span class="backup-chip">${Utils.esc(x.title||T('app.sem_titulo'))}</span>`).join('')}
           ${espera.length>12?`<span class="backup-chip mais">+${espera.length-12}</span>`:''}</div>
         <div style="text-align:center;margin-top:12px">
-          <button class="soft-btn" id="backup-forget"><i data-lucide="trash-2"></i>Descartar o que está esperando</button>
+          <button class="soft-btn" id="backup-forget"><i data-lucide="trash-2"></i>${T('app.descartar_o_que_esta_esperando_2')}</button>
         </div>
       </div>`:''}
     `;
@@ -10023,7 +10163,7 @@ Object.assign(Backup,{
       if(alterna.checked){
         await App.updateSetting('backupLembretes',true);
         await App.updateSetting('backupSnoozeAt',0);
-        Utils.toast('Lembretes de backup religados.','bell');
+        Utils.toast(T('app.lembretes_de_backup_religados'),'bell');
         await this.desenhar();
         this.verificarLembrete();
         return;
@@ -10037,13 +10177,13 @@ Object.assign(Backup,{
     const esquecer=document.getElementById('backup-forget');
     if(esquecer)esquecer.onclick=async()=>{
       const ok=await AppModal.confirm({
-        title:'Descartar o que está esperando?',
-        message:'O progresso e as marcações desses livros serão apagados. Se você importar os arquivos depois, eles voltarão em branco.',
-        confirmText:'Descartar',confirmIcon:'trash-2',danger:true
+        title:T('app.descartar_o_que_esta_esperando'),
+        message:T('app.o_progresso_e_as_marcacoes_desses_livr'),
+        confirmText:T('app.descartar'),confirmIcon:'trash-2',danger:true
       });
       if(!ok)return;
       try{await App.db.deleteRecord(this.PENDENTES_ID)}catch(e){console.warn(e)}
-      Utils.toast('Pronto, nada mais está esperando.','check');
+      Utils.toast(T('app.pronto_nada_mais_esta_esperando'),'check');
       await this.desenhar();
     };
   },
@@ -10056,20 +10196,20 @@ Object.assign(Backup,{
     const livros=(App.library&&App.library.allBooks)||[];
     if(!livros.length){
       await AppModal.alert({
-        title:'Estante vazia',
-        message:'Importe pelo menos um livro antes de fazer um backup.',
+        title:T('app.estante_vazia'),
+        message:T('app.importe_pelo_menos_um_livro_antes_de_f'),
         icon:'library'
       });
       return;
     }
-    Utils.showLoader('Preparando o backup','Reunindo a sua estante...',{progress:true});
+    Utils.showLoader(T('app.preparando_o_backup'),T('app.reunindo_a_sua_estante'),{progress:true});
     let pacote;
     try{
       pacote=await this.gerar({onStatus:t=>Utils.setLoaderText(null,t)});
     }catch(e){
       console.error(e);
       Utils.hideLoader();
-      Utils.toast('Não foi possível gerar o backup.','alert-triangle');
+      Utils.toast(T('app.nao_foi_possivel_gerar_o_backup'),'alert-triangle');
       return;
     }
     Utils.hideLoader();
@@ -10079,7 +10219,7 @@ Object.assign(Backup,{
       try{
         const alvo=await window.showSaveFilePicker({
           suggestedName:pacote.nome,
-          types:[{description:'Backup do Veredas Reader',accept:{'application/zip':['.zip']}}]
+          types:[{description:T('app.backup_do_veredas_reader'),accept:{'application/zip':['.zip']}}]
         });
         const fluxo=await alvo.createWritable();
         await fluxo.write(pacote.blob);
@@ -10107,39 +10247,39 @@ Object.assign(Backup,{
     /* Os motivos que realmente acontecem, em português. */
     let causa='';
     if(/NotAllowed/i.test(nome)){
-      causa='O navegador recebeu um arquivo em formato permitido para compartilhamento, mas recusou a abertura da folha nativa. Isso normalmente indica bloqueio de segurança, aba fora de primeiro plano ou perda da ativação do toque.';
+      causa=T('app.o_navegador_recebeu_um_arquivo_em_form');
     }else if(/NotSupported|TypeError/i.test(nome)){
-      causa='Este navegador não conseguiu iniciar o compartilhamento de arquivos. O Veredas usa um arquivo de transporte .txt porque o Chromium não permite .zip pela Web Share.';
+      causa=T('app.este_navegador_nao_conseguiu_iniciar_o');
     }else if(ctx&&ctx.seguro===false){
-      causa='O compartilhamento só funciona em endereços seguros. Este aplicativo está sendo aberto por um endereço http:// comum, e nesse caso o navegador bloqueia o envio para outros aplicativos.';
+      causa=T('app.o_compartilhamento_so_funciona_em_ende');
     }else if(/Security|InvalidState/i.test(nome)){
-      causa='O navegador considerou a situação insegura para compartilhar.';
+      causa=T('app.o_navegador_considerou_a_situacao_inse');
     }else{
-      causa='O sistema não aceitou receber o arquivo.';
+      causa=T('app.o_sistema_nao_aceitou_receber_o_arquiv');
     }
-    const detalhe=[nome,recado].filter(Boolean).join(': ')||'sem detalhes do navegador';
+    const detalhe=[nome,recado].filter(Boolean).join(': ')||T('app.sem_detalhes_do_navegador');
     const linhaTipo=ctx?'\n'+[
       ctx.tipo?`tipo: ${ctx.tipo}`:'',
       ctx.nome?`nome: ${ctx.nome}`:'',
       ctx.bytes!=null?`tamanho: ${ctx.bytes} bytes`:'',
       ctx.modo?`modo: ${ctx.modo}`:'',
       ctx.gesto!=null?`toque ainda ativo: ${ctx.gesto}`:'',
-      ctx.seguro!=null?`endereço seguro: ${ctx.seguro}`:'',
+      ctx.seguro!=null?T('app.endereco_seguro_seguro',{seguro:ctx.seguro}):'',
       ctx.endereco?`origem: ${ctx.endereco}`:'',
       ctx.navegador?`navegador: ${ctx.navegador}`:''
     ].filter(Boolean).join('\n'):'';
     let copiador=null;
 
     await AppModal.custom({
-      title:'O aparelho recusou abrir a lista',
-      subtitle:'O backup foi salvo assim mesmo',
+      title:T('app.o_aparelho_recusou_abrir_a_lista'),
+      subtitle:T('app.o_backup_foi_salvo_assim_mesmo'),
       icon:'share-2',
-      confirmText:'Entendi',
+      confirmText:T('app.entendi'),
       confirmIcon:'check',
-      cancelText:'Copiar detalhes',
+      cancelText:T('app.copiar_detalhes'),
       html:`
         <p>${Utils.esc(causa)}</p>
-        <p><strong>O arquivo de backup foi salvo neste aparelho</strong>, nos downloads. Dá para enviá-lo agora mesmo: abra o WhatsApp, o e-mail, o Drive ou o que preferir, toque em anexar e escolha o arquivo.</p>
+        <p>${T('app.backup_salvo_nos_downloads')}</p>
         <div class="share-detalhe"><code>${Utils.esc(detalhe+linhaTipo)}</code></div>`,
       aoAbrir:()=>{
         /* O botão da esquerda copia em vez de fechar. O ouvinte entra
@@ -10152,9 +10292,9 @@ Object.assign(Backup,{
           ev.stopPropagation();ev.preventDefault();
           try{
             await navigator.clipboard.writeText(detalhe+linhaTipo);
-            x.textContent='Copiado';
-            setTimeout(()=>{if(x.isConnected)x.textContent='Copiar detalhes'},1600);
-          }catch(e){x.textContent='Não deu para copiar'}
+            x.textContent=T('app.copiado');
+            setTimeout(()=>{if(x.isConnected)x.textContent=T('app.copiar_detalhes')},1600);
+          }catch(e){x.textContent=T('app.nao_deu_para_copiar')}
         };
         x.addEventListener('click',copiador,true);
       }
@@ -10173,7 +10313,7 @@ Object.assign(Backup,{
   async registrarBackupFeito(pacote){
     await App.updateSetting('lastBackupAt',Date.now());
     this.esconderLembrete();
-    Utils.toast(`Backup pronto: ${pacote.resumo.livros} livro(s) e ${pacote.resumo.marcacoes} marcação(ões).`,'shield-check');
+    Utils.toast(T('app.backup_pronto_livros_livro_s_e_marcaco',{livros:pacote.resumo.livros,marcacoes:pacote.resumo.marcacoes}),'shield-check');
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
   },
 
@@ -10198,18 +10338,18 @@ Object.assign(Backup,{
     const livros=(App.library&&App.library.allBooks)||[];
     if(!livros.length){
       await AppModal.alert({
-        title:'Estante vazia',
-        message:'Importe pelo menos um livro antes de fazer um backup.',
+        title:T('app.estante_vazia'),
+        message:T('app.importe_pelo_menos_um_livro_antes_de_f'),
         icon:'library'
       });
       return;
     }
     if(!this.podeCompartilhar()){
       const salvar=await AppModal.confirm({
-        title:'Este aparelho não abre a lista de aplicativos',
-        message:'O navegador aqui não oferece o compartilhamento direto. Dá para salvar o arquivo e enviá-lo depois pelo aplicativo que você quiser.',
-        confirmText:'Salvar o arquivo',confirmIcon:'download',
-        cancelText:'Agora não',icon:'share-2'
+        title:T('app.este_aparelho_nao_abre_a_lista_de_apli'),
+        message:T('app.o_navegador_aqui_nao_oferece_o_compart'),
+        confirmText:T('app.salvar_o_arquivo'),confirmIcon:'download',
+        cancelText:T('ui.agora_nao'),icon:'share-2'
       });
       if(salvar)await this.exportar();
       return;
@@ -10224,28 +10364,28 @@ Object.assign(Backup,{
       .catch(e=>{console.error(e);falhou=e});
 
     const confirmou=await AppModal.custom({
-      title:'Enviar para outro app',
-      subtitle:'Vale conferir o que vai no arquivo',
+      title:T('app.enviar_para_outro_app'),
+      subtitle:T('app.vale_conferir_o_que_vai_no_arquivo'),
       icon:'share-2',
-      confirmText:'Escolher o app',
+      confirmText:T('app.escolher_o_app'),
       confirmIcon:'share-2',
-      cancelText:'Cancelar',
+      cancelText:T('ui.cancelar'),
       html:`
         <div class="share-what">
           <div class="share-line vai">
             <i data-lucide="check"></i>
-            <div><strong>Vai no arquivo</strong>
-            <small>O seu progresso de leitura, os grifos, as citações, as notas, os marcadores e a organização da estante — status, favoritos, coleções, séries e tags.</small></div>
+            <div><strong>${T('app.vai_no_arquivo')}</strong>
+            <small>${T('app.o_seu_progresso_de_leitura_os_grifos_a')}</small></div>
           </div>
           <div class="share-line nao">
             <i data-lucide="x"></i>
-            <div><strong>Não vai no arquivo</strong>
-            <small>Os livros em si, nem as capas — por isso o arquivo tem só alguns KB. Quem receber precisa ter os arquivos dos livros para que as marcações voltem ao lugar, e as capas reaparecem sozinhas na importação.</small></div>
+            <div><strong>${T('app.nao_vai_no_arquivo')}</strong>
+            <small>${T('app.os_livros_em_si_nem_as_capas_por_isso')}</small></div>
           </div>
         </div>
         <div class="backup-status" id="share-pronto">
           <i data-lucide="loader"></i>
-          <div>Preparando o arquivo...</div>
+          <div>${T('app.preparando_o_arquivo_2')}</div>
         </div>`,
       aoAbrir:()=>{
         const btn=AppModal.confirmBtn;
@@ -10255,10 +10395,10 @@ Object.assign(Backup,{
           if(!aviso||!aviso.isConnected)return;
           if(falhou||!arquivo){
             aviso.className='backup-status alerta';
-            aviso.innerHTML='<i data-lucide="alert-triangle"></i><div>Não foi possível montar o arquivo.</div>';
+            aviso.innerHTML=`<i data-lucide="alert-triangle"></i><div>${T('app.nao_foi_possivel_montar_o_arquivo')}</div>`;
           }else{
             aviso.className='backup-status ok';
-            aviso.innerHTML=`<i data-lucide="shield-check"></i><div>Arquivo pronto — <strong>${Utils.esc(Utils.fmtBytes(arquivo.size))}</strong>.</div>`;
+            aviso.innerHTML=`<i data-lucide="shield-check"></i><div>${T('app.arquivo_pronto_tamanho',{tamanho:Utils.esc(Utils.fmtBytes(arquivo.size))})}</div>`;
             if(btn)btn.disabled=false;
           }
           lucide.createIcons({root:aviso});
@@ -10275,7 +10415,7 @@ Object.assign(Backup,{
 
     if(!confirmou)return;                       /* cancelou */
     if(!pacote||falhou){
-      Utils.toast('Não foi possível montar o arquivo de backup.','alert-triangle');
+      Utils.toast(T('app.nao_foi_possivel_montar_o_arquivo_de_b'),'alert-triangle');
       return;
     }
 
@@ -10285,7 +10425,7 @@ Object.assign(Backup,{
     /* Nem chegou a tentar (o tipo do arquivo foi recusado). */
     if(!r||!r.promessa){
       this.baixar(pacote);
-      await this.explicarRecusa(null,{tipo:'(o aparelho recusou o tipo do arquivo)',
+      await this.explicarRecusa(null,{tipo:T('app.o_aparelho_recusou_o_tipo_do_arquivo'),
         seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
         endereco:location.protocol+'//'+location.hostname});
       await this.registrarBackupFeito(pacote);
@@ -10325,7 +10465,7 @@ Object.assign(Backup,{
         tipo:enviar.type,
         nome:enviar.name,
         bytes:enviar.size,
-        modo:'arquivo de transporte .txt contendo os bytes originais do backup ZIP',
+        modo:T('app.arquivo_de_transporte_txt_contendo_os'),
         gesto:(navigator.userActivation?navigator.userActivation.isActive:'?'),
         seguro:(typeof isSecureContext!=='undefined'?isSecureContext:'?'),
         visivel:(document.visibilityState||'?'),
@@ -10335,7 +10475,7 @@ Object.assign(Backup,{
       /* Nenhum await/timeout/modal/Promise antes da chamada. Ela ocorre
          diretamente no handler do clique, preservando a ativação. */
       this._envio={promessa:navigator.share({
-        title:'Backup do Veredas Reader',
+        title:T('app.backup_do_veredas_reader'),
         files:[enviar]
       }),contexto};
     }catch(e){
@@ -10354,7 +10494,7 @@ Object.assign(Backup,{
     entrada.click();
   },
   async fluxoRestaurar(file){
-    Utils.showLoader('Lendo o backup',file.name);
+    Utils.showLoader(T('app.lendo_o_backup'),file.name);
     let pacote;
     try{
       pacote=await this.ler(file);
@@ -10362,8 +10502,8 @@ Object.assign(Backup,{
       Utils.hideLoader();
       const parse=e instanceof ParseError;
       await AppModal.alert({
-        title:parse?e.message:'Não foi possível ler este arquivo',
-        message:parse?(e.hint||''):'Escolha o .zip salvo pelo Veredas ou o .txt recebido pelo compartilhamento.',
+        title:parse?e.message:T('app.nao_foi_possivel_ler_este_arquivo'),
+        message:parse?(e.hint||''):T('app.escolha_o_zip_salvo_pelo_veredas_ou_o'),
         icon:'alert-triangle'
       });
       return;
@@ -10375,32 +10515,32 @@ Object.assign(Backup,{
     const quando=d.criadoEm?this.dataLegivel(Date.parse(d.criadoEm)):null;
 
     const escolha=await AppModal.custom({
-      title:'Restaurar este backup?',
-      subtitle:quando?`Criado em ${quando}`:'',
+      title:T('app.restaurar_este_backup'),
+      subtitle:quando?T('app.criado_em_quando',{quando:quando}):'',
       icon:'archive-restore',
-      confirmText:'Restaurar',
+      confirmText:T('app.restaurar'),
       confirmIcon:'check',
       html:`
         <div class="backup-preview">
-          <div class="backup-stat"><strong>${r.livros}</strong><small>livro(s)</small></div>
-          <div class="backup-stat"><strong>${(r.grifos||0)+(r.citacoes||0)+(r.notas||0)}</strong><small>grifos, citações e notas</small></div>
-          <div class="backup-stat"><strong>${r.marcadores||0}</strong><small>marcador(es)</small></div>
+          <div class="backup-stat"><strong>${r.livros}</strong><small>${T('app.livros_unidade',{n:r.livros})}</small></div>
+          <div class="backup-stat"><strong>${(r.grifos||0)+(r.citacoes||0)+(r.notas||0)}</strong><small>${T('app.grifos_citacoes_e_notas')}</small></div>
+          <div class="backup-stat"><strong>${r.marcadores||0}</strong><small>${T('app.marcadores_unidade',{n:r.marcadores||0})}</small></div>
         </div>
         <div class="form-group" style="margin-top:16px">
-          <label class="form-label">O que fazer com o que já está na estante</label>
+          <label class="form-label">${T('app.o_que_fazer_com_o_que_ja_esta_na_estan')}</label>
           <div class="backup-modes">
             <button type="button" class="backup-mode on" data-modo="mesclar">
-              <strong>Juntar <span class="rec">recomendado</span></strong>
-              <small>Nada é apagado. As marcações dos dois lados se somam e o progresso mais recente prevalece.</small>
+              <strong>${T('app.juntar')} <span class="rec">${T('app.recomendado')}</span></strong>
+              <small>${T('app.nada_e_apagado_as_marcacoes_dos_dois_l')}</small>
             </button>
             <button type="button" class="backup-mode" data-modo="substituir">
-              <strong>Substituir</strong>
-              <small>O backup manda. As marcações atuais dos livros que estiverem no arquivo serão trocadas pelas do backup.</small>
+              <strong>${T('app.substituir')}</strong>
+              <small>${T('app.o_backup_manda_as_marcacoes_atuais_dos')}</small>
             </button>
           </div>
         </div>
         <label class="toggle-row" style="margin-top:6px">
-          <span class="toggle-label"><strong>Restaurar minhas preferências</strong><small>Tema, tipografia, margens, modo de virada e ajustes de áudio.</small></span>
+          <span class="toggle-label"><strong>${T('app.restaurar_minhas_preferencias')}</strong><small>${T('app.tema_tipografia_margens_modo_de_virada')}</small></span>
           <span class="toggle"><input type="checkbox" id="backup-prefs" checked><span></span></span>
         </label>`,
       aoAbrir:raiz=>{
@@ -10418,7 +10558,7 @@ Object.assign(Backup,{
     });
     if(!escolha)return;
 
-    Utils.showLoader('Restaurando','Devolvendo o seu progresso e as suas marcações...',{progress:true});
+    Utils.showLoader(T('app.restaurando'),T('app.devolvendo_o_seu_progresso_e_as_suas_m'),{progress:true});
     let conta;
     try{
       conta=await this.restaurar(pacote,{
@@ -10430,8 +10570,8 @@ Object.assign(Backup,{
       console.error(e);
       Utils.hideLoader();
       await AppModal.alert({
-        title:'A restauração não pôde ser concluída',
-        message:e&&e.message?e.message:'Tente de novo com o arquivo original.',
+        title:T('app.a_restauracao_nao_pode_ser_concluida'),
+        message:e&&e.message?e.message:T('app.tente_de_novo_com_o_arquivo_original'),
         icon:'alert-triangle'
       });
       return;
@@ -10441,18 +10581,18 @@ Object.assign(Backup,{
     App.syncBottomNav();
 
     const linhas=[
-      `${conta.atualizados} livro(s) da sua estante foram atualizados.`,
-      conta.capas?`${conta.capas} capa(s) recuperada(s).`:'',
+      T('app.atualizados_livro_s_da_sua_estante_for',{atualizados:conta.atualizados}),
+      conta.capas?T('app.n_capas_recuperadas',{n:conta.capas}):'',
       conta.aguardando
-        ?`${conta.aguardando} livro(s) do backup ainda não estão aqui. O progresso e as marcações deles ficaram guardados: assim que você importar cada arquivo, tudo volta sozinho para o lugar.`
+        ?T('app.aguardando_livro_s_do_backup_ainda_nao',{aguardando:conta.aguardando})
         :''
     ].filter(Boolean);
     await AppModal.alert({
-      title:'Restauração concluída',
-      subtitle:escolha.modo==='substituir'?'Modo substituir':'Modo juntar',
+      title:T('app.restauracao_concluida'),
+      subtitle:escolha.modo==='substituir'?T('app.modo_substituir'):T('app.modo_juntar'),
       message:linhas.join('\n\n'),
       icon:'shield-check',
-      confirmText:'Ver estante'
+      confirmText:T('app.ver_estante')
     });
     if(document.getElementById('panel-backup')?.classList.contains('visible'))await this.desenhar();
   },
@@ -10464,11 +10604,11 @@ Object.assign(Backup,{
     const titulo=document.getElementById('backup-reminder-title');
     const sub=document.getElementById('backup-reminder-sub');
     if(dias==null){
-      if(titulo)titulo.textContent='Sua estante não tem cópia de segurança';
-      if(sub)sub.textContent='Se este aparelho se perder, o progresso e as marcações vão junto.';
+      if(titulo)titulo.textContent=T('ui.sua_estante_nao_tem_copia_de_seguranca');
+      if(sub)sub.textContent=T('ui.se_este_aparelho_se_perder_o_progresso');
     }else{
-      if(titulo)titulo.textContent=`Seu último backup foi há ${dias} dias`;
-      if(sub)sub.textContent='Um minuto agora evita perder o progresso e as marcações depois.';
+      if(titulo)titulo.textContent=T('app.seu_ultimo_backup_foi_ha_dias_dias',{dias:dias});
+      if(sub)sub.textContent=T('app.um_minuto_agora_evita_perder_o_progres');
     }
     el.hidden=false;
     lucide.createIcons({root:el});
@@ -10507,14 +10647,17 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 17';
+const BUILD='2026-09-20 · 29';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
   sources:{
-    sobre:{title:'Sobre o aplicativo',subtitle:'O que é o Veredas Reader',icon:'info',path:'sobre-politicas-e-termos/sobre.md',kind:'md'},
-    privacidade:{title:'Política de privacidade',subtitle:'Como seus dados são tratados',icon:'shield-check',path:'sobre-politicas-e-termos/politica-de-privacidade.md',kind:'md'},
-    termos:{title:'Termos de uso',subtitle:'Condições de uso do aplicativo',icon:'file-text',path:'sobre-politicas-e-termos/termos-de-uso.md',kind:'md'},
+    /* title e subtitle são getters: Docs nasce junto com o arquivo,
+       antes de o idioma carregar. Como valor simples, guardariam para
+       sempre o texto do idioma da carga. */
+    sobre:{get title(){return T('app.sobre_o_aplicativo')},get subtitle(){return T('app.o_que_e_o_veredas_reader')},icon:'info',path:'sobre-politicas-e-termos/sobre.md',kind:'md'},
+    privacidade:{get title(){return T('app.politica_de_privacidade')},get subtitle(){return T('app.como_seus_dados_sao_tratados')},icon:'shield-check',path:'sobre-politicas-e-termos/politica-de-privacidade.md',kind:'md'},
+    termos:{get title(){return T('app.termos_de_uso')},get subtitle(){return T('app.condicoes_de_uso_do_aplicativo')},icon:'file-text',path:'sobre-politicas-e-termos/termos-de-uso.md',kind:'md'},
     'lic-lucide':{title:'Lucide',subtitle:'Licença ISC',icon:'scale',path:'licencas/LICENSE-Lucide.txt',kind:'txt'},
     'lic-jszip':{title:'JSZip',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-JSZip.txt',kind:'txt'},
     'lic-pdfjs':{title:'PDF.js',subtitle:'Licença Apache 2.0',icon:'scale',path:'licencas/LICENSE-Apache.txt',kind:'txt'},
@@ -10740,11 +10883,11 @@ const Docs={
       'are met:',
       '',
       '1. Redistributions of source code must retain the above copyright',
-      '   notice, this list of conditions and the following disclaimer.',
+      'notice, this list of conditions and the following disclaimer.',
       '2. Redistributions in binary form must reproduce the above',
-      '   copyright notice, this list of conditions and the following',
-      '   disclaimer in the documentation and/or other materials provided',
-      '   with the distribution.',
+      'copyright notice, this list of conditions and the following',
+      'disclaimer in the documentation and/or other materials provided',
+      'with the distribution.',
       '',
       'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS',
       '"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT',
@@ -10759,8 +10902,8 @@ const Docs={
       'Texto completo em licencas/LICENSE-mammoth.txt',
       'Projeto: https://github.com/mwilliamson/mammoth.js'
     ].join('\n'),
-    'lic-libarchivejs':'libarchive.js — Licença MIT\n\nO empacotamento do libarchive para o navegador, usado pelo leitor de\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\nO texto completo da licença deve estar em licencas/LICENSE-libarchivejs.txt.\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
-    'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\n\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\nquadrinhos em CBR, CB7 e CBT.\nO texto completo da licença deve estar em licencas/LICENSE-libarchive.txt.\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
+    'lic-libarchivejs':'libarchive.js — Licença MIT\\n\\nO empacotamento do libarchive para o navegador, usado pelo leitor de\\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\\nO texto completo da licença deve estar em licencas/LICENSE-libarchivejs.txt.\\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
+    'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\\n\\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\\nquadrinhos em CBR, CB7 e CBT.\\nO texto completo da licença deve estar em licencas/LICENSE-libarchive.txt.\\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
   },
   init(){
     this.el=document.getElementById('doc-modal');
@@ -10784,7 +10927,7 @@ const Docs={
         if(text)data={text,embedded:false};
       }
     }catch(e){
-      console.warn(`Não foi possível ler ${src.path}; usando o texto embutido.`,e);
+      console.warn(T('app.nao_foi_possivel_ler_path_usando_o_tex',{path:src.path}),e);
     }
     this.cache.set(key,data);
     return data;
@@ -10820,7 +10963,7 @@ const Docs={
       closeList();para.push(line);
     }
     flushPara();closeList();
-    return html||'<p>Conteúdo indisponível no momento.</p>';
+    return html||`<p>${'Conteúdo indisponível no momento.'}</p>`;
   },
   extras(key){
     if(key!=='sobre')return '';
@@ -10839,9 +10982,9 @@ const Docs={
       (v!=='—'?`<span class="doc-dep-ver">${v}</span>`:'')+
       `<span class="lic-tag">${l}</span></div>`
     ).join('');
-    return '<h2>Bibliotecas de código aberto</h2>'+
-      '<p>Todas acompanham o aplicativo, na pasta <code>vendor</code>. '+
-      'Nenhuma é buscada na internet: é por isso que o leitor abre e '+
+    return `<h2>${'Bibliotecas de código aberto'}</h2>`+
+      `<p>${'Todas acompanham o aplicativo, na pasta'} <code>vendor</code>. `+
+      'Nenhuma é buscada na internet: é por isso que o leitor abre e'+
       'funciona igual com o aparelho em modo avião.</p>'+
       `<div class="doc-dep-list">${deps}</div>`;
   },
@@ -10853,7 +10996,7 @@ const Docs={
     this.lastFocus=document.activeElement;
     document.getElementById('doc-title').textContent=src.title;
     document.getElementById('doc-subtitle').textContent=
-      key==='sobre'?`${src.subtitle} · versão ${BUILD}`:src.subtitle;
+      key==='sobre'?T('app.subtitle_versao_build',{subtitle:src.subtitle,BUILD:BUILD}):src.subtitle;
     document.getElementById('doc-icon').innerHTML=`<i data-lucide="${src.icon}"></i>`;
     const body=document.getElementById('doc-body');
     body.innerHTML='<div class="doc-loading"><div class="spinner"></div><span>Carregando documento…</span></div>';
@@ -10862,7 +11005,7 @@ const Docs={
     lucide.createIcons({root:this.el});
     const data=await this.load(key);
     const note=data.embedded
-      ?`<div class="doc-note"><i data-lucide="info"></i><div>Não foi possível ler <strong>${Utils.esc(src.path)}</strong>. Mostrando a versão incluída no aplicativo.</div></div>`
+      ?`<div class="doc-note"><i data-lucide="info"></i><div>${'Não foi possível ler'} <strong>${Utils.esc(src.path)}</strong>. Mostrando a versão incluída no aplicativo.</div></div>`
       :'';
     body.innerHTML=note+(src.kind==='md'
       ?this.renderMarkdown(data.text)+this.extras(key)
@@ -10887,11 +11030,29 @@ const Docs={
    uma pasta e o aplicativo percorre tudo o que existe dentro dela.
    ============================================================ */
 const DeviceScan={
+  /* O aviso que evita a nota de uma estrela.
+
+     Quem manda procurar livros e vê que o PDF da faculdade, o TXT e o
+     MP3 não entraram conclui que o aplicativo está com defeito. Não
+     está: esses formatos servem para tudo (boleto, planilha, música) e
+     encheriam a estante de coisas que não são livros. O aviso diz isso
+     com todas as letras, em vermelho, e aponta a saída — o botão +.
+     Aparece na busca e no convite da primeira abertura. */
+  avisoForaDaBusca(){
+    return `<div class="aviso-importante" role="note">
+      <i data-lucide="circle-alert"></i>
+      <div><strong class="aviso-titulo">${T('app.fora_da_busca_titulo')}</strong><div class="aviso-texto">${T('app.fora_da_busca_texto')}</div></div>
+    </div>`;
+  },
   /* CBZ, CBR, M4B, EPUB e MOBI: são os formatos que o usuário costuma
      já ter guardados no aparelho e que dá para reconhecer só pela
      extensão, sem abrir cada arquivo. */
   exts:['epub','mobi','cbz','cbr','cb7','cbt','m4b'],
-  label:'EPUB, MOBI, CBZ, CBR e M4B',
+  /* Getter, e não valor: este objeto nasce junto com o arquivo,
+     antes de o idioma carregar. Como valor, guardaria para sempre o
+     texto do idioma que estava valendo na carga — ou, pior, a
+     própria chave. Como getter, é lido na hora em que a tela pede. */
+  get label(){return T('app.epub_mobi_cbz_cbr_e_m4b')},
   maxFiles:600,
   busy:false,
   el:null,body:null,footer:null,titleEl:null,subEl:null,iconEl:null,confirmBtn:null,cancelBtn:null,closeBtn:null,
@@ -10956,23 +11117,24 @@ const DeviceScan={
     if(!this.el)this.init();
     if(!this.supported()){
       await AppModal.alert({
-        title:'Busca automática indisponível',
-        subtitle:'Seu navegador não permite ler pastas',
-        message:'Use o botão + para escolher os arquivos manualmente. Em celulares Android, o Chrome costuma permitir a escolha de uma pasta inteira.',
-        icon:'folder-x',confirmText:'Entendi'
+        title:T('app.busca_automatica_indisponivel'),
+        subtitle:T('app.seu_navegador_nao_permite_ler_pastas'),
+        message:T('app.use_o_botao_para_escolher_os_arquivos'),
+        icon:'folder-x',confirmText:T('app.entendi')
       });
       return;
     }
     this.busy=true;
     try{
-      this.setHead('Buscar livros no dispositivo',`Escolha uma pasta para procurar ${this.label}.`,'folder-search');
+      this.setHead(T('ui.buscar_livros_no_dispositivo'),T('app.escolha_uma_pasta_para_procurar_label',{label:this.label}),'folder-search');
       this.body.innerHTML=`
-        <p>${auto?'Para montar sua estante rapidamente, o':'O'} aplicativo pode procurar livros em <strong>EPUB</strong> e <strong>MOBI</strong>, quadrinhos em <strong>CBZ</strong> e <strong>CBR</strong> e audiolivros em <strong>M4B</strong> dentro de uma pasta do seu aparelho, incluindo as subpastas.</p>
+        <p>${T(auto?'app.scan_intro_auto_frase':'app.scan_intro_frase')}</p>
         <div class="conversion-warning">
           <i data-lucide="shield-check"></i>
-          <div><strong>Você escolhe a pasta</strong><div>A leitura acontece só no seu dispositivo e apenas na pasta autorizada. Downloads costuma ser o melhor ponto de partida.</div></div>
-        </div>`;
-      this.setFooter('<i data-lucide="folder-open"></i>Escolher pasta',auto?'Agora não':'Cancelar');
+          <div><strong>${T('app.voce_escolhe_a_pasta')}</strong><div>${T('app.a_leitura_acontece_so_no_seu_dispositi')}</div></div>
+        </div>
+        ${DeviceScan.avisoForaDaBusca()}`;
+      this.setFooter(`<i data-lucide="folder-open"></i>${T('ui.escolher_pasta')}`,auto?T('ui.agora_nao'):T('ui.cancelar'));
       this.show();
       lucide.createIcons({root:this.el});
       if(!await this.waitChoice()){this.hide();return}
@@ -10981,13 +11143,13 @@ const DeviceScan={
       if(entries===null){this.hide();return}
 
       if(!entries.length){
-        this.setHead('Nenhum livro encontrado','Tente outra pasta do aparelho.','folder-x');
+        this.setHead(T('app.nenhum_livro_encontrado'),T('app.tente_outra_pasta_do_aparelho'),'folder-x');
         this.body.innerHTML=`
           <div class="scan-empty">
             <i data-lucide="search-x"></i>
-            <div>Não encontramos arquivos ${Utils.esc(this.label)} nessa pasta.<br>Você pode tentar outra pasta ou importar os arquivos pelo botão +.</div>
+            <div>${T('app.nao_encontramos_arquivos_tipo',{tipo:Utils.esc(this.label)})}<br>${T('app.voce_pode_tentar_outra_pasta_ou_import')}</div>
           </div>`;
-        this.setFooter('<i data-lucide="folder-open"></i>Tentar outra pasta','Fechar');
+        this.setFooter(`<i data-lucide="folder-open"></i>${T('app.tentar_outra_pasta')}`,T('ui.fechar'));
         lucide.createIcons({root:this.el});
         if(await this.waitChoice()){this.busy=false;return this.start({auto})}
         this.hide();
@@ -11004,7 +11166,7 @@ const DeviceScan={
       }else{
         console.error(err);
         this.hide();
-        Utils.toast('Não foi possível concluir a busca no dispositivo.','alert-triangle');
+        Utils.toast(T('app.nao_foi_possivel_concluir_a_busca_no_d'),'alert-triangle');
       }
     }finally{
       Utils.hideLoader();
@@ -11071,7 +11233,7 @@ const DeviceScan={
   async walk(dirHandle){
     const found=[];
     let scanned=0,cancelled=false;
-    Utils.showLoader('Procurando livros','Lendo a pasta escolhida…',{onCancel:()=>{cancelled=true}});
+    Utils.showLoader(T('app.procurando_livros'),T('app.lendo_a_pasta_escolhida'),{onCancel:()=>{cancelled=true}});
     const queue=[{handle:dirHandle,path:dirHandle.name||'',depth:0}];
     try{
       while(queue.length&&!cancelled&&found.length<this.maxFiles){
@@ -11086,7 +11248,7 @@ const DeviceScan={
           }
           scanned++;
           if(scanned%25===0){
-            Utils.setLoaderText(null,`${scanned} arquivo(s) verificado(s) · ${found.length} livro(s) encontrado(s)`);
+            Utils.setLoaderText(null,T('app.scanned_arquivos_verificados_livros_enc',{scanned:scanned,encontrados:found.length}));
             await Utils.yieldToUI();
           }
           const ext=BookFormats.ext(entry.name);
@@ -11119,14 +11281,14 @@ const DeviceScan={
   },
   chooseFiles(items){
     const novos=items.filter(i=>!i.known).length;
-    this.setHead(`${items.length} livro(s) encontrado(s)`,novos?`${novos} ainda não estão na sua estante.`:'Todos parecem já estar na sua estante.','library-big');
+    this.setHead(T('app.n_livros_encontrados',{n:items.length}),novos?T('app.novos_ainda_nao_estao_na_sua_estante',{novos:novos}):T('app.todos_parecem_ja_estar_na_sua_estante'),'library-big');
     const render=()=>{
       const selected=items.filter(i=>i.selected).length;
       this.body.innerHTML=`
-        <p>Escolha o que deseja adicionar à biblioteca. Arquivos idênticos aos que já estão na estante são ignorados automaticamente.</p>
+        <p>${T('app.escolha_o_que_deseja_adicionar_a_bibli')}</p>
         <div class="scan-toolbar">
-          <span>${selected} de ${items.length} selecionado(s)</span>
-          <button type="button" id="scan-toggle-all">${selected===items.length?'Limpar seleção':'Selecionar todos'}</button>
+          <span>${T('app.n_de_total_selecionados',{n:selected,total:items.length})}</span>
+          <button type="button" id="scan-toggle-all">${selected===items.length?T('app.limpar_selecao'):T('app.selecionar_todos')}</button>
         </div>
         <div class="scan-list">
           ${items.map((item,index)=>`
@@ -11136,10 +11298,10 @@ const DeviceScan={
                 <strong>${Utils.esc(item.file.name)}</strong>
                 <small>${Utils.esc(item.path||'')} · ${Utils.fmtBytes(item.file.size)}</small>
               </span>
-              ${item.known?'<span class="scan-badge">na estante</span>':''}
+              ${item.known?`<span class="scan-badge">${T('app.na_estante')}</span>`:''}
             </button>`).join('')}
         </div>`;
-      this.setFooter(`<i data-lucide="download"></i>Importar ${selected||''}`.trim(),'Cancelar',{confirmDisabled:!selected});
+      this.setFooter(`<i data-lucide="download"></i>${selected?T('app.importar_n',{n:selected}):T('app.importar')}`,T('ui.cancelar'),{confirmDisabled:!selected});
       lucide.createIcons({root:this.el});
       this.body.querySelector('#scan-toggle-all').onclick=()=>{
         const turnOn=items.filter(i=>i.selected).length!==items.length;
@@ -11246,25 +11408,29 @@ const FirstRun={
     return new Promise(resolve=>{
       const renderConsent=()=>{
         this.setSteps(0,2);
-        document.getElementById('onb-title').textContent='Bem-vindo ao Veredas Reader';
-        document.getElementById('onb-lead').textContent='Antes de começar, leia e aceite os documentos abaixo.';
+        document.getElementById('onb-title').textContent=T('ui.bem_vindo_ao_veredas_reader');
+        document.getElementById('onb-lead').textContent=T('app.antes_de_comecar_leia_e_aceite_os_docu');
         this.body.innerHTML=`
           <div class="onb-points">
-            <div class="onb-point"><i data-lucide="hard-drive"></i><div><strong>Tudo fica no seu aparelho</strong><span>Livros, marcações e progresso são guardados localmente. Nada é enviado para servidores nossos.</span></div></div>
-            
-            <div class="onb-point"><i data-lucide="user-check"></i><div><strong>Você no controle</strong><span>O aplicativo só acessa os arquivos e pastas que você escolher, quando você escolher.</span></div></div>
+            <div class="onb-point"><i data-lucide="hard-drive"></i><div><strong>${T('app.tudo_fica_no_seu_aparelho')}</strong><span>${T('app.livros_marcacoes_e_progresso_sao_guard')}</span></div></div>
+
+          <div class="onb-point"><i data-lucide="wifi-off"></i><div><strong>${T('app.funciona_offline')}</strong><span>${T('app.depois_de_importar_um_livro_voce_le_se')}</span></div></div>
+
+            <div class="onb-point"><i data-lucide="user-check"></i><div><strong>${T('app.voce_no_controle')}</strong><span>${T('app.o_aplicativo_so_acessa_os_arquivos_e_p')}</span></div></div>
           </div>
+
+
           <div class="onb-docs">
-            <button class="soft-btn" data-open-doc="privacidade"><i data-lucide="shield-check"></i>Política de privacidade</button>
-            <button class="soft-btn" data-open-doc="termos"><i data-lucide="file-text"></i>Termos de uso</button>
+            <button class="soft-btn" data-open-doc="privacidade"><i data-lucide="shield-check"></i>${T('app.politica_de_privacidade')}</button>
+            <button class="soft-btn" data-open-doc="termos"><i data-lucide="file-text"></i>${T('app.termos_de_uso')}</button>
           </div>
           <button type="button" class="consent-check" id="consent-check" role="checkbox" aria-checked="false">
             <span class="consent-box"><i data-lucide="check"></i></span>
-            <p>Li e aceito a <strong>Política de Privacidade</strong> e os <strong>Termos de Uso</strong> do Veredas Reader.</p>
+            <p>${T('app.aceite_frase',{politica:`<strong>${T('app.politica_de_privacidade_2')}</strong>`,termos:`<strong>${T('app.termos_de_uso_2')}</strong>`})}</p>
           </button>`;
         this.foot.innerHTML=`
-          <button class="soft-btn" id="consent-decline">Não aceito</button>
-          <button class="soft-btn primary" id="consent-accept" disabled><i data-lucide="check"></i>Aceitar e continuar</button>`;
+          <button class="soft-btn" id="consent-decline">${T('app.nao_aceito')}</button>
+          <button class="soft-btn primary" id="consent-accept" disabled><i data-lucide="check"></i>${T('app.aceitar_e_continuar')}</button>`;
         lucide.createIcons({root:this.el});
         const check=document.getElementById('consent-check');
         const accept=document.getElementById('consent-accept');
@@ -11284,18 +11450,18 @@ const FirstRun={
       };
       const renderDeclined=()=>{
         this.setSteps(0,2);
-        document.getElementById('onb-title').textContent='Precisamos do seu aceite';
-        document.getElementById('onb-lead').textContent='Sem a aceitação, o aplicativo não pode ser usado.';
+        document.getElementById('onb-title').textContent=T('app.precisamos_do_seu_aceite');
+        document.getElementById('onb-lead').textContent=T('app.sem_a_aceitacao_o_aplicativo_nao_pode');
         this.body.innerHTML=`
           <div class="onb-points">
-            <div class="onb-point"><i data-lucide="circle-alert"></i><div><strong>Nada acontece sem o aceite</strong><span>A política e os termos explicam como o aplicativo guarda seus livros e o que você pode fazer com eles. Sem a concordância, a biblioteca fica indisponível.</span></div></div>
-            <div class="onb-point"><i data-lucide="book-open"></i><div><strong>Leia com calma</strong><span>Os dois documentos ficam sempre disponíveis no menu lateral, em Sobre.</span></div></div>
+            <div class="onb-point"><i data-lucide="circle-alert"></i><div><strong>${T('app.nada_acontece_sem_o_aceite')}</strong><span>${T('app.a_politica_e_os_termos_explicam_como_o')}</span></div></div>
+            <div class="onb-point"><i data-lucide="book-open"></i><div><strong>${T('app.leia_com_calma')}</strong><span>${T('app.os_dois_documentos_ficam_sempre_dispon')}</span></div></div>
           </div>
           <div class="onb-docs">
-            <button class="soft-btn" data-open-doc="privacidade"><i data-lucide="shield-check"></i>Ler a política</button>
-            <button class="soft-btn" data-open-doc="termos"><i data-lucide="file-text"></i>Ler os termos</button>
+            <button class="soft-btn" data-open-doc="privacidade"><i data-lucide="shield-check"></i>${T('app.ler_a_politica')}</button>
+            <button class="soft-btn" data-open-doc="termos"><i data-lucide="file-text"></i>${T('app.ler_os_termos')}</button>
           </div>`;
-        this.foot.innerHTML=`<button class="soft-btn primary" id="consent-back"><i data-lucide="arrow-left"></i>Voltar e revisar</button>`;
+        this.foot.innerHTML=`<button class="soft-btn primary" id="consent-back"><i data-lucide="arrow-left"></i>${T('app.voltar_e_revisar')}</button>`;
         lucide.createIcons({root:this.el});
         this.body.querySelectorAll('[data-open-doc]').forEach(btn=>{
           btn.onclick=()=>Docs.open(btn.dataset.openDoc);
@@ -11309,17 +11475,23 @@ const FirstRun={
     this.show();
     return new Promise(resolve=>{
       this.setSteps(1,2);
-      document.getElementById('onb-title').textContent='Vamos montar sua estante?';
-      document.getElementById('onb-lead').textContent='O aplicativo pode procurar os livros que já estão no seu aparelho.';
+      document.getElementById('onb-title').textContent=T('app.vamos_montar_sua_estante');
+      document.getElementById('onb-lead').textContent=T('app.o_aplicativo_pode_procurar_os_livros_q');
       this.body.innerHTML=`
         <div class="onb-points">
-          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>Busca por EPUB, MOBI, CBZ, CBR e M4B</strong><span>Escolha uma pasta (Downloads é um bom começo) e o aplicativo procura nela e em todas as subpastas.</span></div></div>
-          <div class="onb-point"><i data-lucide="list-checks"></i><div><strong>Você revisa antes</strong><span>Nada entra na estante sem a sua confirmação: você vê a lista e marca o que quer importar.</span></div></div>
-          <div class="onb-point"><i data-lucide="plus"></i><div><strong>Dá para fazer depois</strong><span>A busca fica sempre disponível no menu lateral, em Sistema.</span></div></div>
+          <div class="onb-point"><i data-lucide="folder-search"></i><div><strong>${T('app.busca_por_epub_mobi_cbz_cbr_e_m4b')}</strong><span>${T('app.escolha_uma_pasta_downloads_e_um_bom_c')}</span></div></div>
+          ${DeviceScan.avisoForaDaBusca()}
+          <div class="onb-point"><i data-lucide="list-checks"></i><div><strong>${T('app.voce_revisa_antes')}</strong><span>${T('app.nada_entra_na_estante_sem_a_sua_confir')}</span></div></div>
+          <div class="onb-point"><i data-lucide="plus"></i><div><strong>${T('app.da_para_fazer_depois')}</strong><span>${T('app.a_busca_fica_sempre_disponivel_no_menu')}</span></div></div>
         </div>`;
+      /* O aviso vermelho mora logo abaixo do "o que procuramos", para
+         ser visto sem rolar. E a rolagem começa do topo: sem isto, o
+         passo herdava a posição do passo anterior (o do aceite) e a
+         pessoa já chegava no meio. */
+      this.body.scrollTop=0;
       this.foot.innerHTML=`
-        <button class="soft-btn" id="onb-skip">Agora não</button>
-        <button class="soft-btn primary" id="onb-scan"><i data-lucide="folder-search"></i>Procurar meus livros</button>`;
+        <button class="soft-btn" id="onb-skip">${T('ui.agora_nao')}</button>
+        <button class="soft-btn primary" id="onb-scan"><i data-lucide="folder-search"></i>${T('app.procurar_meus_livros')}</button>`;
       lucide.createIcons({root:this.el});
       document.getElementById('onb-skip').onclick=()=>resolve(false);
       document.getElementById('onb-scan').onclick=()=>resolve(true);
@@ -11338,6 +11510,16 @@ const App={
   lastScrollTop:0,
   scrollTimeout:null,
   async init(){
+    /* O idioma entra antes de qualquer tela.
+
+       A preferência fica em DOIS lugares de propósito. No
+       localStorage porque é leitura instantânea e precisamos dela
+       ANTES de abrir o banco — senão a primeira tela pisca em
+       português e troca depois, que é feio. E nas configurações
+       do banco porque é de lá que sai o backup: quem restaura num
+       aparelho novo recupera o idioma junto com o resto. */
+    await Idioma.iniciar();
+
     Docs.init();
     DeviceScan.init();
     FirstRun.init();
@@ -11346,6 +11528,9 @@ const App={
       this.db=new DBManager();
       await this.db.init();
       this.state.settings=await this.db.getSettings();
+      /* O banco é a palavra final: se um backup restaurado trouxe
+         outro idioma, ele vence a cópia rápida do localStorage. */
+      await Idioma.conferirComAsConfiguracoes(this.state.settings);
       /* Antes, o sentido de rolagem era uma preferência única para toda a
          biblioteca. Agora é de cada livro: na primeira abertura depois da
          atualização, a preferência geral volta para "Automático" para que
@@ -11358,7 +11543,7 @@ const App={
     }catch(e){
       console.error(e);
       FirstRun.unlock();
-      Utils.toast('Armazenamento local indisponível neste navegador.','alert-triangle');
+      Utils.toast(T('app.armazenamento_local_indisponivel_neste'),'alert-triangle');
       return;
     }
     this.applySettings();
@@ -11505,11 +11690,11 @@ const App={
     if(aberto){
       const efetivo=this.reader.resolveReadingMode(livro.format,livro)==='vertical'?'vertical':'horizontal';
       const padrao=this.reader.defaultReadingMode(livro.format)==='vertical'?'vertical':'horizontal';
-      tip.textContent=`Esta escolha vale só para “${livro.title||'este livro'}”. Cada livro guarda o seu sentido de rolagem. `+
-        `Agora está em ${efetivo}; no automático, ${BookFormats.label(livro.format)} abre em ${padrao}.`;
+      tip.textContent=T('app.esta_escolha_vale_so_para_v_cada_livro',{v:livro.title||T('app.este_livro')})+
+        T('app.agora_esta_em_efetivo_no_automatico_fo',{efetivo:efetivo,format:BookFormats.label(livro.format),padrao:padrao});
     }else{
-      tip.textContent='Automático usa rolagem horizontal para EPUB, MOBI, TXT, MD e quadrinhos, e vertical para PDF e DOCX. '+
-        'Mudando durante a leitura, o ajuste fica guardado só naquele livro.';
+      tip.textContent=T('app.automatico_usa_rolagem_horizontal_para')+
+        T('app.mudando_durante_a_leitura_o_ajuste_fic');
     }
   },
   setupPanels(){
@@ -11518,7 +11703,34 @@ const App={
     document.getElementById('btn-save-organize').onclick=()=>this.library.saveOrganizer();
     document.getElementById('btn-save-note').onclick=()=>this.reader.saveNote();
   },
+  /* A lista de idiomas.
+
+     "Seguir o aparelho" vem primeiro e é o padrão: a esmagadora
+     maioria nunca vai mexer aqui, e para essa maioria o certo é
+     o aplicativo falar a língua do telefone. Logo abaixo, cada
+     idioma com o nome escrito nele mesmo — "Français", não
+     "Francês" — porque quem abriu o app por engano em russo
+     precisa reconhecer a própria língua na lista.
+
+     O nome do idioma do sistema aparece entre parênteses na
+     primeira opção, para a escolha não ser às cegas. */
+  montarSeletorDeIdioma(){
+    const sel=document.getElementById('set-idioma');
+    if(!sel)return;
+    const doSistema=Idiomas.doSistema();
+    sel.innerHTML=
+      `<option value="sistema">${Utils.esc(T('ui.seguir_o_aparelho'))} — ${Utils.esc(Idiomas.nomeDe(doSistema))}</option>`
+      +Idiomas.DISPONIVEIS.map(i=>`<option value="${i.tag}">${Utils.esc(i.nome)}</option>`).join('');
+    sel.value=Idioma.preferencia||'sistema';
+    sel.onchange=async()=>{
+      const antes=sel.value;
+      await Idioma.trocar(antes);
+      Utils.toast(T('aviso.idioma_trocado'),'languages');
+    };
+  },
+
   setupSettingsUI(){
+    this.montarSeletorDeIdioma();
     document.querySelectorAll('[data-theme-value]').forEach(b=>b.onclick=()=>{
       this.updateSetting('theme',b.dataset.themeValue);
       this.updateSetting('readerBg', '');
@@ -11534,20 +11746,20 @@ const App={
         this.syncReadingModeUi();
         const efetivo=this.reader.isVerticalReading()?'vertical':'horizontal';
         Utils.toast(valor==='auto'
-          ?`Automático neste livro: leitura ${efetivo}.`
-          :`Leitura ${efetivo} aplicada a este livro.`,'book-open');
+          ?T('app.automatico_neste_livro_leitura_efetivo',{efetivo:efetivo})
+          :T('app.leitura_efetivo_aplicada_a_este_livro',{efetivo:efetivo}),'book-open');
       }else{
         await this.updateSetting('readingMode',valor);
         this.syncReadingModeUi();
         Utils.toast(valor==='auto'
-          ?'Padrão automático: cada formato abre no sentido natural dele.'
-          :`Novos livros vão abrir em leitura ${valor==='vertical'?'vertical':'horizontal'}.`,'book-open');
+          ?T('app.padrao_automatico_cada_formato_abre_no')
+          :T('app.novos_livros_vao_abrir_em_leitura_v',{v:valor==='vertical'?'vertical':'horizontal'}),'book-open');
       }
     });
     
     document.querySelectorAll('#page-turn-grid button').forEach(b=>b.onclick=async()=>{
       await this.updateSetting('pageTurn',b.dataset.pageTurn);
-      const label={curl:'Virada em folha real ativada.',slide:'Virada deslizante ativada.',none:'Virada sem animação ativada.'}[b.dataset.pageTurn];
+      const label={curl:T('app.virada_em_folha_real_ativada'),slide:T('app.virada_deslizante_ativada'),none:T('app.virada_sem_animacao_ativada')}[b.dataset.pageTurn];
       Utils.toast(label,'book-open');
     });
 
@@ -11556,15 +11768,15 @@ const App={
       if(!this.reader||!this.reader.comic)return;
       await this.reader.setComicOption('comicFit',b.dataset.comicFit);
       Utils.toast(b.dataset.comicFit==='width'
-        ?'A página passa a ocupar toda a largura da tela.'
-        :'A página inteira passa a caber na tela.','book-image');
+        ?T('app.a_pagina_passa_a_ocupar_toda_a_largura')
+        :T('app.a_pagina_inteira_passa_a_caber_na_tela'),'book-image');
     });
     document.querySelectorAll('#comic-direction-grid button').forEach(b=>b.onclick=async()=>{
       if(!this.reader||!this.reader.comic)return;
       await this.reader.setComicOption('comicRtl',b.dataset.comicDir==='rtl');
       Utils.toast(b.dataset.comicDir==='rtl'
-        ?'Leitura da direita para a esquerda (mangá).'
-        :'Leitura da esquerda para a direita.','book-image');
+        ?T('app.leitura_da_direita_para_a_esquerda_man')
+        :T('app.leitura_da_esquerda_para_a_direita'),'book-image');
     });
     const spreadToggle=document.getElementById('comic-spread-toggle');
     if(spreadToggle)spreadToggle.onchange=async e=>{
@@ -11598,7 +11810,7 @@ const App={
         if(this.reader && document.getElementById('view-reader').classList.contains('active')) {
           this.reader.triggerRePagination();
         }
-        Utils.toast('Configurações padrão restauradas.', 'rotate-ccw');
+        Utils.toast(T('app.configuracoes_padrao_restauradas'), 'rotate-ccw');
       };
     }
   },
@@ -11663,10 +11875,10 @@ const App={
           </div>
           ${a.text?`<div class="item-text">“${Utils.esc(a.text)}”</div>`:''}
           ${a.note?`<div class="item-note">${Utils.esc(a.note)}</div>`:''}
-          <div class="item-meta">Página ${(a.pageIndex||0)+1}</div>
+          <div class="item-meta">${T('app.pagina_v',{v:(a.pageIndex||0)+1})}</div>
           <div class="item-actions">
-             ${isNote ? `<button class="action-btn edit-btn" title="Editar"><i data-lucide="edit-3"></i></button>` : ''}
-             <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+             ${isNote ? `<button class="action-btn edit-btn" title="${T('app.editar')}"><i data-lucide="edit-3"></i></button>` : ''}
+             <button class="action-btn delete-btn" title="${T('app.excluir')}"><i data-lucide="trash"></i></button>
           </div>`;
         
         c.onclick=(e)=>{ 
@@ -11677,9 +11889,9 @@ const App={
 
         c.querySelector('.delete-btn').onclick = async (e) => {
             e.stopPropagation();
-            if(await AppModal.confirm({title:`Excluir ${title.toLowerCase().slice(0,-1)}?`,message:'Este registro será removido permanentemente da biblioteca.',confirmText:'Excluir',confirmIcon:'trash',danger:true})) {
+            if(await AppModal.confirm({title:T('app.excluir_item_pergunta'),message:T('app.este_registro_sera_removido_permanente'),confirmText:T('app.excluir'),confirmIcon:'trash',danger:true})) {
                 await this.db.deleteAnnotation(book.id, a.id);
-                Utils.toast('Item excluído.', 'trash');
+                Utils.toast(T('app.item_excluido'), 'trash');
                 this.reader.applyAnnotationsToRenderedPage(a.pageIndex);
                 this.reloadAnnotations();
             }
@@ -11689,7 +11901,7 @@ const App={
             c.querySelector('.edit-btn').onclick = (e) => {
                 e.stopPropagation();
                 document.getElementById('selected-preview').innerHTML = 
-                    `<div class="item-type">Trecho original</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">Página ${(a.pageIndex||0)+1}</div>`;
+                    `<div class="item-type">${T('app.trecho_original')}</div><div class="item-text">“${Utils.esc(a.text)}”</div><div class="item-meta">${T('app.pagina_v',{v:(a.pageIndex||0)+1})}</div>`;
                 document.getElementById('note-text').value = a.note;
                 document.getElementById('btn-save-note').dataset.editId = a.id;
                 document.getElementById('btn-save-note').dataset.bookId = book.id;
@@ -11700,26 +11912,26 @@ const App={
         body.appendChild(c);
       });
     };
-    addSection('Grifos',book.annotations.filter(a=>a.type==='highlight'),'highlighter');
-    addSection('Citações',book.annotations.filter(a=>a.type==='quote'),'quote');
-    addSection('Anotações',book.annotations.filter(a=>a.type==='note'),'sticky-note');
+    addSection(T('app.grifos'),book.annotations.filter(a=>a.type==='highlight'),'highlighter');
+    addSection(T('app.citacoes'),book.annotations.filter(a=>a.type==='quote'),'quote');
+    addSection(T('app.anotacoes'),book.annotations.filter(a=>a.type==='note'),'sticky-note');
     if(book.bookmarks.length){
       const h=document.createElement('div');
       h.className='nav-title';
-      h.textContent='Marcadores';
+      h.textContent=T('ui.marcadores');
       body.appendChild(h);
       book.bookmarks.forEach(m=>{
         const c=document.createElement('div');
         c.className='bookmark-card';
         c.innerHTML=`
           <div class="item-head">
-            <div class="item-type">Marcador</div>
+            <div class="item-type">${T('app.marcador')}</div>
             <i data-lucide="bookmark" style="width:16px;height:16px;color:var(--accent)"></i>
           </div>
-          <div class="item-text">${Utils.esc(m.title||'Página salva')}</div>
-          <div class="item-meta">Página ${(m.globalPage??m.pageIndex??0)+1}</div>
+          <div class="item-text">${Utils.esc(m.title||T('app.pagina_salva'))}</div>
+          <div class="item-meta">${T('app.pagina_v',{v:(m.globalPage??m.pageIndex??0)+1})}</div>
           <div class="item-actions">
-             <button class="action-btn delete-btn" title="Excluir"><i data-lucide="trash"></i></button>
+             <button class="action-btn delete-btn" title="${T('app.excluir')}"><i data-lucide="trash"></i></button>
           </div>`;
           
         c.onclick=(e)=>{ 
@@ -11730,9 +11942,9 @@ const App={
 
         c.querySelector('.delete-btn').onclick = async (e) => {
             e.stopPropagation();
-            if(await AppModal.confirm({title:'Excluir marcador?',message:'O marcador será removido permanentemente.',confirmText:'Excluir marcador',confirmIcon:'trash',danger:true})) {
+            if(await AppModal.confirm({title:T('app.excluir_marcador_2'),message:T('app.o_marcador_sera_removido_permanentemen'),confirmText:T('app.excluir_marcador'),confirmIcon:'trash',danger:true})) {
                 await this.db.deleteBookmark(book.id, m.id);
-                Utils.toast('Marcador excluído.', 'trash');
+                Utils.toast(T('app.marcador_excluido'), 'trash');
                 this.reloadAnnotations();
             }
         };
@@ -11741,7 +11953,7 @@ const App={
       });
     }
     if(!body.children.length){
-      body.innerHTML=`<div class="empty"><h3>Nenhuma marcação ainda</h3><p>Use Grifar, Citação, Anotar ou Marcador durante a leitura.</p></div>`;
+      body.innerHTML=`<div class="empty"><h3>${T('app.nenhuma_marcacao_ainda')}</h3><p>${T('app.use_grifar_citacao_anotar_ou_marcador')}</p></div>`;
     }
     lucide.createIcons({root:body});
   }
