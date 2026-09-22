@@ -5095,7 +5095,7 @@ const VozNatural={
   guardarMotorNoCache(){
     try{
       const base=new URL(this.ORT,location.href).href;
-      const urls=['ort.min.js','ort-wasm-simd-threaded.jsep.js','ort-wasm-jsep-parte1.bin','ort-wasm-jsep-parte2.bin'].map(n=>base+n);
+      const urls=['ort-bundle.min.js','ort.min.js','ort-wasm-simd-threaded.jsep.js','ort-wasm-jsep-parte1.bin','ort-wasm-jsep-parte2.bin'].map(n=>base+n);
       urls.push(new URL(this.TRABALHADOR,location.href).href);
       navigator.serviceWorker?.controller?.postMessage({tipo:'guardar-motor-de-voz',urls});
     }catch(e){}
@@ -5162,7 +5162,7 @@ const VozNatural={
       };
       const nucleos=navigator.hardwareConcurrency||2;
       const threads=(self.crossOriginIsolated&&!this._modoSeguro)?Math.max(1,Math.min(4,nucleos-1)):1;
-      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:!this._modoSeguro,threads});
+      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,ortBundle:new URL(this.ORT+'ort-bundle.min.js',location.href).href,preferirGpu:!this._modoSeguro,threads});
     });
     return this._iniciando;
   },
@@ -11591,7 +11591,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 36';
+const BUILD='2026-09-20 · 37';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

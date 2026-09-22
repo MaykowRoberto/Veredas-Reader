@@ -6,7 +6,7 @@ gerada no próprio aparelho.
 
 CÓDIGO
   voz-natural-worker.js
-    md5 968dc4edb6e75d2b8fa6fb50a07b7989       16.875 bytes
+    md5 7a4bd982463edeb892413503e75b5334       19.330 bytes
   Escrito para este aplicativo a partir do exemplo oficial
   web/helper.js do Supertonic (licença MIT, © Supertone Inc.,
   https://github.com/supertone-oss-archive/supertonic), com estas

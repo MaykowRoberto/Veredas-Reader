@@ -36,6 +36,10 @@ const cancelados = new Set();
 let cancelarTudoAte = 0;  /* ids menores ou iguais a este são descartados */
 let fila = Promise.resolve();
 let ultimoInicio = null;
+
+/* Modelo de teste: soma dois números. Serve só para confirmar que o
+   WebAssembly acordou neste aparelho, com erro claro quando não. */
+const MODELO_DE_TESTE = Uint8Array.from(atob('CAg6RgoOCgFhCgFiEgFjIgNBZGQSAXRaDwoBYRIKCggIARIECgIIAVoPCgFiEgoKCAgBEgQKAggBYg8KAWMSCgoICAESBAoCCAFCBAoAEA0='), c => c.charCodeAt(0));
 /* Quanto custa cada parte da síntese: a página usa isso para escolher
    quantos passos cabem no tempo da fala neste aparelho. */
 let medida = { fixo: 0, passos: 0, n: 0 };
@@ -79,31 +83,66 @@ async function lerArquivo(db, nome) {
 async function iniciar(msg) {
   if (sessoes) return { backend };
   if (!ORT) try {
-    importScripts(msg.ortScript || (msg.ortBase + 'ort.min.js'));
-    ORT = self.ort;
-    /* Vários núcleos só quando a página está isolada (o service worker
-       cuida disso); sem isolamento o navegador não oferece memória
-       compartilhada, e o motor roda num núcleo só. */
-    ORT.env.wasm.numThreads = (self.crossOriginIsolated && msg.threads > 1) ? msg.threads : 1;
-    ORT.env.wasm.proxy = false;
-    ORT.env.wasm.wasmPaths = { mjs: msg.ortMjs || (msg.ortBase + 'ort-wasm-simd-threaded.jsep.js') };
-    /* O binário do ONNX Runtime (28 MB) vem em duas partes de 14 MB:
-       o upload pelo site do GitHub recusa arquivos acima de 25 MB.
-       As partes são emendadas aqui e entregues prontas ao motor. */
+    /* O motor vem em duas partes: o programa (ort-bundle.min.js, com o
+       carregador do WebAssembly embutido) e o binário, cortado em dois
+       arquivos de 14 MB porque o envio pelo site do GitHub recusa acima
+       de 25 MB.
+
+       Os dois são buscados aqui, com fetch comum, e o programa é
+       carregado a partir de um endereço blob: local. Isso evita o
+       `import()` de um endereço da rede — que falhou em aparelhos
+       Android mais simples, mesmo com o arquivo no ar e com o tipo
+       certo — e faz cada falha aparecer com nome e número, em vez de
+       um "módulo não pôde ser importado" genérico. */
+    self.__etapa = 'motor: programa';
+    const rp = await fetch(msg.ortBundle || (msg.ortBase + 'ort-bundle.min.js'), { cache: 'force-cache' });
+    if (!rp.ok) throw new Error('programa http ' + rp.status);
+    const texto = await rp.text();
+    if (texto.length < 100000) throw new Error('programa incompleto (' + texto.length + ' bytes)');
+
+    self.__etapa = 'motor: binario';
     const partes = msg.wasmPartes || [msg.ortBase + 'ort-wasm-jsep-parte1.bin', msg.ortBase + 'ort-wasm-jsep-parte2.bin'];
     const buffers = [];
     for (const u of partes) {
-      const r = await fetch(u);
-      if (!r.ok) throw new Error('motor-ausente:' + u.split('/').pop() + ':' + r.status);
+      const r = await fetch(u, { cache: 'force-cache' });
+      if (!r.ok) throw new Error('binario http ' + r.status + ' em ' + u.split('/').pop());
       buffers.push(new Uint8Array(await r.arrayBuffer()));
     }
     const total = buffers.reduce((n, b) => n + b.length, 0);
     const wasm = new Uint8Array(total);
     let o = 0;
     for (const b of buffers) { wasm.set(b, o); o += b.length; }
-    if (wasm[0] !== 0 || wasm[1] !== 0x61 || wasm[2] !== 0x73 || wasm[3] !== 0x6d) throw new Error('motor-corrompido');
+    if (wasm[0] !== 0 || wasm[1] !== 0x61 || wasm[2] !== 0x73 || wasm[3] !== 0x6d) throw new Error('binario corrompido (' + total + ' bytes)');
+
+    self.__etapa = 'motor: carga';
+    const endereco = URL.createObjectURL(new Blob([texto], { type: 'text/javascript' }));
+    let modulo = null, erroBlob = '';
+    try {
+      modulo = await import(endereco);
+    } catch (e) {
+      /* Se nem pelo blob der, resta o caminho antigo: o programa como
+         script comum, com o carregador do WebAssembly à parte. */
+      erroBlob = String(e && e.message || e).slice(0, 160);
+      self.__etapa = 'motor: carga (2)';
+      importScripts(msg.ortBase + 'ort.min.js');
+      modulo = self.ort;
+      if (modulo) modulo.env.wasm.wasmPaths = { mjs: msg.ortBase + 'ort-wasm-simd-threaded.jsep.js' };
+    } finally { try { URL.revokeObjectURL(endereco); } catch (_) {} }
+    ORT = modulo && modulo.default && modulo.default.InferenceSession ? modulo.default : modulo;
+    if (!ORT || !ORT.InferenceSession) throw new Error('programa sem InferenceSession' + (erroBlob ? ' (blob: ' + erroBlob + ')' : ''));
+
+    ORT.env.wasm.numThreads = (self.crossOriginIsolated && msg.threads > 1) ? msg.threads : 1;
+    ORT.env.wasm.proxy = false;
     ORT.env.wasm.wasmBinary = wasm.buffer;
+    ORT.env.logLevel = 'error';
+
+    self.__etapa = 'motor: teste';
+    /* Um modelo minúsculo (soma de dois números) acorda o WebAssembly
+       agora, com mensagem clara, em vez de deixar a falha aparecer
+       mais adiante como "nenhum backend disponível". */
+    await ORT.InferenceSession.create(MODELO_DE_TESTE, { executionProviders: ['wasm'] });
   } catch (e) { ORT = null; throw e; }
+  self.__etapa = 'modelo guardado';
   const db = await abrirBanco();
   cfg = JSON.parse(await (await lerArquivo(db, 'onnx/tts.json')).text());
   const lista = JSON.parse(await (await lerArquivo(db, 'onnx/unicode_indexer.json')).text());
@@ -137,15 +176,22 @@ async function iniciar(msg) {
   if (msg.preferirGpu && self.navigator && navigator.gpu) {
     try { temGpu = !!(await navigator.gpu.requestAdapter()); } catch (e) { temGpu = false; }
   }
+  self.__etapa = 'sessoes';
   if (temGpu) planos.push(['webgpu', { graphOptimizationLevel: 'all' }, 'webgpu']);
   planos.push(['wasm', { graphOptimizationLevel: 'all' }, 'wasm']);
   planos.push(['wasm', { graphOptimizationLevel: 'disabled', enableMemPattern: false, enableCpuMemArena: false, executionMode: 'sequential' }, 'wasm-economico']);
-  let conjunto = null, ultimoErro = null;
+  let conjunto = null;
+  const falhas = [];
   for (const [ep, opcoes, nome] of planos) {
     try { conjunto = await tentar([ep], opcoes); backend = nome; break; }
-    catch (e) { ultimoErro = e; }
+    catch (e) { falhas.push(nome + ': ' + String(e && e.message || e).slice(0, 220)); }
   }
-  if (!conjunto) throw ultimoErro || new Error('motor-nao-carregou');
+  if (!conjunto) {
+    /* O relato de TODAS as tentativas: é o que permite descobrir, num
+       aparelho que não está aqui, onde exatamente a voz travou. */
+    const e = new Error(falhas.join(' || ') || 'motor-nao-carregou');
+    throw e;
+  }
   sessoes = { dp: conjunto.duration_predictor, enc: conjunto.text_encoder, ve: conjunto.vector_estimator, voc: conjunto.vocoder };
   db.close();
   return { backend, threads: ORT.env.wasm.numThreads };
@@ -363,7 +409,8 @@ self.onmessage = e => {
         estilos.clear();
       }
     } catch (err) {
-      self.postMessage({ tipo: 'erro', id: msg.id, pedido: msg.tipo, mensagem: String(err && err.message || err) });
+      self.postMessage({ tipo: 'erro', id: msg.id, pedido: msg.tipo, etapa: self.__etapa || '',
+        mensagem: String(err && err.message || err).slice(0, 700) });
     }
   });
 };

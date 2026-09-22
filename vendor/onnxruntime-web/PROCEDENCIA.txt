@@ -30,7 +30,19 @@ Duas mudanças de FORMA, de propósito (o conteúdo é o mesmo):
      motor (env.wasm.wasmBinary). Para conferir à mão:
        cat ort-wasm-jsep-parte1.bin ort-wasm-jsep-parte2.bin | md5sum
 
+  3. dist/ort.bundle.min.mjs  →  ort-bundle.min.js
+     É o mesmo motor, com o carregador do WebAssembly embutido no
+     próprio arquivo. É ele que o aplicativo usa: o trabalhador busca
+     este texto com um fetch comum e o carrega a partir de um endereço
+     blob: local. O caminho antigo (ort.min.js + o carregador à parte,
+     trazido por import() de um endereço da rede) falhava em aparelhos
+     Android mais simples com "Failed to fetch dynamically imported
+     module", mesmo com o arquivo no ar e com o tipo certo. Os dois
+     arquivos antigos continuam aqui como segunda tentativa.
+
 Arquivos e impressão digital (md5):
+  ort-bundle.min.js
+    md5 e0f1cc25d3e1b8754dd77b10a2dbee47      413.523 bytes
   ort.min.js
     md5 ef4d177a05e67812156c40cfd677547d      368.025 bytes
   ort-wasm-simd-threaded.jsep.js
