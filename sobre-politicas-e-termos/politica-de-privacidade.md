@@ -6,7 +6,7 @@ A sua privacidade é um princípio de projeto do **Veredas Reader**. Esta Polít
 
 ## 1. Quem é o controlador
 
-O Aplicativo é desenvolvido e disponibilizado por **Torres Software**, controladora dos dados pessoais eventualmente tratados pelo Aplicativo, nos termos do art. 5º, VI, da LGPD.
+O Aplicativo é desenvolvido e disponibilizado por **Torres Software**, marca utilizada pelo desenvolvedor independente **Maykow Roberto Lima Torres**, com atuação em Pernambuco, Brasil, que é o controlador dos dados pessoais eventualmente tratados pelo Aplicativo, nos termos do art. 5º, VI, da LGPD.
 
 Canal de atendimento ao titular de dados: **torres.software.app@gmail.com**
 

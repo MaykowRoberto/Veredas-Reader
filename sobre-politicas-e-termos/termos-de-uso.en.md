@@ -4,7 +4,7 @@
 
 > This English version is provided for convenience. In case of any discrepancy, the **Portuguese (Brazil) version prevails**.
 
-These Terms and Conditions of Use ("Terms") govern the use of the **Veredas Reader** application ("App"), developed and made available by **Torres Software** ("Torres Software", "we", "us"). Please read them carefully: they explain what the App does, what you may and may not do with it, and each party's responsibilities.
+These Terms and Conditions of Use ("Terms") govern the use of the **Veredas Reader** application ("App"), developed and made available by **Torres Software**, the brand used by independent developer **Maykow Roberto Lima Torres**, based in Pernambuco, Brazil ("Torres Software", "we", "us"). Please read them carefully: they explain what the App does, what you may and may not do with it, and each party's responsibilities.
 
 Contact: **torres.software.app@gmail.com**
 

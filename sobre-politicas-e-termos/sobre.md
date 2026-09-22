@@ -38,7 +38,7 @@ Seus livros, sua estante e suas anotações ficam no seu dispositivo e permanece
 
 ## Quem faz
 
-Desenvolvido por **Torres Software**.
+Desenvolvido por **Torres Software**, marca do desenvolvedor independente **Maykow Roberto Lima Torres** (Pernambuco, Brasil).
 Contato: **torres.software.app@gmail.com**
 
-© 2026 Torres Software. Todos os direitos reservados. É proibida a reprodução, a distribuição, a engenharia reversa ou a extração do código do aplicativo sem autorização, nos termos dos **Termos de Uso**.
+© 2026 Torres Software — Maykow Roberto Lima Torres. Todos os direitos reservados. É proibida a reprodução, a distribuição, a engenharia reversa ou a extração do código do aplicativo sem autorização, nos termos dos **Termos de Uso**.

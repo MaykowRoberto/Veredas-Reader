@@ -38,7 +38,7 @@ Your books, your shelf and your notes stay on your device and remain yours.
 
 ## Who makes it
 
-Developed by **Torres Software**.
+Developed by **Torres Software**, the brand of independent developer **Maykow Roberto Lima Torres** (Pernambuco, Brazil).
 Contact: **torres.software.app@gmail.com**
 
-© 2026 Torres Software. All rights reserved. Reproduction, distribution, reverse engineering or extraction of the app's code without authorization is prohibited, as set out in the **Terms of Use**.
+© 2026 Torres Software — Maykow Roberto Lima Torres. All rights reserved. Reproduction, distribution, reverse engineering or extraction of the app's code without authorization is prohibited, as set out in the **Terms of Use**.

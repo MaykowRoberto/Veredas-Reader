@@ -8,7 +8,7 @@ Your privacy is a design principle of **Veredas Reader**. This Policy explains c
 
 ## 1. Who the controller is
 
-The App is developed and made available by **Torres Software**, the controller of any personal data processed through the App, under article 5, VI, of the LGPD.
+The App is developed and made available by **Torres Software**, the brand used by independent developer **Maykow Roberto Lima Torres**, based in Pernambuco, Brazil, who is the controller of any personal data processed through the App, under article 5, VI, of the LGPD.
 
 Data subject contact channel: **torres.software.app@gmail.com**
 

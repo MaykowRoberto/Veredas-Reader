@@ -2,7 +2,7 @@
 
 **Última atualização:** 21 de setembro de 2026
 
-Estes Termos e Condições de Uso ("Termos") regulam o uso do aplicativo **Veredas Reader** ("Aplicativo"), desenvolvido e disponibilizado por **Torres Software** ("Torres Software", "nós"). Leia com atenção: eles explicam o que o Aplicativo faz, o que você pode e o que não pode fazer com ele e quais são as responsabilidades de cada parte.
+Estes Termos e Condições de Uso ("Termos") regulam o uso do aplicativo **Veredas Reader** ("Aplicativo"), desenvolvido e disponibilizado por **Torres Software**, marca utilizada pelo desenvolvedor independente **Maykow Roberto Lima Torres**, com atuação em Pernambuco, Brasil ("Torres Software", "nós"). Leia com atenção: eles explicam o que o Aplicativo faz, o que você pode e o que não pode fazer com ele e quais são as responsabilidades de cada parte.
 
 Contato: **torres.software.app@gmail.com**
 

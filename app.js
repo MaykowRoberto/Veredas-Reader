@@ -10647,7 +10647,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 30';
+const BUILD='2026-09-20 · 31';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
