@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-32';
+const VERSAO = 'veredas-2026-09-20-33';
 
 const ESSENCIAIS = [
   './',
@@ -117,6 +117,31 @@ self.addEventListener('activate', evento => {
   );
 });
 
+/* ISOLAMENTO ENTRE ORIGENS
+   A voz natural roda até 4x mais rápido quando o motor pode usar
+   vários núcleos do processador — e o navegador só libera isso
+   (SharedArrayBuffer) para páginas "isoladas", que chegam com os
+   cabeçalhos COOP e COEP. O GitHub Pages não deixa configurar
+   cabeçalhos, então é o service worker quem os acrescenta a tudo o
+   que vem deste mesmo endereço.
+
+   Não quebra nada do aplicativo: tudo o que ele carrega mora aqui
+   dentro (vendor/), e o download da voz vem do Hugging Face por CORS,
+   que o isolamento aceita. Vale a partir da segunda abertura — na
+   primeira o service worker ainda não controla a página, e o motor
+   simplesmente usa um núcleo só. */
+function isolar(resposta) {
+  if (!resposta || resposta.type === 'opaque' || resposta.type === 'error' || !resposta.status) return resposta;
+  if ([101, 204, 205, 304].includes(resposta.status)) return resposta;
+  try {
+    const h = new Headers(resposta.headers);
+    h.set('Cross-Origin-Opener-Policy', 'same-origin');
+    h.set('Cross-Origin-Embedder-Policy', 'require-corp');
+    h.set('Cross-Origin-Resource-Policy', 'same-origin');
+    return new Response(resposta.body, { status: resposta.status, statusText: resposta.statusText, headers: h });
+  } catch (e) { return resposta; }
+}
+
 self.addEventListener('fetch', evento => {
   const req = evento.request;
   if (req.method !== 'GET') return;
@@ -132,12 +157,12 @@ self.addEventListener('fetch', evento => {
   if (url.pathname.includes(PASTA_MOTOR)) {
     evento.respondWith(
       caches.open(MOTOR).then(cache =>
-        cache.match(req, { ignoreSearch: true }).then(guardado => guardado || fetch(req).then(resposta => {
+        cache.match(req, { ignoreSearch: true }).then(guardado => guardado ? isolar(guardado) : fetch(req).then(resposta => {
           /* Só quem usa a voz natural chega a pedir estes arquivos:
              guardá-los aqui cobre quem baixou a voz na primeira
              visita, antes de o service worker assumir a página. */
           if (resposta && resposta.ok && resposta.type === 'basic') cache.put(req, resposta.clone()).catch(() => {});
-          return resposta;
+          return isolar(resposta);
         }))
       )
     );
@@ -151,14 +176,14 @@ self.addEventListener('fetch', evento => {
           const copia = resposta.clone();
           caches.open(VERSAO).then(c => c.put(req, copia)).catch(() => {});
         }
-        return resposta;
+        return isolar(resposta);
       })
       .catch(() =>
         caches.match(req).then(guardado => {
-          if (guardado) return guardado;
+          if (guardado) return isolar(guardado);
           /* Sem rede e sem cópia: se era uma navegação, devolve a
              própria página inicial, que está guardada. */
-          if (req.mode === 'navigate') return caches.match('./index.html');
+          if (req.mode === 'navigate') return caches.match('./index.html').then(isolar);
           return Response.error();
         })
       )

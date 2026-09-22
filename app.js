@@ -5095,7 +5095,7 @@ const VozNatural={
   guardarMotorNoCache(){
     try{
       const base=new URL(this.ORT,location.href).href;
-      const urls=['ort.min.js','ort-wasm-simd-threaded.jsep.js','ort-wasm-simd-threaded.jsep.wasm'].map(n=>base+n);
+      const urls=['ort.min.js','ort-wasm-simd-threaded.jsep.js','ort-wasm-jsep-parte1.bin','ort-wasm-jsep-parte2.bin'].map(n=>base+n);
       urls.push(new URL(this.TRABALHADOR,location.href).href);
       navigator.serviceWorker?.controller?.postMessage({tipo:'guardar-motor-de-voz',urls});
     }catch(e){}
@@ -5117,7 +5117,7 @@ const VozNatural={
       };
       const primeira=e=>{
         const m=e.data||{};
-        if(m.tipo==='pronto')fim(null,m.backend);
+        if(m.tipo==='pronto'){this.estado.threads=m.threads||1;fim(null,m.backend)}
         else if(m.tipo==='erro'&&m.pedido==='iniciar')fim(new Error(m.mensagem));
       };
       w.addEventListener('message',primeira);
@@ -5128,7 +5128,9 @@ const VozNatural={
         fim(erro);
         this._falharPendentes(erro);
       };
-      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:true});
+      const nucleos=navigator.hardwareConcurrency||2;
+      const threads=self.crossOriginIsolated?Math.max(1,Math.min(4,nucleos-1)):1;
+      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:true,threads});
     });
     return this._iniciando;
   },
@@ -5290,16 +5292,11 @@ const VozNaturalUI={
   },
   html(){
     const s=App.state.settings;
-    const motor=s.ttsMotor==='sistema'?'sistema':'natural';
     const est=VozNatural.estado;
-    const seg=`<div class="seg two vn-motor" role="radiogroup" aria-label="${Utils.esc(T('vn.quem_le'))}">
-      <button type="button" role="radio" aria-checked="${motor==='natural'}" class="${motor==='natural'?'active':''}" data-vn-motor="natural"><i data-lucide="sparkles"></i>${T('vn.natural')}</button>
-      <button type="button" role="radio" aria-checked="${motor==='sistema'}" class="${motor==='sistema'?'active':''}" data-vn-motor="sistema"><i data-lucide="smartphone"></i>${T('vn.do_sistema')}</button>
-    </div>`;
-    if(motor==='sistema'){
-      const nota=est.fase==='pronto'?T('vn.nota_sistema_com_natural'):T('vn.nota_sistema');
-      return seg+`<p class="setting-hint">${nota}</p>`;
-    }
+    /* A voz natural é sempre a preferida. A voz do sistema só lê
+       quando a natural não foi baixada, não fala o idioma do livro ou
+       não conseguiu rodar no aparelho — não existe chave para trocar. */
+    const seg='';
     const total=this.mb(VozNatural.total);
     const topo=`<div class="vn-topo"><span class="vn-selo"><i data-lucide="audio-lines"></i></span><div><strong>${T('vn.voz_natural')}</strong><small>${T('vn.gerada_no_aparelho')}</small></div></div>`;
     const barra=(b,ativo)=>`<div class="vn-barra${ativo?' ativa':''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(b/VozNatural.total*100)}" aria-label="${Utils.esc(T('vn.progresso_download'))}"><span style="width:${Math.min(100,b/VozNatural.total*100).toFixed(1)}%"></span></div>
@@ -5450,7 +5447,7 @@ const VozNaturalUI={
     this._gerandoAmostra=voz;this.renderizarTodos();
     try{
       const {lang,texto}=VozNatural.amostraTexto();
-      const r=await VozNatural.sintetizar(texto,lang,voz,{passos:VozNatural.estado.backend==='webgpu'?8:6,velocidade:1.05});
+      const r=await VozNatural.sintetizar(texto,lang,voz,{passos:VozNatural.estado.backend==='webgpu'?6:(App.reader?.tts?.passosAuto||3),velocidade:1.05});
       if(r.tipo!=='audio')throw new Error(r.tipo);
       const a=new Audio(URL.createObjectURL(new Blob([r.wav],{type:'audio/wav'})));
       this._amostra=a;this._amostraVoz=voz;
@@ -5505,7 +5502,7 @@ class TextToSpeechController{
     /* Mudou a escolha da voz natural (motor, voz, qualidade)? Quem
        está ouvindo recomeça do mesmo trecho com a escolha nova. */
     VozNaturalUI.aoMudar=()=>{
-      this.naturalFalhou=false;this.passosAuto=0;this.lentidao=0;
+      this.naturalFalhou=false;this.naturalLento=false;this.passosAuto=0;this.lentidao=0;
       this.refreshPanel();
       if(this.playing){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
     };
@@ -5558,13 +5555,15 @@ class TextToSpeechController{
      motivo volta junto, para a tela explicar a troca. */
   escolherMotor(){
     const lang=this.idiomaAtual();
-    if(App.state.settings.ttsMotor==='sistema')return {motor:'sistema',lang,motivo:'escolha'};
     const amb=VozNatural.motivoAmbiente();
     if(amb)return {motor:'sistema',lang,motivo:amb};
     if(VozNatural.estado.fase!=='pronto')return {motor:'sistema',lang,motivo:'nao-baixada'};
     if(!lang)return {motor:'sistema',lang,motivo:'idioma-desconhecido'};
     if(!VozNatural.IDIOMAS.has(lang.split('-')[0]))return {motor:'sistema',lang,motivo:'idioma'};
-    if(this.naturalFalhou)return {motor:'sistema',lang,motivo:'falha'};
+    /* Falhou há pouco? Usa o sistema por um minuto e depois tenta a
+       natural de novo — pode ter sido memória momentaneamente cheia. */
+    if(this.naturalFalhou&&Date.now()-this.naturalFalhou<60000)return {motor:'sistema',lang,motivo:'falha'};
+    if(this.naturalLento)return {motor:'sistema',lang,motivo:'lento'};
     return {motor:'natural',lang,motivo:''};
   }
 
@@ -5613,10 +5612,11 @@ class TextToSpeechController{
         'idioma':T('vn.aviso_idioma',{idioma:nome}),
         'idioma-desconhecido':T('vn.aviso_idioma_desconhecido'),
         'falha':T('vn.aviso_falha'),
+        'lento':T('vn.aviso_lento'),
         'arquivo':T('vn.aviso_arquivo'),
         'navegador':T('vn.aviso_navegador')
       };
-      const txt=App.state.settings.ttsMotor==='sistema'?'':textos[escolha.motivo]||'';
+      const txt=textos[escolha.motivo]||'';
       aviso.textContent=txt;aviso.hidden=!txt;
     }
   }
@@ -5658,7 +5658,7 @@ class TextToSpeechController{
       catch(e){
         console.warn('[voz natural]',e);
         if(run!==this.runId)return;
-        this.naturalFalhou=true;this.motor='sistema';
+        this.naturalFalhou=Date.now();this.motor='sistema';
         Utils.toast(T('vn.nao_carregou_usando_sistema'),'alert-triangle');
       }
       this.gerando=false;
@@ -5727,8 +5727,11 @@ class TextToSpeechController{
     const alvo=1.05*rate;
     const velocidade=Utils.clamp(alvo,0.8,1.6);
     const q=App.state.settings.ttsQualidade||'auto';
-    let passos=q==='rapida'?4:q==='maxima'?8:(VozNatural.estado.backend==='webgpu'?8:6);
-    if(q==='auto'&&this.passosAuto)passos=Math.min(passos,this.passosAuto);
+    let passos=q==='rapida'?2:q==='maxima'?8:(VozNatural.estado.backend==='webgpu'?6:4);
+    /* Automática: sem placa de vídeo, o primeiro trecho sai com o
+       mínimo (2 passos) para a leitura começar logo; depois a medida
+       real do aparelho diz quantos passos cabem no tempo da fala. */
+    if(q==='auto')passos=this.passosAuto||(VozNatural.estado.backend==='webgpu'?passos:2);
     return {velocidade,passos,playbackRate:alvo/velocidade,voz:App.state.settings.ttsVozNatural||'feminina'};
   }
   pedirAudio(pagina,trecho,texto){
@@ -5742,14 +5745,29 @@ class TextToSpeechController{
       /* Mede a folga: gerar mais devagar do que se ouve causa pausas.
          No modo automático, a qualidade desce um degrau sozinha. */
       const ritmo=r.tempo/Math.max(0.5,r.duracao);
-      if(ritmo>0.85){
-        this.lentidao++;
-        if((App.state.settings.ttsQualidade||'auto')==='auto'&&this.lentidao>=2){
-          const atual=this.passosAuto||o.passos;
-          if(atual>4){this.passosAuto=atual>6?6:4;this.lentidao=0}
+      const q=App.state.settings.ttsQualidade||'auto';
+      /* Quanto tempo levaria, neste aparelho, com n passos. */
+      const custo=n=>((r.fixo||0)+(r.porPasso||0)*n)/Math.max(0.5,r.duracao);
+      if(r.porPasso){
+        if(q==='auto'){
+          const teto=VozNatural.estado.backend==='webgpu'?6:4;
+          let n=teto;while(n>2&&custo(n)>0.8)n--;
+          this.passosAuto=n;
         }
-        if(this.lentidao>=3&&!this.avisouLento&&ritmo>1.1){this.avisouLento=true;Utils.toast(T('vn.aparelho_lento'),'hourglass')}
-      }else this.lentidao=Math.max(0,this.lentidao-1);
+        /* Nem com o mínimo de passos a voz sai na velocidade da fala:
+           neste aparelho a voz natural não dá conta. A leitura segue
+           com a voz do sistema, e o painel explica o porquê. */
+        if(q!=='maxima'&&custo(2)>1.3){
+          this.lentidao++;
+          if((this.lentidao>=2||custo(2)>2)&&!this.naturalLento){
+            this.naturalLento=true;
+            Utils.toast(T('vn.lento_usando_sistema'),'hourglass');
+            const pg=this.pageIndex,sg=this.segmentIndex;
+            setTimeout(()=>{if(this.playing&&this.motor==='natural'){this.stop(false);this.start(pg,sg)}},0);
+          }
+        }else this.lentidao=0;
+        if(q==='maxima'&&ritmo>1.1&&!this.avisouLento){this.avisouLento=true;Utils.toast(T('vn.aparelho_lento'),'hourglass')}
+      }
       return {url:URL.createObjectURL(new Blob([r.wav],{type:'audio/wav'})),duracao:r.duracao};
     });
     this.preparados.set(chave,p);
@@ -5814,7 +5832,7 @@ class TextToSpeechController{
       if(!this.playing||run!==this.runId)return;
       if(String(e?.message||'')==='encerrado')return;
       console.warn('[voz natural]',e);
-      this.naturalFalhou=true;
+      this.naturalFalhou=Date.now();
       Utils.toast(T('vn.parou_usando_sistema'),'alert-triangle');
       const pg=this.pageIndex,sg=this.segmentIndex;
       this.stop(false);this.start(pg,sg);
@@ -11485,7 +11503,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 32';
+const BUILD='2026-09-20 · 33';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

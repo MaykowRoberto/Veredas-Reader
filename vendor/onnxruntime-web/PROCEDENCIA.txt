@@ -1,0 +1,48 @@
+ONNX Runtime Web 1.30.0
+=======================
+
+Para que serve aqui: rodar o modelo da voz natural (Supertonic 3)
+dentro do aparelho, em WebAssembly ou, quando o aparelho oferece,
+na placa de vídeo (WebGPU).
+Licença: MIT (texto completo em licencas/LICENSE-onnxruntime.txt);
+avisos de componentes de terceiros em
+licencas/ThirdPartyNotices-onnxruntime.txt.
+Site do projeto: https://onnxruntime.ai/
+
+De onde veio: onnxruntime-web@1.30.0 (npm), pasta dist/, sem
+modificação de conteúdo.
+
+Duas mudanças de FORMA, de propósito (o conteúdo é o mesmo):
+
+  1. dist/ort-wasm-simd-threaded.jsep.mjs  →  ort-wasm-simd-threaded.jsep.js
+     A extensão .mjs não é reconhecida por todo servidor (e por alguns
+     empacotadores de aplicativo nativo), que a entregam com o tipo
+     errado; aí o navegador recusa o módulo. O trabalhador informa o
+     nome novo por env.wasm.wasmPaths.mjs.
+
+  2. dist/ort-wasm-simd-threaded.jsep.wasm (28.312.028 bytes, md5
+     2330e78bda0acdb009a8c8643e29509d) foi cortado em duas partes:
+       ort-wasm-jsep-parte1.bin  md5 5ebec47cf00247902ac3e340a2c91ecd  14.156.014 bytes
+       ort-wasm-jsep-parte2.bin  md5 ac13393bbc9501dba04280ee4fcfc184  14.156.014 bytes
+     O envio de arquivos pelo site do GitHub recusa arquivos acima de
+     25 MB. O trabalhador da voz natural busca as duas partes, emenda,
+     confere o cabeçalho do WebAssembly e entrega o binário pronto ao
+     motor (env.wasm.wasmBinary). Para conferir à mão:
+       cat ort-wasm-jsep-parte1.bin ort-wasm-jsep-parte2.bin | md5sum
+
+Arquivos e impressão digital (md5):
+  ort.min.js
+    md5 ef4d177a05e67812156c40cfd677547d      368.025 bytes
+  ort-wasm-simd-threaded.jsep.js
+    md5 e74756bc3b68ab529ff3cc46a54e6574       46.851 bytes
+
+Não estão na lista ESSENCIAIS do sw.js: são 28 MB que só servem a
+quem baixou a voz natural. Quando o download da voz termina, a
+página pede ao service worker que os guarde (recado
+'guardar-motor-de-voz'), num cache que não é apagado a cada versão.
+
+Para atualizar um dia: troque os arquivos (renomeando o .mjs e cortando o
+.wasm com `split -b 14156014`),
+atualize este bilhete, a versão em Docs.extras (app.js) e o nome
+do cache 'veredas-motor-…' no sw.js, e teste a voz natural com a
+internet desligada.

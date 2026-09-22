@@ -1,0 +1,49 @@
+Supertonic 3 — voz natural
+==========================
+
+Para que serve aqui: ler os livros em voz alta com uma voz neural,
+gerada no próprio aparelho.
+
+CÓDIGO
+  voz-natural-worker.js
+    md5 ffe0257b3ba90de2145d840b110fd4a6       15.956 bytes
+  Escrito para este aplicativo a partir do exemplo oficial
+  web/helper.js do Supertonic (licença MIT, © Supertone Inc.,
+  https://github.com/supertone-oss-archive/supertonic), com estas
+  mudanças: vetores tipados em vez de listas aninhadas; leitura do
+  modelo a partir do IndexedDB; síntese cancelável entre os passos;
+  limpeza de caracteres que o modelo não conhece e das marcas de
+  expressão (<laugh> etc.), para o texto de um livro não dispará-las;
+  saída em WAV pronta para tocar.
+  Licença do código de origem: licencas/LICENSE-Supertonic-codigo.txt
+
+MODELO (NÃO vem dentro do aplicativo)
+  Fonte: https://huggingface.co/supertone-oss-archive/supertonic-3
+  Revisão fixa: aafc6e32416a594460b32413efc49d7fe4ce6d46
+  Licença: BigScience OpenRAIL-M
+    (licencas/LICENSE-Supertonic-modelo-OpenRAIL-M.txt)
+  Baixado só quando a pessoa pede, direto dessa fonte, e guardado no
+  IndexedDB do aparelho (banco "veredas-voz"). Arquivos e tamanhos
+  conferidos depois do download:
+    onnx/tts.json                         8.253 bytes
+    onnx/unicode_indexer.json           277.676 bytes
+    voice_styles/F5.json                291.479 bytes  (voz feminina)
+    voice_styles/M5.json                291.469 bytes  (voz masculina)
+    onnx/duration_predictor.onnx      3.700.147 bytes
+    onnx/text_encoder.onnx           36.416.150 bytes
+    onnx/vocoder.onnx               101.424.195 bytes
+    onnx/vector_estimator.onnx      256.534.781 bytes
+    total                           398.944.150 bytes (≈ 380 MB)
+
+  Os pesos não são modificados. As restrições de uso do Anexo A da
+  licença estão repetidas nos Termos de Uso, como a licença exige
+  (item 4.a).
+
+Por que F5 e M5: das dez vozes do modelo, são as duas que a própria
+Supertone indica para narração longa (audiolivro). Escolher mais
+vozes não aumentaria o download de forma relevante (290 KB cada),
+mas deixaria a escolha mais confusa sem ganho real.
+
+Para trocar de revisão um dia: atualize REVISAO e ARQUIVOS em
+VozNatural (app.js) com os tamanhos novos, este bilhete e a
+revisão citada em Docs.extras e nas licenças.
