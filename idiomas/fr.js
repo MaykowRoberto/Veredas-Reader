@@ -1005,6 +1005,8 @@ Idiomas.registrar('fr', {
     "idioma_do_texto_dica": "Détectée à partir du texte. Changez-la si la prononciation semble incorrecte.",
     "leitura_em_voz_alta": "Lecture à voix haute",
     "lento_usando_sistema": "La voix naturelle est trop lente sur cet appareil. La lecture continue avec la voix du système.",
-    "aviso_lento": "Cet appareil n’arrive pas à générer la voix naturelle au rythme de la lecture : la voix du système prend le relais pour l’instant."
+    "aviso_lento": "Cet appareil n’arrive pas à générer la voix naturelle au rythme de la lecture : la voix du système prend le relais pour l’instant.",
+    "sem_memoria_usando_sistema": "La voix naturelle n’a pas tenu dans la mémoire de cet appareil. Lecture avec la voix du système.",
+    "aviso_falha_memoria": "Il n’y avait pas assez de mémoire pour la voix naturelle sur cet appareil. Fermer d’autres applications et réessayer suffit souvent ; en attendant, la lecture utilise la voix du système."
   }
 });

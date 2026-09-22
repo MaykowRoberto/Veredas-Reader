@@ -109,33 +109,44 @@ async function iniciar(msg) {
   const lista = JSON.parse(await (await lerArquivo(db, 'onnx/unicode_indexer.json')).text());
   indexador = Int32Array.from(lista);
 
-  const nomes = ['duration_predictor', 'text_encoder', 'vector_estimator', 'vocoder'];
-  const tentar = async provedores => {
-    const s = [];
+  /* O maior primeiro, de propósito: enquanto ele é montado a memória
+     ainda está vazia, e é esse o momento de aperto (o arquivo ocupa
+     256 MB em JavaScript e outro tanto dentro do motor). */
+  const nomes = ['vector_estimator', 'vocoder', 'text_encoder', 'duration_predictor'];
+  const tentar = async (provedores, opcoes) => {
+    const s = {};
     try {
       for (const n of nomes) {
-        /* Um de cada vez: o arquivo só existe na memória até a sessão
-           ser criada, e o maior tem 256 MB. */
         let bytes = new Uint8Array(await (await lerArquivo(db, 'onnx/' + n + '.onnx')).arrayBuffer());
-        s.push(await ORT.InferenceSession.create(bytes, { executionProviders: provedores, graphOptimizationLevel: 'all' }));
+        s[n] = await ORT.InferenceSession.create(bytes, { executionProviders: provedores, ...opcoes });
         bytes = null;
       }
       return s;
     } catch (e) {
-      for (const x of s) { try { await x.release(); } catch (_) {} }
+      for (const x of Object.values(s)) { try { await x.release(); } catch (_) {} }
       throw e;
     }
   };
-  let lista4 = null;
+  /* Tentativas, da melhor para a mais econômica. Aparelhos de 4 GB
+     costumam falhar na primeira por falta de memória: a otimização do
+     grafo chega a manter duas cópias dos pesos enquanto trabalha.
+     Sem otimização, sem arena e sem mapa de memória, o motor usa bem
+     menos — roda mais devagar, mas roda. */
+  const planos = [];
+  let temGpu = false;
   if (msg.preferirGpu && self.navigator && navigator.gpu) {
-    try {
-      const adaptador = await navigator.gpu.requestAdapter();
-      if (adaptador) { lista4 = await tentar(['webgpu']); backend = 'webgpu'; }
-    } catch (e) { lista4 = null; }
+    try { temGpu = !!(await navigator.gpu.requestAdapter()); } catch (e) { temGpu = false; }
   }
-  if (!lista4) { lista4 = await tentar(['wasm']); backend = 'wasm'; }
-  const [dp, enc, ve, voc] = lista4;
-  sessoes = { dp, enc, ve, voc };
+  if (temGpu) planos.push(['webgpu', { graphOptimizationLevel: 'all' }, 'webgpu']);
+  planos.push(['wasm', { graphOptimizationLevel: 'all' }, 'wasm']);
+  planos.push(['wasm', { graphOptimizationLevel: 'disabled', enableMemPattern: false, enableCpuMemArena: false, executionMode: 'sequential' }, 'wasm-economico']);
+  let conjunto = null, ultimoErro = null;
+  for (const [ep, opcoes, nome] of planos) {
+    try { conjunto = await tentar([ep], opcoes); backend = nome; break; }
+    catch (e) { ultimoErro = e; }
+  }
+  if (!conjunto) throw ultimoErro || new Error('motor-nao-carregou');
+  sessoes = { dp: conjunto.duration_predictor, enc: conjunto.text_encoder, ve: conjunto.vector_estimator, voc: conjunto.vocoder };
   db.close();
   return { backend, threads: ORT.env.wasm.numThreads };
 }

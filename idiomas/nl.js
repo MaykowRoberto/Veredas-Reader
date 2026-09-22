@@ -1005,6 +1005,8 @@ Idiomas.registrar('nl', {
     "idioma_do_texto_dica": "Herkend aan de tekst zelf. Wijzig dit als de uitspraak niet klopt.",
     "leitura_em_voz_alta": "Voorlezen",
     "lento_usando_sistema": "De natuurlijke stem is te traag op dit apparaat. Het voorlezen gaat verder met de systeemstem.",
-    "aviso_lento": "Dit apparaat kan de natuurlijke stem niet snel genoeg maken, dus de systeemstem leest voorlopig voor."
+    "aviso_lento": "Dit apparaat kan de natuurlijke stem niet snel genoeg maken, dus de systeemstem leest voorlopig voor.",
+    "sem_memoria_usando_sistema": "De natuurlijke stem paste niet in het geheugen van dit apparaat. De systeemstem leest voor.",
+    "aviso_falha_memoria": "Er was niet genoeg geheugen voor de natuurlijke stem op dit apparaat. Andere apps sluiten en het opnieuw proberen helpt meestal; zolang leest de systeemstem voor."
   }
 });

@@ -1015,6 +1015,8 @@ Idiomas.registrar('en', {
     "idioma_do_texto_dica": "Recognized from the text itself. Change it if the pronunciation sounds wrong.",
     "leitura_em_voz_alta": "Read aloud",
     "lento_usando_sistema": "The natural voice is too slow on this device. Continuing with the system voice.",
-    "aviso_lento": "This device can’t generate the natural voice as fast as it reads, so the system voice has taken over for now."
+    "aviso_lento": "This device can’t generate the natural voice as fast as it reads, so the system voice has taken over for now.",
+    "sem_memoria_usando_sistema": "The natural voice didn’t fit in this device’s memory. Reading with the system voice.",
+    "aviso_falha_memoria": "There wasn’t enough memory for the natural voice on this device. Closing other apps and trying again usually helps; meanwhile, reading uses the system voice."
   }
 });

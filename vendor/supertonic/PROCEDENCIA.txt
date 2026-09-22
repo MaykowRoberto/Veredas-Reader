@@ -6,7 +6,7 @@ gerada no próprio aparelho.
 
 CÓDIGO
   voz-natural-worker.js
-    md5 ffe0257b3ba90de2145d840b110fd4a6       15.956 bytes
+    md5 968dc4edb6e75d2b8fa6fb50a07b7989       16.875 bytes
   Escrito para este aplicativo a partir do exemplo oficial
   web/helper.js do Supertonic (licença MIT, © Supertone Inc.,
   https://github.com/supertone-oss-archive/supertonic), com estas
@@ -14,7 +14,9 @@ CÓDIGO
   modelo a partir do IndexedDB; síntese cancelável entre os passos;
   limpeza de caracteres que o modelo não conhece e das marcas de
   expressão (<laugh> etc.), para o texto de um livro não dispará-las;
-  saída em WAV pronta para tocar.
+  saída em WAV pronta para tocar; e três tentativas de carga (GPU,
+  processador e processador econômico) para aparelhos com pouca
+  memória conseguirem carregar o modelo.
   Licença do código de origem: licencas/LICENSE-Supertonic-codigo.txt
 
 MODELO (NÃO vem dentro do aplicativo)

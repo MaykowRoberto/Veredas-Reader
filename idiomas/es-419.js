@@ -1003,6 +1003,8 @@ Idiomas.registrar('es-419', {
     "idioma_do_texto_dica": "Detectado a partir del propio texto. Cámbialo si la pronunciación no suena bien.",
     "leitura_em_voz_alta": "Lectura en voz alta",
     "lento_usando_sistema": "La voz natural está demasiado lenta en este dispositivo. La lectura sigue con la voz del sistema.",
-    "aviso_lento": "Este dispositivo no logra generar la voz natural a la velocidad de la lectura, así que la voz del sistema tomó el relevo por ahora."
+    "aviso_lento": "Este dispositivo no logra generar la voz natural a la velocidad de la lectura, así que la voz del sistema tomó el relevo por ahora.",
+    "sem_memoria_usando_sistema": "La voz natural no cupo en la memoria de este dispositivo. La lectura sigue con la voz del sistema.",
+    "aviso_falha_memoria": "No hubo memoria suficiente para la voz natural en este dispositivo. Cerrar otras apps y volver a intentarlo suele funcionar; mientras tanto, la lectura usa la voz del sistema."
   }
 });

@@ -1010,6 +1010,8 @@ Idiomas.registrar('de-DE', {
     "idioma_do_texto_dica": "Anhand des Textes erkannt. Ändern Sie sie, falls die Aussprache falsch klingt.",
     "leitura_em_voz_alta": "Vorlesen",
     "lento_usando_sistema": "Die natürliche Stimme ist auf diesem Gerät zu langsam. Es geht mit der Systemstimme weiter.",
-    "aviso_lento": "Dieses Gerät kann die natürliche Stimme nicht schnell genug erzeugen, daher liest vorerst die Systemstimme."
+    "aviso_lento": "Dieses Gerät kann die natürliche Stimme nicht schnell genug erzeugen, daher liest vorerst die Systemstimme.",
+    "sem_memoria_usando_sistema": "Die natürliche Stimme passte nicht in den Speicher dieses Geräts. Es liest die Systemstimme.",
+    "aviso_falha_memoria": "Auf diesem Gerät war nicht genug Speicher für die natürliche Stimme. Andere Apps zu schließen und es erneut zu versuchen hilft meistens; solange liest die Systemstimme."
   }
 });

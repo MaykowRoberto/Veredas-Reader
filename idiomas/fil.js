@@ -1020,6 +1020,8 @@ Idiomas.registrar('fil', {
     "idioma_do_texto_dica": "Kinilala mula mismo sa text. Palitan kung mali ang bigkas.",
     "leitura_em_voz_alta": "Read aloud",
     "lento_usando_sistema": "Masyadong mabagal ang natural na boses sa device na ito. Itutuloy gamit ang system voice.",
-    "aviso_lento": "Hindi kayang gawin ng device na ito ang natural na boses nang kasimbilis ng pagbasa, kaya system voice muna ang gagamitin."
+    "aviso_lento": "Hindi kayang gawin ng device na ito ang natural na boses nang kasimbilis ng pagbasa, kaya system voice muna ang gagamitin.",
+    "sem_memoria_usando_sistema": "Hindi kasya ang natural na boses sa memory ng device na ito. System voice muna ang magbabasa.",
+    "aviso_falha_memoria": "Kulang ang memory para sa natural na boses sa device na ito. Kadalasan, nakakatulong ang pagsara ng ibang app at muling pagsubok; pansamantala, system voice ang gagamitin."
   }
 });

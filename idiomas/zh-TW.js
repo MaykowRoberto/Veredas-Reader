@@ -1003,6 +1003,8 @@ Idiomas.registrar('zh-TW', {
     "idioma_do_texto_dica": "根據文字內容辨識。如果發音不正確，可以更改。",
     "leitura_em_voz_alta": "朗讀",
     "lento_usando_sistema": "自然語音在這台裝置上太慢，將繼續使用系統語音朗讀。",
-    "aviso_lento": "這台裝置無法以朗讀的速度產生自然語音，因此暫時改用系統語音。"
+    "aviso_lento": "這台裝置無法以朗讀的速度產生自然語音，因此暫時改用系統語音。",
+    "sem_memoria_usando_sistema": "這台裝置的記憶體放不下自然語音，將使用系統語音朗讀。",
+    "aviso_falha_memoria": "這台裝置沒有足夠的記憶體執行自然語音。關閉其他應用程式後再試通常可以解決；在此之前會使用系統語音朗讀。"
   }
 });

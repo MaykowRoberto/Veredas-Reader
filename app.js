@@ -5112,7 +5112,7 @@ const VozNatural={
       this._trab=w;
       const fim=(erro,backend)=>{
         w.removeEventListener('message',primeira);
-        if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;falha(erro)}
+        if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;this.estado.erroMotor=String(erro.message||erro);falha(erro)}
         else{this.estado.backend=backend;ok(backend)}
       };
       const primeira=e=>{
@@ -5255,6 +5255,11 @@ const VozNatural={
     const ord=Object.entries(pontos).sort((a,b)=>b[1]-a[1]);
     if(!ord[0]||ord[0][1]<Math.max(2,tokens.length*0.04))return null;
     return ord[0][0];
+  },
+  /* A falha foi por falta de memória? O motor diz isso de várias
+     formas, todas em inglês e nenhuma padronizada. */
+  semMemoria(){
+    return /mem(o|ó)r|alloc|abort|out of|RangeError|too large|Cannot enlarge/i.test(this.estado.erroMotor||'');
   },
   nomeDoIdioma(cod){
     try{return new Intl.DisplayNames([Idiomas._tag||'en'],{type:'language'}).of(cod)||cod}catch(e){return cod}
@@ -5610,13 +5615,15 @@ class TextToSpeechController{
       const nome=escolha.lang?VozNatural.nomeDoIdioma(escolha.lang):'';
       const textos={
         'idioma':T('vn.aviso_idioma',{idioma:nome}),
+        'falha-memoria':T('vn.aviso_falha_memoria'),
         'idioma-desconhecido':T('vn.aviso_idioma_desconhecido'),
         'falha':T('vn.aviso_falha'),
         'lento':T('vn.aviso_lento'),
         'arquivo':T('vn.aviso_arquivo'),
         'navegador':T('vn.aviso_navegador')
       };
-      const txt=textos[escolha.motivo]||'';
+      const motivo=escolha.motivo==='falha'&&VozNatural.semMemoria()?'falha-memoria':escolha.motivo;
+      const txt=textos[motivo]||'';
       aviso.textContent=txt;aviso.hidden=!txt;
     }
   }
@@ -5659,7 +5666,7 @@ class TextToSpeechController{
         console.warn('[voz natural]',e);
         if(run!==this.runId)return;
         this.naturalFalhou=Date.now();this.motor='sistema';
-        Utils.toast(T('vn.nao_carregou_usando_sistema'),'alert-triangle');
+        Utils.toast(VozNatural.semMemoria()?T('vn.sem_memoria_usando_sistema'):T('vn.nao_carregou_usando_sistema'),'alert-triangle');
       }
       this.gerando=false;
       if(run!==this.runId||!this.playing)return;
@@ -11503,7 +11510,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 33';
+const BUILD='2026-09-20 · 34';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
