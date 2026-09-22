@@ -5102,8 +5102,20 @@ const VozNatural={
   },
 
   /* ---------- motor ------------------------------------------- */
-  _trab:null,_iniciando:null,_seq:0,_pendentes:new Map(),
-  motor(){
+  _trab:null,_iniciando:null,_seq:0,_pendentes:new Map(),_modoSeguro:false,
+  /* Primeira tentativa com tudo ligado; se falhar, uma segunda com o
+     mínimo (um núcleo, sem placa de vídeo). Aparelhos mais simples às
+     vezes tropeçam justamente no que é opcional. */
+  async motor(){
+    try{return await this._motor()}
+    catch(e){
+      if(this._modoSeguro)throw e;
+      this._modoSeguro=true;
+      console.warn('[voz natural] tentando em modo seguro:',e&&e.message||e);
+      return await this._motor();
+    }
+  },
+  _motor(){
     if(this._iniciando)return this._iniciando;
     clearTimeout(this._tSoltar);
     this._iniciando=new Promise((ok,falha)=>{
@@ -5129,8 +5141,8 @@ const VozNatural={
         this._falharPendentes(erro);
       };
       const nucleos=navigator.hardwareConcurrency||2;
-      const threads=self.crossOriginIsolated?Math.max(1,Math.min(4,nucleos-1)):1;
-      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:true,threads});
+      const threads=(self.crossOriginIsolated&&!this._modoSeguro)?Math.max(1,Math.min(4,nucleos-1)):1;
+      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:!this._modoSeguro,threads});
     });
     return this._iniciando;
   },
@@ -5165,6 +5177,7 @@ const VozNatural={
   },
   soltar(){
     clearTimeout(this._tSoltar);
+    this._modoSeguro=false;
     if(this._trab){try{this._trab.terminate()}catch(e){}}
     this._falharPendentes(new Error('encerrado'));
   },
@@ -5460,6 +5473,7 @@ const VozNaturalUI={
       await a.play();
     }catch(e){
       console.warn('[voz natural]',e);
+      VozNatural.estado.erroMotor=String(e&&e.message||e);
       this.pararAmostra();
       Utils.toast(T('vn.amostra_falhou'),'alert-triangle');
     }finally{
@@ -5625,6 +5639,21 @@ class TextToSpeechController{
       const motivo=escolha.motivo==='falha'&&VozNatural.semMemoria()?'falha-memoria':escolha.motivo;
       const txt=textos[motivo]||'';
       aviso.textContent=txt;aviso.hidden=!txt;
+      /* Quando a voz não carrega, a mensagem crua do motor é o que
+         permite descobrir o porquê num aparelho que não está aqui. */
+      if(txt&&(escolha.motivo==='falha')&&VozNatural.estado.erroMotor){
+        const det=document.createElement('div');
+        det.className='vn-detalhe';
+        det.innerHTML=`<code>${Utils.esc(String(VozNatural.estado.erroMotor).slice(0,400))}</code>`;
+        const botao=document.createElement('button');
+        botao.type='button';botao.className='vn-link';botao.textContent=T('vn.copiar_detalhe');
+        botao.onclick=async()=>{
+          try{await navigator.clipboard.writeText(String(VozNatural.estado.erroMotor));Utils.toast(T('vn.copiado'),'check-circle')}
+          catch(e){Utils.toast(String(VozNatural.estado.erroMotor),'info')}
+        };
+        det.appendChild(botao);
+        aviso.appendChild(det);
+      }
     }
   }
   async openPanel(){
@@ -11510,7 +11539,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 34';
+const BUILD='2026-09-20 · 35';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

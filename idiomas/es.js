@@ -1007,6 +1007,8 @@ Idiomas.registrar('es', {
     "lento_usando_sistema": "La voz natural va demasiado lenta en este dispositivo. Sigue la lectura con la voz del sistema.",
     "aviso_lento": "Este dispositivo no consigue generar la voz natural a la velocidad de la lectura, así que la voz del sistema ha tomado el relevo por ahora.",
     "sem_memoria_usando_sistema": "La voz natural no cupo en la memoria de este dispositivo. Se lee con la voz del sistema.",
-    "aviso_falha_memoria": "No hubo memoria suficiente para la voz natural en este dispositivo. Cerrar otras apps y volver a intentarlo suele funcionar; mientras tanto, la lectura usa la voz del sistema."
+    "aviso_falha_memoria": "No hubo memoria suficiente para la voz natural en este dispositivo. Cerrar otras apps y volver a intentarlo suele funcionar; mientras tanto, la lectura usa la voz del sistema.",
+    "copiar_detalhe": "Copiar detalle",
+    "copiado": "Detalle copiado."
   }
 });

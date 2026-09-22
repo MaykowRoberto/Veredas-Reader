@@ -1005,6 +1005,8 @@ Idiomas.registrar('zh', {
     "lento_usando_sistema": "自然声音在此设备上太慢，将继续使用系统声音朗读。",
     "aviso_lento": "此设备无法以朗读的速度生成自然声音，因此暂时改用系统声音。",
     "sem_memoria_usando_sistema": "此设备的内存放不下自然声音，将使用系统声音朗读。",
-    "aviso_falha_memoria": "此设备没有足够内存运行自然声音。关闭其他应用后重试通常可以解决；在此之前将使用系统声音朗读。"
+    "aviso_falha_memoria": "此设备没有足够内存运行自然声音。关闭其他应用后重试通常可以解决；在此之前将使用系统声音朗读。",
+    "copiar_detalhe": "复制详情",
+    "copiado": "详情已复制。"
   }
 });
