@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** September 21, 2026
+**Last updated:** September 22, 2026
 
 > This English version is provided for convenience. In case of any discrepancy, the **Portuguese (Brazil) version prevails**.
 
@@ -19,6 +19,7 @@ Data subject contact channel: **torres.software.app@gmail.com**
 - Reading works **without internet**.
 - In the **free version**, Google AdMob shows ads and collects some technical device data, as described in section 5.
 - For the **subscription**, payment is handled by the app store. We never see your card details.
+- The **natural voice** is optional. If you decide to use it, the voice model is downloaded once from Hugging Face; after that it works offline and **the text being read never leaves your device**.
 
 ## 3. What we do NOT collect (privacy by design)
 
@@ -35,7 +36,13 @@ All of this is saved in the App's local storage, inside your device, and only yo
 
 4.1. The App only accesses the files and folders **you choose**, at the moment you choose them. The on-device book search only examines the folder you point to, and only when you ask. There is no automatic or background scanning.
 
-4.2. **Read aloud.** This feature uses your device's operating system speech engine. Depending on the manufacturer and the voice selected, some speech engines may process the text online, under the system provider's policies. If you prefer, choose a voice installed on the device.
+4.2. **Read aloud with the system voice.** This mode uses your device's operating system speech engine. Depending on the manufacturer and the voice selected, some speech engines may process the text online, under the system provider's policies. If you prefer, choose a voice installed on the device or use the natural voice.
+
+4.3. **Read aloud with the natural voice (optional).** The natural voice turns text into audio **entirely on your device**, using the Supertonic 3 voice model by Supertone Inc. The text being read and the generated audio **are not sent** to Torres Software or to any third party.
+
+To use the natural voice, you need to download the model (about 380 MB) once, and only if you want to, by tapping **Download natural voice**. The download comes directly from Supertone's public repository hosted on **Hugging Face** (huggingface.co). As with any website visit, Hugging Face receives technical connection data, such as your IP address, browser or device type and the date and time of access, and processes it as an independent controller under its own privacy policy: [huggingface.co/privacy](https://huggingface.co/privacy). **No data about you or your reading is sent in this download**, and Torres Software does not receive this technical data.
+
+The model is kept in the App's local storage, separate from your reading data and outside the backup file. You can delete it at any time with the **Remove** option, under **Listen** or **Settings**. To pick the right pronunciation language, the App analyzes excerpts of the text on the device itself; this analysis is neither stored nor sent anywhere.
 
 ## 5. Ads in the free version (Google AdMob)
 
@@ -65,11 +72,11 @@ App stores may automatically collect aggregated crash and performance reports (f
 
 ## 8. Data sharing
 
-Torres Software **does not sell, rent or share** personal data. The only data flows with third parties are those described in sections 5, 6 and 7 (Google AdMob, the app store and the store's crash diagnostics). Data may also be provided to authorities when required by law or court order.
+Torres Software **does not sell, rent or share** personal data. The only data flows with third parties are those described in sections 4.3, 5, 6 and 7 (the optional natural voice download from Hugging Face, Google AdMob, the app store and the store's crash diagnostics). Data may also be provided to authorities when required by law or court order.
 
 ## 9. International transfers
 
-Google and the app stores may process data on servers outside Brazil. These transfers take place under the cases provided in article 33 of the LGPD and with the safeguards adopted by those providers.
+Google, the app stores and Hugging Face (for the optional natural voice download) may process data on servers outside Brazil. These transfers take place under the cases provided in article 33 of the LGPD and with the safeguards adopted by those providers.
 
 ## 10. Backup
 
@@ -86,6 +93,8 @@ Since your reading data stays on the device itself, its main protection is your 
 12.1. **Reading data:** stays on your device for as long as you want. You can delete books and notes in the App itself, and full removal happens when you **clear the App's data** or **uninstall it**.
 
 12.2. **AdMob data:** kept by Google for the periods set out in Google's privacy policy.
+
+12.3. **Natural voice model:** stays on your device until you remove it, clear the App's data or uninstall it. Technical data from the download is kept by Hugging Face for the periods set out in its policy.
 
 ## 13. Your rights (article 18 of the LGPD)
 

@@ -2321,3 +2321,56 @@ html[dir="rtl"] .select{
 .onb-points .aviso-importante{margin-top:0}
 /* O texto que vem depois do título em negrito, nos avisos amarelos. */
 .conversion-warning strong+div{font-size:12px;line-height:1.5;color:var(--muted)}
+
+/* ============================================================
+   VOZ NATURAL
+   ------------------------------------------------------------
+   Cartão do painel "Ouvir leitura" e de Configurações. Usa só as
+   variáveis do tema, então segue claro, sépia, escuro e oceano.
+   ============================================================ */
+.vn-motor{margin-bottom:12px}
+.vn-motor button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.vn-motor button svg{width:15px;height:15px}
+.vn-cartao{background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.vn-topo{display:flex;gap:12px;align-items:center}
+.vn-topo strong{display:block;font-size:14px}
+.vn-topo small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+.vn-selo{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--accent-solid);color:var(--on-accent)}
+.vn-selo svg{width:20px;height:20px}
+.vn-fatos{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.vn-fatos li{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45}
+.vn-fatos svg{flex:none;width:16px;height:16px;margin-top:1px;color:var(--accent)}
+.vn-largo{width:100%;justify-content:center;white-space:normal;text-align:center;min-height:46px}
+.vn-botoes{display:flex;gap:8px;flex-wrap:wrap}
+.vn-botoes .soft-btn{flex:1 1 140px;justify-content:center}
+.vn-texto{font-size:12.5px;line-height:1.5;margin:0}
+.vn-erro{color:var(--aviso-forte,#b42336);font-weight:600}
+.vn-barra{height:8px;border-radius:99px;background:var(--border);overflow:hidden}
+.vn-barra span{display:block;height:100%;border-radius:inherit;background:var(--accent-solid);transition:width .25s linear}
+.vn-barra.ativa span{background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);background-size:200% 100%;animation:vn-brilho 1.4s linear infinite}
+@keyframes vn-brilho{from{background-position:200% 0}to{background-position:-200% 0}}
+.vn-numeros{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:-6px}
+.vn-vozes{display:grid;gap:8px}
+.vn-voz{display:flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:4px 4px 4px 0;transition:border-color .15s,box-shadow .15s}
+.vn-voz.ativa{border-color:var(--accent-solid);box-shadow:var(--shadow-sm)}
+.vn-voz-escolha{flex:1;display:flex;align-items:center;gap:11px;text-align:start;padding:8px 4px 8px 12px;min-height:var(--touch);background:none;border:0;color:var(--text)}
+.vn-voz-escolha strong{display:block;font-size:13.5px}
+.vn-voz-escolha small{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.vn-marca{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid var(--muted);display:grid;place-items:center}
+.vn-voz.ativa .vn-marca{border-color:var(--accent-solid)}
+.vn-voz.ativa .vn-marca::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent-solid)}
+.vn-ouvir{flex:none;width:var(--touch);height:var(--touch);border-radius:12px;color:var(--accent)}
+.vn-gira{animation:vn-gira 1s linear infinite}
+@keyframes vn-gira{to{transform:rotate(360deg)}}
+.vn-sub{font-size:11.5px;font-weight:800;margin:2px 0 -4px;color:var(--muted);text-transform:none}
+.vn-qualidade{grid-template-columns:repeat(3,1fr)}
+.vn-cartao .setting-hint{margin-top:-4px}
+.vn-rodape{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px}
+.vn-rodape span{display:inline-flex;align-items:center;gap:6px}
+.vn-rodape svg{width:14px;height:14px}
+.vn-link{background:none;border:0;color:var(--aviso-forte,#b42336);font-weight:700;font-size:12px;padding:8px 4px;min-height:36px}
+.vn-aviso p{font-size:12.5px;line-height:1.5;margin:0}
+.tts-motor-aviso{font-size:12px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--surface-2);border-inline-start:3px solid var(--accent-solid)}
+#tts-sistema-bloco{margin-top:12px}
+.vn-idioma-rotulo{margin-top:14px;display:block}
+@media (prefers-reduced-motion:reduce){.vn-barra.ativa span,.vn-gira{animation:none}}

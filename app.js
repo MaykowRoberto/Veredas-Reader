@@ -644,7 +644,7 @@ class DBManager{
 const AppDefaults={settings:{
   theme:'light',fontFamily:"'Literata',Georgia,serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
-  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',pageTurn:'curl',
+  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',ttsMotor:'natural',ttsVozNatural:'feminina',ttsQualidade:'auto',ttsIdiomaLivro:{},pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
   comicFit:'page',comicSpread:true,comicRtl:false,
   lastBackupAt:0,backupSnoozeAt:0,backupLembretes:true,
@@ -4887,10 +4887,595 @@ AudioPlayer.SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAA
 /* ============================================================
    READER ENGINE
    ============================================================ */
+/* ============================================================
+   VOZ NATURAL (Supertonic 3)
+   ------------------------------------------------------------
+   A voz do sistema de muitos aparelhos é robótica. A voz natural
+   é gerada por um modelo neural que roda no próprio aparelho:
+
+     • o modelo (≈ 381 MB) NÃO vem com o aplicativo — a pessoa
+       decide baixar, uma única vez, direto do repositório público
+       do Supertonic no Hugging Face, numa revisão fixa;
+     • os arquivos ficam no IndexedDB, num banco separado
+       ("veredas-voz"), fora do backup e fora dos dados de leitura;
+     • depois de baixado, nada sai do aparelho: o texto vira áudio
+       num Web Worker (vendor/supertonic/voz-natural-worker.js);
+     • o download aceita pausa e continua de onde parou, em pedaços
+       de 8 MB, porque 381 MB de uma vez no celular é pedir para
+       cair no meio;
+     • idiomas que o modelo não fala (tailandês, chinês, filipino…)
+       continuam com a voz do sistema, sem a pessoa precisar fazer
+       nada.
+
+   Licenças: código do Supertonic sob MIT; pesos do modelo sob a
+   BigScience OpenRAIL-M, cujas restrições de uso estão repetidas
+   nos Termos de Uso (exigência do item 4.a da licença).
+   ============================================================ */
+const VozNatural={
+  REVISAO:'aafc6e32416a594460b32413efc49d7fe4ce6d46',
+  BASE:'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/',
+  ORT:'vendor/onnxruntime-web/',
+  TRABALHADOR:'vendor/supertonic/voz-natural-worker.js',
+  BANCO:'veredas-voz',
+  PEDACO:8*1024*1024,
+  ARQUIVOS:[
+    {nome:'onnx/tts.json',bytes:8253},
+    {nome:'onnx/unicode_indexer.json',bytes:277676},
+    {nome:'voice_styles/F5.json',bytes:291479},
+    {nome:'voice_styles/M5.json',bytes:291469},
+    {nome:'onnx/duration_predictor.onnx',bytes:3700147},
+    {nome:'onnx/text_encoder.onnx',bytes:36416150},
+    {nome:'onnx/vocoder.onnx',bytes:101424195},
+    {nome:'onnx/vector_estimator.onnx',bytes:256534781}
+  ],
+  /* Duas vozes, escolhidas entre as dez do modelo por serem as
+     indicadas para narração longa: F5 (feminina, suave e calma) e
+     M5 (masculina, calorosa e serena). Cada estilo tem 290 KB. */
+  VOZES:{feminina:'F5',masculina:'M5'},
+  IDIOMAS:new Set(['en','ko','ja','ar','bg','cs','da','de','el','es','et','fi','fr','hi','hr','hu','id','it','lt','lv','nl','pl','pt','ro','ru','sk','sl','sv','tr','uk','vi']),
+
+  estado:{fase:'desconhecido',baixados:0,erro:'',backend:''},
+  ouvintes:new Set(),
+  get total(){return this.ARQUIVOS.reduce((s,a)=>s+a.bytes,0)},
+  on(fn){this.ouvintes.add(fn);return()=>this.ouvintes.delete(fn)},
+  emitir(){this.ouvintes.forEach(fn=>{try{fn(this.estado)}catch(e){console.warn(e)}})},
+  _emitirDepois(){
+    if(this._tEmit)return;
+    this._tEmit=setTimeout(()=>{this._tEmit=0;this.emitir()},250);
+  },
+
+  /* O modelo precisa de Web Worker, WebAssembly e IndexedDB, e de
+     um endereço de verdade: aberto como arquivo (file://) o
+     navegador não deixa criar o trabalhador. */
+  motivoAmbiente(){
+    if(location.protocol==='file:')return 'arquivo';
+    if(typeof Worker==='undefined'||typeof WebAssembly==='undefined'||!('indexedDB' in window))return 'navegador';
+    return '';
+  },
+  ambienteOk(){return !this.motivoAmbiente()},
+
+  /* ---------- banco ------------------------------------------- */
+  abrir(){
+    return new Promise((ok,falha)=>{
+      const r=indexedDB.open(this.BANCO,1);
+      r.onupgradeneeded=()=>{
+        const db=r.result;
+        if(!db.objectStoreNames.contains('pedacos'))db.createObjectStore('pedacos');
+        if(!db.objectStoreNames.contains('arquivos'))db.createObjectStore('arquivos',{keyPath:'nome'});
+      };
+      r.onsuccess=()=>ok(r.result);r.onerror=()=>falha(r.error);
+      r.onblocked=()=>falha(new Error('bloqueado'));
+    });
+  },
+  _req(r){return new Promise((ok,falha)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>falha(r.error)})},
+  _tx(tx){return new Promise((ok,falha)=>{tx.oncomplete=()=>ok();tx.onerror=()=>falha(tx.error);tx.onabort=()=>falha(tx.error||new Error('abortado'))})},
+
+  async verificar(){
+    if(!this.ambienteOk()){this.estado.fase='indisponivel';this.emitir();return this.estado}
+    if(this.estado.fase==='baixando')return this.estado;
+    try{
+      const db=await this.abrir();
+      const infos=await this._req(db.transaction('arquivos').objectStore('arquivos').getAll());
+      db.close();
+      const mapa=new Map(infos.map(i=>[i.nome,i]));
+      let baixados=0,completos=0;
+      this.ARQUIVOS.forEach(a=>{
+        const i=mapa.get(a.nome);if(!i)return;
+        baixados+=Math.min(i.bytes||0,a.bytes);
+        if(i.completo&&i.bytes===a.bytes)completos++;
+      });
+      this.estado.baixados=baixados;
+      this.estado.fase=completos===this.ARQUIVOS.length?'pronto':baixados>0?'parcial':'ausente';
+    }catch(e){console.warn(e);this.estado.fase='ausente';this.estado.baixados=0}
+    this.emitir();return this.estado;
+  },
+
+  /* ---------- download ---------------------------------------- */
+  async baixar(){
+    if(this.estado.fase==='baixando'||!this.ambienteOk())return;
+    const ctl=new AbortController();this._ctl=ctl;
+    this.estado.fase='baixando';this.estado.erro='';this.emitir();
+    let db=null;
+    try{
+      try{await navigator.storage?.persist?.()}catch(e){}
+      try{
+        const est=await navigator.storage?.estimate?.();
+        const falta=this.total-this.estado.baixados;
+        if(est&&est.quota&&est.quota-est.usage<falta*1.05){const e=new Error('espaco');e.codigo='espaco';throw e}
+      }catch(e){if(e.codigo)throw e}
+      db=await this.abrir();
+      for(const arq of this.ARQUIVOS){
+        const loja=db.transaction('arquivos').objectStore('arquivos');
+        let info=await this._req(loja.get(arq.nome));
+        if(info&&info.completo&&info.bytes===arq.bytes)continue;
+        if(!info)info={nome:arq.nome,bytes:0,pedacos:0,completo:false};
+        await this._baixarArquivo(db,arq,info,ctl.signal);
+      }
+      db.close();db=null;
+      this.estado.fase='verificando';
+      await this.verificar();
+      if(this.estado.fase==='pronto'){
+        /* O motor (ONNX Runtime, 28 MB) mora no próprio aplicativo;
+           guardá-lo agora garante a voz sem internet já na primeira
+           leitura. */
+        this.guardarMotorNoCache();
+      }
+    }catch(e){
+      try{db?.close()}catch(_){}
+      const abortado=ctl.signal.aborted||e?.name==='AbortError';
+      this.estado.fase='parcial';
+      if(!abortado){
+        this.estado.erro=e?.codigo==='espaco'||e?.name==='QuotaExceededError'?'espaco':!navigator.onLine?'offline':'rede';
+        console.warn('[voz natural]',e);
+      }
+      await this.verificar().catch(()=>{});
+      if(!abortado&&this.estado.fase!=='pronto')this.estado.fase='erro';
+      this.emitir();
+    }finally{if(this._ctl===ctl)this._ctl=null}
+  },
+  pausar(){try{this._ctl?.abort()}catch(e){}},
+  async _baixarArquivo(db,arq,info,sinal){
+    const url=this.BASE+this.REVISAO+'/'+arq.nome;
+    const cab={};
+    if(info.bytes>0)cab.Range=`bytes=${info.bytes}-`;
+    const r=await fetch(url,{headers:cab,signal:sinal,cache:'no-store',credentials:'omit'});
+    if(info.bytes>0&&r.status===200){
+      /* O servidor ignorou o pedido de continuação: recomeça este
+         arquivo do zero, sem misturar pedaços. */
+      await this._apagarArquivo(db,arq.nome,info.pedacos);
+      this.estado.baixados-=info.bytes;
+      info={nome:arq.nome,bytes:0,pedacos:0,completo:false};
+    }else if(!r.ok&&r.status!==206){const e=new Error('http-'+r.status);throw e}
+    const leitor=r.body.getReader();
+    let partes=[],tam=0;
+    const gravar=async()=>{
+      const blob=new Blob(partes);partes=[];tam=0;
+      const novo={...info,bytes:info.bytes+blob.size,pedacos:info.pedacos+1};
+      const tx=db.transaction(['pedacos','arquivos'],'readwrite');
+      tx.objectStore('pedacos').put(blob,arq.nome+'#'+info.pedacos);
+      tx.objectStore('arquivos').put(novo);
+      await this._tx(tx);
+      info=novo;
+    };
+    while(true){
+      const {done,value}=await leitor.read();
+      if(done)break;
+      partes.push(value);tam+=value.length;
+      this.estado.baixados+=value.length;this._emitirDepois();
+      if(tam>=this.PEDACO)await gravar();
+    }
+    if(tam)await gravar();
+    if(info.bytes!==arq.bytes){
+      await this._apagarArquivo(db,arq.nome,info.pedacos);
+      throw new Error('tamanho-inesperado:'+arq.nome);
+    }
+    info.completo=true;
+    const tx=db.transaction('arquivos','readwrite');tx.objectStore('arquivos').put(info);await this._tx(tx);
+  },
+  async _apagarArquivo(db,nome,n){
+    const tx=db.transaction(['pedacos','arquivos'],'readwrite');
+    for(let i=0;i<Math.max(n||0,0)+2;i++)tx.objectStore('pedacos').delete(nome+'#'+i);
+    tx.objectStore('arquivos').delete(nome);
+    await this._tx(tx);
+  },
+  async remover(){
+    this.pausar();this.soltar();
+    await new Promise(ok=>{
+      const r=indexedDB.deleteDatabase(this.BANCO);
+      r.onsuccess=r.onerror=r.onblocked=()=>ok();
+    });
+    try{
+      if('caches' in window){
+        const ch=await caches.keys();
+        await Promise.all(ch.filter(k=>k.startsWith('veredas-motor-')).map(k=>caches.delete(k)));
+      }
+    }catch(e){}
+    this.estado={fase:'ausente',baixados:0,erro:'',backend:''};this.emitir();
+  },
+  guardarMotorNoCache(){
+    try{
+      const base=new URL(this.ORT,location.href).href;
+      const urls=['ort.min.js','ort-wasm-simd-threaded.jsep.js','ort-wasm-simd-threaded.jsep.wasm'].map(n=>base+n);
+      urls.push(new URL(this.TRABALHADOR,location.href).href);
+      navigator.serviceWorker?.controller?.postMessage({tipo:'guardar-motor-de-voz',urls});
+    }catch(e){}
+  },
+
+  /* ---------- motor ------------------------------------------- */
+  _trab:null,_iniciando:null,_seq:0,_pendentes:new Map(),
+  motor(){
+    if(this._iniciando)return this._iniciando;
+    clearTimeout(this._tSoltar);
+    this._iniciando=new Promise((ok,falha)=>{
+      let w;
+      try{w=new Worker(this.TRABALHADOR)}catch(e){falha(e);return}
+      this._trab=w;
+      const fim=(erro,backend)=>{
+        w.removeEventListener('message',primeira);
+        if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;falha(erro)}
+        else{this.estado.backend=backend;ok(backend)}
+      };
+      const primeira=e=>{
+        const m=e.data||{};
+        if(m.tipo==='pronto')fim(null,m.backend);
+        else if(m.tipo==='erro'&&m.pedido==='iniciar')fim(new Error(m.mensagem));
+      };
+      w.addEventListener('message',primeira);
+      w.addEventListener('message',e=>this._receber(e.data||{}));
+      w.onerror=ev=>{
+        ev.preventDefault?.();
+        const erro=new Error('trabalhador:'+(ev.message||'falhou'));
+        fim(erro);
+        this._falharPendentes(erro);
+      };
+      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,preferirGpu:true});
+    });
+    return this._iniciando;
+  },
+  _receber(m){
+    if(m.id===undefined||!this._pendentes.has(m.id))return;
+    const p=this._pendentes.get(m.id);this._pendentes.delete(m.id);
+    if(m.tipo==='erro')p.falha(new Error(m.mensagem));
+    else p.ok(m);
+  },
+  _falharPendentes(erro){
+    this._pendentes.forEach(p=>p.falha(erro));this._pendentes.clear();
+    this._iniciando=null;this._trab=null;
+  },
+  async sintetizar(texto,lang,voz,{passos=6,velocidade=1.05}={}){
+    await this.motor();
+    const id=++this._seq;
+    const w=this._trab;
+    return new Promise((ok,falha)=>{
+      this._pendentes.set(id,{ok,falha});
+      w.postMessage({tipo:'sintetizar',id,texto,lang,voz:this.VOZES[voz]||voz,passos,velocidade});
+    });
+  },
+  cancelarTudo(){
+    if(this._trab)this._trab.postMessage({tipo:'cancelar',ate:this._seq});
+  },
+  /* A voz ocupa perto de 1 GB de memória enquanto está carregada.
+     Parada a leitura, o trabalhador é encerrado depois de um tempo,
+     para o celular não ficar pesado à toa. */
+  soltarDepois(ms=120000){
+    clearTimeout(this._tSoltar);
+    this._tSoltar=setTimeout(()=>this.soltar(),ms);
+  },
+  soltar(){
+    clearTimeout(this._tSoltar);
+    if(this._trab){try{this._trab.terminate()}catch(e){}}
+    this._falharPendentes(new Error('encerrado'));
+  },
+
+  /* ---------- amostra ----------------------------------------- */
+  amostraTexto(){
+    const base=(Idiomas._tag||'en').split('-')[0];
+    const lang=this.IDIOMAS.has(base)?base:'en';
+    return {lang,texto:lang===base?T('vn.amostra'):'Hello! This is how your books will sound with the natural voice.'};
+  },
+
+  /* ---------- idioma do texto --------------------------------- */
+  PALAVRAS:{
+    pt:'que não uma com para os mais mas como foi ele ela está também são você muito isso do da no na ao pelo seu sua já quando',
+    es:'que y el la los las un una por con no se es del al lo como pero más para está yo muy también cuando su sus fue ella',
+    en:'the and of to in is that it was he for with as his on be at by you not this but had her which they have from',
+    fr:'le la les des et un une du est que qui dans pour pas sur il elle au avec ce ne se vous nous mais sont était aux',
+    de:'der die das und ist nicht ein eine zu den mit sich auf für von dem des im er sie es ich auch wie aber war',
+    it:'il di che la un una per non è del della con sono gli le si lo ma come nel alla questo anche più era ho',
+    nl:'de het een en van ik te dat die in is niet zijn op aan met voor er maar om ook als dan wat hij',
+    pl:'i w nie się na że z to do jest jak co ale po tak za od już był jego mnie jej ich przez',
+    ro:'și în de la nu cu pe că o un se este mai din care pentru fost sunt ce lui îi',
+    sv:'och att det som en på är av för med till den har inte om ett han men var jag hon',
+    da:'og i at det er en til på de med for af den ikke har som jeg han var et men hun',
+    fi:'ja on ei että se oli hän mutta kun niin kuin ovat myös tämä mitä minä sen hänen',
+    cs:'a se na je že v to s z do jsem jak ale by byl jsou také není nebo jeho',
+    sk:'a sa na je že v to s z do som ako ale by bol sú aj nie alebo jeho',
+    hu:'a az és hogy nem egy is van meg de csak volt már még mint ez azt',
+    tr:'ve bir bu da de için ile ne çok daha gibi ama olarak var ben sen onun',
+    id:'dan yang di itu dengan untuk tidak ini dari dalam akan pada juga saya ke karena',
+    vi:'và của là không có được những một người trong cho với này đã',
+    hr:'je i u da se na za su od ali što kao bi sam nije',
+    sl:'je in da se na za so ki pa tudi ne ali sem bil',
+    lt:'ir kad yra su į iš ar bet tai nuo buvo jis',
+    lv:'un ir ka ar uz no par kā bet tas bija viņš',
+    et:'ja on ei et see kui oli ta mis aga seda',
+    fil:'ang ng mga sa na at ay si ko ako hindi siya ito kanyang',
+    ca:'i el la els les amb per és que no del als una però',
+    eo:'la kaj de en estas ne mi al ke'
+  },
+  _palavras:null,
+  detectarIdioma(texto){
+    const t=String(texto||'').slice(0,6000);
+    if(!t.trim())return null;
+    const conta=re=>(t.match(re)||[]).length;
+    const letras=conta(/\p{L}/gu)||1;
+    const sc={
+      ko:conta(/[가-힯ᄀ-ᇿ㄰-㆏]/g),
+      kana:conta(/[぀-ヿ]/g),
+      han:conta(/[一-鿿㐀-䶿]/g),
+      ar:conta(/[؀-ۿݐ-ݿ]/g),
+      hi:conta(/[ऀ-ॿ]/g),
+      th:conta(/[฀-๿]/g),
+      el:conta(/[Ͱ-Ͽἀ-῿]/g),
+      cir:conta(/[Ѐ-ӿ]/g),
+      he:conta(/[֐-׿]/g)
+    };
+    const lim=letras*0.3;
+    if(sc.ko>lim)return 'ko';
+    if(sc.kana+sc.han>lim)return sc.kana>=(sc.kana+sc.han)*0.08?'ja':'zh';
+    if(sc.ar>lim)return /[پچژگ]/.test(t)&&conta(/[پچژگ]/g)>sc.ar*0.01?'fa':'ar';
+    if(sc.hi>lim)return 'hi';
+    if(sc.th>lim)return 'th';
+    if(sc.el>lim)return 'el';
+    if(sc.he>lim)return 'he';
+    if(sc.cir>lim){
+      if(conta(/[іїєґІЇЄҐ]/g)>sc.cir*0.004)return 'uk';
+      if(!/[ыэЫЭ]/.test(t)&&conta(/[ъЪ]/g)>sc.cir*0.004)return 'bg';
+      return 'ru';
+    }
+    if(!this._palavras){
+      this._palavras={};
+      Object.entries(this.PALAVRAS).forEach(([l,s])=>this._palavras[l]=new Set(s.split(' ')));
+    }
+    const tokens=t.toLowerCase().match(/[\p{L}']+/gu)||[];
+    if(tokens.length<3)return null;
+    const pontos={};
+    Object.keys(this._palavras).forEach(l=>pontos[l]=0);
+    tokens.slice(0,1200).forEach(w=>{for(const l in this._palavras)if(this._palavras[l].has(w))pontos[l]++});
+    /* Pistas de grafia que as palavras curtas não dão. */
+    const bonus=(l,re,peso)=>{pontos[l]+=conta(re)*peso};
+    bonus('pt',/[ãõ]|ção\b|ções\b/gi,1.5);bonus('es',/[ñ¿¡]|ción\b/gi,1.5);
+    bonus('fr',/[èêëœ]|\bj'|\bl'|\bd'|\bqu'/gi,0.6);bonus('de',/[ß]|\b\w+ung\b/gi,0.8);
+    bonus('pl',/[łśźżćń]/gi,1);bonus('cs',/[ěřů]/gi,1);bonus('sk',/[ľĺŕô]/gi,1);bonus('ro',/[șțăî]/gi,0.8);
+    bonus('hu',/[őű]/gi,1.5);bonus('tr',/[ğış]/gi,1);bonus('vi',/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹđ]/gi,1);
+    bonus('sv',/[å]/gi,0.4);bonus('da',/[æø]/gi,1);bonus('fi',/[äö]{1}\w*[äö]/gi,0.3);bonus('lv',/[āēīūķļņģ]/gi,1);bonus('lt',/[ąęėįųū]/gi,1);bonus('et',/[õ]/gi,0.3);
+    const ui=(Idiomas._tag||'').split('-')[0];if(pontos[ui]!==undefined)pontos[ui]*=1.08;
+    const ord=Object.entries(pontos).sort((a,b)=>b[1]-a[1]);
+    if(!ord[0]||ord[0][1]<Math.max(2,tokens.length*0.04))return null;
+    return ord[0][0];
+  },
+  nomeDoIdioma(cod){
+    try{return new Intl.DisplayNames([Idiomas._tag||'en'],{type:'language'}).of(cod)||cod}catch(e){return cod}
+  }
+};
+
+/* ============================================================
+   VOZ NATURAL — a tela
+   ------------------------------------------------------------
+   O mesmo bloco aparece em dois lugares: no painel "Ouvir leitura"
+   (onde a pessoa está quando quer ouvir) e em Configurações (onde
+   ela procura quando quer preparar tudo antes, no Wi-Fi de casa).
+   Cada lugar tem um <div data-vn-bloco>; este objeto desenha todos
+   e atende aos toques por delegação, então os dois ficam sempre
+   iguais.
+
+   Estados do cartão:
+     indisponível → explica por quê (arquivo local, navegador antigo)
+     ausente      → o que é, quanto ocupa, botão de baixar
+     baixando     → barra, MB e porcentagem, botão de pausar
+     parcial/erro → barra parada, continuar ou descartar
+     pronto       → duas vozes com amostra, qualidade, remover
+   ============================================================ */
+const VozNaturalUI={
+  aoMudar:null,
+  _ultimo:new WeakMap(),
+  _amostra:null,_amostraVoz:'',_gerandoAmostra:'',
+  mb(b){
+    const n=b/1048576;
+    try{return new Intl.NumberFormat(Idiomas._tag||'pt-BR',{maximumFractionDigits:n<10?1:0}).format(n)+' MB'}catch(e){return Math.round(n)+' MB'}
+  },
+  pct(b){
+    const p=Math.min(100,Math.floor(b/VozNatural.total*100));
+    try{return new Intl.NumberFormat(Idiomas._tag||'pt-BR',{style:'percent',maximumFractionDigits:0}).format(p/100)}catch(e){return p+'%'}
+  },
+  html(){
+    const s=App.state.settings;
+    const motor=s.ttsMotor==='sistema'?'sistema':'natural';
+    const est=VozNatural.estado;
+    const seg=`<div class="seg two vn-motor" role="radiogroup" aria-label="${Utils.esc(T('vn.quem_le'))}">
+      <button type="button" role="radio" aria-checked="${motor==='natural'}" class="${motor==='natural'?'active':''}" data-vn-motor="natural"><i data-lucide="sparkles"></i>${T('vn.natural')}</button>
+      <button type="button" role="radio" aria-checked="${motor==='sistema'}" class="${motor==='sistema'?'active':''}" data-vn-motor="sistema"><i data-lucide="smartphone"></i>${T('vn.do_sistema')}</button>
+    </div>`;
+    if(motor==='sistema'){
+      const nota=est.fase==='pronto'?T('vn.nota_sistema_com_natural'):T('vn.nota_sistema');
+      return seg+`<p class="setting-hint">${nota}</p>`;
+    }
+    const total=this.mb(VozNatural.total);
+    const topo=`<div class="vn-topo"><span class="vn-selo"><i data-lucide="audio-lines"></i></span><div><strong>${T('vn.voz_natural')}</strong><small>${T('vn.gerada_no_aparelho')}</small></div></div>`;
+    const barra=(b,ativo)=>`<div class="vn-barra${ativo?' ativa':''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(b/VozNatural.total*100)}" aria-label="${Utils.esc(T('vn.progresso_download'))}"><span style="width:${Math.min(100,b/VozNatural.total*100).toFixed(1)}%"></span></div>
+      <div class="vn-numeros"><span>${T('vn.x_de_y',{x:this.mb(b),y:total})}</span><span>${this.pct(b)}</span></div>`;
+    const motivo=VozNatural.motivoAmbiente();
+    if(motivo||est.fase==='indisponivel'){
+      return seg+`<div class="vn-cartao vn-aviso">${topo}<p>${motivo==='arquivo'?T('vn.aviso_arquivo'):T('vn.aviso_navegador')}</p></div>`;
+    }
+    if(est.fase==='desconhecido'||est.fase==='verificando'){
+      return seg+`<div class="vn-cartao">${topo}<p class="vn-texto">${T('vn.verificando')}</p></div>`;
+    }
+    if(est.fase==='ausente'){
+      return seg+`<div class="vn-cartao">${topo}
+        <ul class="vn-fatos">
+          <li><i data-lucide="download"></i><span>${T('vn.fato_download',{tamanho:total})}</span></li>
+          <li><i data-lucide="wifi"></i><span>${T('vn.fato_wifi')}</span></li>
+          <li><i data-lucide="shield-check"></i><span>${T('vn.fato_privacidade')}</span></li>
+          <li><i data-lucide="languages"></i><span>${T('vn.fato_idiomas')}</span></li>
+        </ul>
+        <button type="button" class="soft-btn primary vn-largo" data-vn-acao="baixar"><i data-lucide="download"></i>${T('vn.baixar_voz_natural',{tamanho:total})}</button>
+        <p class="setting-hint">${T('vn.licenca_curta')}</p>
+      </div>`;
+    }
+    if(est.fase==='baixando'){
+      return seg+`<div class="vn-cartao">${topo}${barra(est.baixados,true)}
+        <p class="setting-hint">${T('vn.pode_continuar_usando')}</p>
+        <button type="button" class="soft-btn vn-largo" data-vn-acao="pausar"><i data-lucide="pause"></i>${T('vn.pausar_download')}</button>
+      </div>`;
+    }
+    if(est.fase==='parcial'||est.fase==='erro'){
+      const erro=est.erro==='espaco'?T('vn.erro_espaco'):est.erro==='offline'?T('vn.erro_offline'):est.erro?T('vn.erro_rede'):T('vn.download_pausado');
+      return seg+`<div class="vn-cartao">${topo}${barra(est.baixados,false)}
+        <p class="vn-texto${est.erro?' vn-erro':''}">${erro}</p>
+        <div class="vn-botoes">
+          <button type="button" class="soft-btn primary" data-vn-acao="baixar"><i data-lucide="play"></i>${T('vn.continuar_download')}</button>
+          <button type="button" class="soft-btn" data-vn-acao="remover"><i data-lucide="trash-2"></i>${T('vn.descartar')}</button>
+        </div>
+      </div>`;
+    }
+    /* pronto */
+    const voz=s.ttsVozNatural==='masculina'?'masculina':'feminina';
+    const q=['auto','rapida','maxima'].includes(s.ttsQualidade)?s.ttsQualidade:'auto';
+    const opcao=(v,icone)=>{
+      const ativa=voz===v;
+      const gerando=this._gerandoAmostra===v;
+      const tocando=this._amostraVoz===v&&this._amostra&&!this._amostra.paused;
+      return `<div class="vn-voz${ativa?' ativa':''}">
+        <button type="button" class="vn-voz-escolha" role="radio" aria-checked="${ativa}" data-vn-voz="${v}">
+          <span class="vn-marca" aria-hidden="true"></span>
+          <span><strong>${T('vn.voz_'+v)}</strong><small>${T('vn.voz_'+v+'_desc')}</small></span>
+        </button>
+        <button type="button" class="icon-btn vn-ouvir" data-vn-amostra="${v}" aria-label="${Utils.esc(T(tocando?'vn.parar_amostra':'vn.ouvir_amostra_de',{voz:T('vn.voz_'+v)}))}" ${gerando?'aria-busy="true"':''}>
+          <i data-lucide="${gerando?'loader':tocando?'square':'play'}" class="${gerando?'vn-gira':''}"></i>
+        </button>
+      </div>`;
+    };
+    return seg+`<div class="vn-cartao vn-pronto">${topo}
+      <div class="vn-vozes" role="radiogroup" aria-label="${Utils.esc(T('vn.escolha_a_voz'))}">${opcao('feminina')}${opcao('masculina')}</div>
+      <h5 class="vn-sub">${T('vn.qualidade')}</h5>
+      <div class="seg vn-qualidade" role="radiogroup" aria-label="${Utils.esc(T('vn.qualidade'))}">
+        ${['auto','rapida','maxima'].map(x=>`<button type="button" role="radio" aria-checked="${q===x}" class="${q===x?'active':''}" data-vn-qualidade="${x}">${T('vn.q_'+x)}</button>`).join('')}
+      </div>
+      <p class="setting-hint">${T('vn.q_'+q+'_desc')}</p>
+      <div class="vn-rodape"><span><i data-lucide="hard-drive"></i>${T('vn.ocupa',{tamanho:total})}</span><button type="button" class="vn-link" data-vn-acao="remover">${T('vn.remover')}</button></div>
+    </div>`;
+  },
+  renderizarTodos(){
+    const blocos=document.querySelectorAll('[data-vn-bloco]');
+    if(!blocos.length)return;
+    const h=this.html();
+    blocos.forEach(el=>{
+      if(!el._vnLigado){el._vnLigado=true;el.addEventListener('click',e=>this.clique(e))}
+      if(this._ultimo.get(el)===h)return;
+      /* Durante o download só a barra muda: atualizar só ela evita
+         redesenhar o botão que a pessoa pode estar prestes a tocar. */
+      const barra=el.querySelector('.vn-barra.ativa');
+      if(barra&&VozNatural.estado.fase==='baixando'&&this._ultimo.get(el)?.includes('vn-barra ativa')){
+        const est=VozNatural.estado;
+        const p=Math.min(100,est.baixados/VozNatural.total*100);
+        barra.querySelector('span').style.width=p.toFixed(1)+'%';
+        barra.setAttribute('aria-valuenow',String(Math.floor(p)));
+        const nums=el.querySelector('.vn-numeros');
+        if(nums)nums.innerHTML=`<span>${T('vn.x_de_y',{x:this.mb(est.baixados),y:this.mb(VozNatural.total)})}</span><span>${this.pct(est.baixados)}</span>`;
+        this._ultimo.set(el,h);
+        return;
+      }
+      el.innerHTML=h;this._ultimo.set(el,h);
+      try{lucide.createIcons({root:el})}catch(e){}
+    });
+  },
+  async clique(e){
+    const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.vnMotor){
+      if(App.state.settings.ttsMotor===b.dataset.vnMotor||(!App.state.settings.ttsMotor&&b.dataset.vnMotor==='natural'))return;
+      await App.updateSetting('ttsMotor',b.dataset.vnMotor);
+      if(b.dataset.vnMotor==='natural')VozNatural.verificar().catch(()=>{});
+      this.renderizarTodos();this.aoMudar?.();return;
+    }
+    if(b.dataset.vnVoz){
+      if(App.state.settings.ttsVozNatural===b.dataset.vnVoz)return;
+      await App.updateSetting('ttsVozNatural',b.dataset.vnVoz);
+      this.renderizarTodos();this.aoMudar?.();return;
+    }
+    if(b.dataset.vnQualidade){
+      await App.updateSetting('ttsQualidade',b.dataset.vnQualidade);
+      this.renderizarTodos();this.aoMudar?.();return;
+    }
+    if(b.dataset.vnAmostra){this.tocarAmostra(b.dataset.vnAmostra);return}
+    const acao=b.dataset.vnAcao;
+    if(acao==='baixar'){
+      if(navigator.connection?.saveData||['cellular'].includes(navigator.connection?.type)){
+        const ok=await AppModal.confirm({title:T('vn.baixar_pelos_dados'),message:T('vn.baixar_pelos_dados_msg',{tamanho:this.mb(VozNatural.total-VozNatural.estado.baixados)}),confirmText:T('vn.baixar_agora'),confirmIcon:'download',icon:'wifi-off'});
+        if(!ok)return;
+      }
+      await VozNatural.baixar();
+      if(VozNatural.estado.fase==='pronto'){Utils.toast(T('vn.pronta'),'check-circle');this.aoMudar?.()}
+      else if(VozNatural.estado.fase==='erro')Utils.toast(T('vn.download_interrompido'),'alert-triangle');
+      return;
+    }
+    if(acao==='pausar'){VozNatural.pausar();return}
+    if(acao==='remover'){
+      const baixada=VozNatural.estado.fase==='pronto';
+      const ok=await AppModal.confirm({
+        title:baixada?T('vn.remover_titulo'):T('vn.descartar_titulo'),
+        message:baixada?T('vn.remover_msg',{tamanho:this.mb(VozNatural.total)}):T('vn.descartar_msg'),
+        confirmText:baixada?T('vn.remover'):T('vn.descartar'),confirmIcon:'trash-2',icon:'trash-2',danger:true
+      });
+      if(!ok)return;
+      this.pararAmostra();
+      App.reader?.tts?.stop();
+      await VozNatural.remover();
+      Utils.toast(T('vn.removida'),'check-circle');
+      this.aoMudar?.();
+    }
+  },
+  pararAmostra(){
+    if(this._amostra){try{this._amostra.pause()}catch(e){}URL.revokeObjectURL(this._amostra.src);this._amostra=null}
+    this._amostraVoz='';
+  },
+  async tocarAmostra(voz){
+    if(this._amostraVoz===voz&&this._amostra&&!this._amostra.paused){this.pararAmostra();this.renderizarTodos();return}
+    if(this._gerandoAmostra)return;
+    this.pararAmostra();
+    /* Quem está ouvindo o livro não pode ter duas vozes falando ao
+       mesmo tempo: a leitura pausa enquanto a amostra toca. */
+    const tts=App.reader?.tts;
+    if(tts?.playing&&!tts.paused)tts.toggle();
+    this._gerandoAmostra=voz;this.renderizarTodos();
+    try{
+      const {lang,texto}=VozNatural.amostraTexto();
+      const r=await VozNatural.sintetizar(texto,lang,voz,{passos:VozNatural.estado.backend==='webgpu'?8:6,velocidade:1.05});
+      if(r.tipo!=='audio')throw new Error(r.tipo);
+      const a=new Audio(URL.createObjectURL(new Blob([r.wav],{type:'audio/wav'})));
+      this._amostra=a;this._amostraVoz=voz;
+      a.onended=()=>{this.pararAmostra();this.renderizarTodos()};
+      await a.play();
+    }catch(e){
+      console.warn('[voz natural]',e);
+      this.pararAmostra();
+      Utils.toast(T('vn.amostra_falhou'),'alert-triangle');
+    }finally{
+      this._gerandoAmostra='';this.renderizarTodos();
+      if(!tts?.playing)VozNatural.soltarDepois();
+    }
+  }
+};
+VozNatural.on(()=>VozNaturalUI.renderizarTodos());
+
 class TextToSpeechController{
   constructor(reader){
     this.reader=reader;this.supported='speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
     this.playing=false;this.paused=false;this.pageIndex=0;this.segmentIndex=0;this.segments=[];this.runId=0;this.wakeLock=null;
+    /* Voz natural: fila de áudios já gerados (página:trecho → promessa),
+       trechos de cada página e o idioma detectado de cada livro. */
+    this.motor='sistema';this.audio=null;this.preparados=new Map();this.trechosPorPagina=new Map();
+    this.idiomaCache=new Map();this.naturalFalhou=false;this.gerando=false;this.lentidao=0;this.passosAuto=0;this.avisouLento=false;
     this.bind();
   }
   bind(){
@@ -4906,19 +5491,37 @@ class TextToSpeechController{
     });
     document.getElementById('tts-voice').onchange=async e=>{
       await App.updateSetting('ttsVoiceURI',e.target.value);
+      if(this.playing&&this.motor==='sistema'){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
+    };
+    const idioma=document.getElementById('tts-idioma');
+    if(idioma)idioma.onchange=async e=>{
+      const id=this.reader.currentBook?.id;if(!id)return;
+      const mapa={...(App.state.settings.ttsIdiomaLivro||{})};
+      if(e.target.value==='auto')delete mapa[id];else mapa[id]=e.target.value;
+      await App.updateSetting('ttsIdiomaLivro',mapa);
+      this.refreshPanel();
       if(this.playing){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
     };
+    /* Mudou a escolha da voz natural (motor, voz, qualidade)? Quem
+       está ouvindo recomeça do mesmo trecho com a escolha nova. */
+    VozNaturalUI.aoMudar=()=>{
+      this.naturalFalhou=false;this.passosAuto=0;this.lentidao=0;
+      this.refreshPanel();
+      if(this.playing){this.stop(false);this.start(this.pageIndex,this.segmentIndex)}
+    };
+    VozNatural.on(()=>{if(document.getElementById('panel-tts')?.classList.contains('visible'))this.refreshPanel()});
     if(this.supported){
       speechSynthesis.addEventListener?.('voiceschanged',()=>this.populateVoices());
-      window.addEventListener('pagehide',()=>this.stop());
     }
+    window.addEventListener('pagehide',()=>this.stop());
   }
   populateVoices(){
     const select=document.getElementById('tts-voice');if(!select||!this.supported)return;
     const chosen=App.state.settings.ttsVoiceURI||'';
+    const base=(this.idiomaAtual()||Idiomas._tag||'pt').split('-')[0].toLowerCase();
     const voices=speechSynthesis.getVoices().slice().sort((a,b)=>{
-      const aPt=/^pt/i.test(a.lang)?0:1,bPt=/^pt/i.test(b.lang)?0:1;
-      return aPt-bPt||a.name.localeCompare(b.name);
+      const aL=(a.lang||'').toLowerCase().startsWith(base)?0:1,bL=(b.lang||'').toLowerCase().startsWith(base)?0:1;
+      return aL-bL||a.name.localeCompare(b.name);
     });
     select.innerHTML=`<option value="">${T('ui.voz_padrao_do_sistema')}</option>`;
     voices.forEach(v=>{
@@ -4926,41 +5529,158 @@ class TextToSpeechController{
       if(v.voiceURI===chosen)option.selected=true;select.appendChild(option);
     });
   }
+
+  /* ---------- idioma e motor ---------------------------------- */
+  idiomaAtual(){
+    const id=this.reader.currentBook?.id;
+    const escolhido=(App.state.settings.ttsIdiomaLivro||{})[id];
+    if(escolhido)return escolhido;
+    return this.idiomaCache.get(id)||null;
+  }
+  async detectarIdiomaDoLivro(){
+    const book=this.reader.currentBook;if(!book)return null;
+    if(this.idiomaCache.has(book.id))return this.idiomaCache.get(book.id);
+    let amostra='';
+    const n=this.reader.pagesData?.length||0;
+    const inicio=Utils.clamp(this.reader.currentPageIndex||0,0,Math.max(0,n-1));
+    for(let i=inicio;i<n&&i<inicio+4&&amostra.length<5000;i++){
+      try{amostra+=' '+(await this.reader.getPageSpeechText(i)||'')}catch(e){}
+    }
+    if(amostra.trim().length<200&&inicio>0){
+      for(let i=0;i<n&&i<4&&amostra.length<5000;i++){try{amostra+=' '+(await this.reader.getPageSpeechText(i)||'')}catch(e){}}
+    }
+    const lang=VozNatural.detectarIdioma(amostra);
+    if(lang)this.idiomaCache.set(book.id,lang);
+    return lang;
+  }
+  /* Decide quem lê: a voz natural quando ela foi escolhida, está
+     baixada e fala o idioma do livro; senão a voz do sistema. O
+     motivo volta junto, para a tela explicar a troca. */
+  escolherMotor(){
+    const lang=this.idiomaAtual();
+    if(App.state.settings.ttsMotor==='sistema')return {motor:'sistema',lang,motivo:'escolha'};
+    const amb=VozNatural.motivoAmbiente();
+    if(amb)return {motor:'sistema',lang,motivo:amb};
+    if(VozNatural.estado.fase!=='pronto')return {motor:'sistema',lang,motivo:'nao-baixada'};
+    if(!lang)return {motor:'sistema',lang,motivo:'idioma-desconhecido'};
+    if(!VozNatural.IDIOMAS.has(lang.split('-')[0]))return {motor:'sistema',lang,motivo:'idioma'};
+    if(this.naturalFalhou)return {motor:'sistema',lang,motivo:'falha'};
+    return {motor:'natural',lang,motivo:''};
+  }
+
   refreshPanel(){
     const title=this.reader.currentBook?.title||T('ui.livro');
     document.getElementById('tts-book-title').textContent=title;
-    document.getElementById('tts-status').textContent=!this.supported?T('app.leitura_em_voz_alta_nao_disponivel_nes'):this.paused?T('app.em_pausa'):this.playing?T('app.lendo_pagina_v_de_length',{v:this.pageIndex+1,length:this.reader.pagesData.length}):T('ui.pronto_para_comecar');
+    const escolha=this.escolherMotor();
+    const podeTocar=escolha.motor==='natural'||this.supported;
+    let status;
+    if(!podeTocar)status=T('app.leitura_em_voz_alta_nao_disponivel_nes');
+    else if(this.paused)status=T('app.em_pausa');
+    else if(this.playing&&this.gerando)status=T('vn.gerando_voz');
+    else if(this.playing)status=T('app.lendo_pagina_v_de_length',{v:this.pageIndex+1,length:this.reader.pagesData.length});
+    else status=T('ui.pronto_para_comecar');
+    document.getElementById('tts-status').textContent=status;
     const btn=document.getElementById('btn-tts-play');
-    btn.disabled=!this.supported;btn.setAttribute('aria-label',this.playing&&!this.paused?T('app.pausar_leitura'):T('ui.iniciar_leitura'));
+    btn.disabled=!podeTocar;btn.setAttribute('aria-label',this.playing&&!this.paused?T('app.pausar_leitura'):T('ui.iniciar_leitura'));
     btn.innerHTML=`<i data-lucide="${this.playing&&!this.paused?'pause':'play'}"></i>`;
     document.getElementById('btn-reader-tts')?.classList.toggle('is-playing',this.playing&&!this.paused);
     document.querySelectorAll('[data-tts-rate]').forEach(x=>x.classList.toggle('active',Number(x.dataset.ttsRate)===Number(App.state.settings.ttsRate||1)));
+    this.refreshMotor(escolha);
     lucide.createIcons({root:document.getElementById('panel-tts')});
   }
-  openPanel(){
-    if(!this.supported)Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');
+  /* A parte "Voz" do painel: bloco da voz natural, escolha do
+     idioma do texto e, quando é o sistema quem lê, a lista de vozes
+     do aparelho — com o porquê, quando a natural ficou de fora. */
+  refreshMotor(escolha=this.escolherMotor()){
+    VozNaturalUI.renderizarTodos();
+    const sistema=document.getElementById('tts-sistema-bloco');
+    if(sistema)sistema.hidden=escolha.motor==='natural';
+    const sel=document.getElementById('tts-idioma');
+    if(sel){
+      const id=this.reader.currentBook?.id;
+      const escolhido=(App.state.settings.ttsIdiomaLivro||{})[id]||'auto';
+      const detectado=this.idiomaCache.get(id);
+      const lista=[...new Set([...VozNatural.IDIOMAS,'zh','th','fil','fa','he','ca'])]
+        .map(c=>({c,n:VozNatural.nomeDoIdioma(c)})).sort((a,b)=>a.n.localeCompare(b.n,Idiomas._tag));
+      const auto=detectado?T('vn.automatico_idioma',{idioma:VozNatural.nomeDoIdioma(detectado)}):T('vn.automatico');
+      sel.innerHTML=`<option value="auto">${Utils.esc(auto)}</option>`+lista.map(({c,n})=>`<option value="${c}">${Utils.esc(n)}${VozNatural.IDIOMAS.has(c)?'':' · '+T('vn.so_voz_do_sistema')}</option>`).join('');
+      sel.value=escolhido;
+    }
+    const aviso=document.getElementById('tts-motor-aviso');
+    if(aviso){
+      const nome=escolha.lang?VozNatural.nomeDoIdioma(escolha.lang):'';
+      const textos={
+        'idioma':T('vn.aviso_idioma',{idioma:nome}),
+        'idioma-desconhecido':T('vn.aviso_idioma_desconhecido'),
+        'falha':T('vn.aviso_falha'),
+        'arquivo':T('vn.aviso_arquivo'),
+        'navegador':T('vn.aviso_navegador')
+      };
+      const txt=App.state.settings.ttsMotor==='sistema'?'':textos[escolha.motivo]||'';
+      aviso.textContent=txt;aviso.hidden=!txt;
+    }
+  }
+  async openPanel(){
     if(!this.playing)this.pageIndex=this.reader.currentPageIndex;
-    this.populateVoices();this.refreshPanel();App.openPanel('panel-tts');
+    this.refreshPanel();App.openPanel('panel-tts');
+    VozNatural.verificar().catch(()=>{});
+    await this.detectarIdiomaDoLivro().catch(()=>null);
+    this.populateVoices();this.refreshPanel();
+    const escolha=this.escolherMotor();
+    if(escolha.motor!=='natural'&&!this.supported)Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');
   }
   async toggle(){
-    if(!this.supported)return;
-    if(this.playing&&!this.paused){speechSynthesis.pause();this.paused=true;this.updateMediaSession('paused');this.refreshPanel();return}
-    if(this.playing&&this.paused){speechSynthesis.resume();this.paused=false;this.updateMediaSession('playing');this.refreshPanel();return}
+    if(this.playing&&!this.paused){
+      if(this.motor==='natural')this.audio?.pause();else speechSynthesis.pause();
+      this.paused=true;this.updateMediaSession('paused');this.refreshPanel();return;
+    }
+    if(this.playing&&this.paused){
+      if(this.motor==='natural'){try{await this.audio?.play()}catch(e){}}else speechSynthesis.resume();
+      this.paused=false;this.updateMediaSession('playing');this.refreshPanel();return;
+    }
     await this.start(this.reader.currentPageIndex,0);
   }
   async start(pageIndex,segmentIndex=0){
     if(!this.reader.currentBook)return;
     App.player?.pauseForOtherMedia();
-    this.stop(false);this.playing=true;this.paused=false;this.pageIndex=Utils.clamp(pageIndex,0,this.reader.pagesData.length-1);this.segmentIndex=segmentIndex;
+    this.stop(false);
+    const run=this.runId;
+    this.playing=true;this.paused=false;this.pageIndex=Utils.clamp(pageIndex,0,this.reader.pagesData.length-1);this.segmentIndex=segmentIndex;
     await this.requestWakeLock();this.updateMediaSession('playing');this.refreshPanel();
+    if(VozNatural.estado.fase==='desconhecido')await VozNatural.verificar().catch(()=>{});
+    if(!this.idiomaAtual())await this.detectarIdiomaDoLivro().catch(()=>null);
+    if(run!==this.runId||!this.playing)return;
+    const escolha=this.escolherMotor();
+    this.motor=escolha.motor;
+    if(this.motor==='natural'){
+      this.gerando=true;this.refreshPanel();
+      try{await VozNatural.motor()}
+      catch(e){
+        console.warn('[voz natural]',e);
+        if(run!==this.runId)return;
+        this.naturalFalhou=true;this.motor='sistema';
+        Utils.toast(T('vn.nao_carregou_usando_sistema'),'alert-triangle');
+      }
+      this.gerando=false;
+      if(run!==this.runId||!this.playing)return;
+    }
+    if(this.motor==='sistema'&&!this.supported){this.stop();Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');return}
+    this.refreshPanel();
     await this.loadPageAndSpeak();
+  }
+  async trechosDa(pagina){
+    if(this.trechosPorPagina.has(pagina))return this.trechosPorPagina.get(pagina);
+    const text=await this.reader.getPageSpeechText(pagina);
+    const lista=this.segmentText(text);
+    this.trechosPorPagina.set(pagina,lista);
+    return lista;
   }
   async loadPageAndSpeak(){
     const run=++this.runId;
     try{
-      const text=await this.reader.getPageSpeechText(this.pageIndex);
+      const lista=await this.trechosDa(this.pageIndex);
       if(!this.playing||run!==this.runId)return;
-      this.segments=this.segmentText(text);
+      this.segments=lista;
       if(!this.segments.length){this.advance();return}
       this.segmentIndex=Utils.clamp(this.segmentIndex,0,this.segments.length-1);
       this.speakSegment(run);
@@ -4968,20 +5688,29 @@ class TextToSpeechController{
   }
   segmentText(text){
     const normalized=(text||'').replace(/\s+/g,' ').trim();if(!normalized)return[];
-    const sentences=normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g)||[normalized];
+    const sentences=normalized.match(/[^.!?…。！？]+[.!?…。！？]+|[^.!?…。！？]+$/g)||[normalized];
+    const lang=(this.idiomaAtual()||'').split('-')[0];
+    const max=this.motor==='natural'&&(lang==='ja'||lang==='ko')?160:280;
     const parts=[];let current='';
     sentences.forEach(sentence=>{
-      if((current+' '+sentence).length>280&&current){parts.push(current.trim());current=sentence}
+      if((current+' '+sentence).length>max&&current){parts.push(current.trim());current=sentence}
       else current+=' '+sentence;
     });
     if(current.trim())parts.push(current.trim());return parts;
   }
   speakSegment(run){
     if(!this.playing||run!==this.runId)return;
+    if(this.motor==='natural'){this.falarNatural(run);return}
     const utterance=new SpeechSynthesisUtterance(this.segments[this.segmentIndex]);
     const voiceURI=App.state.settings.ttsVoiceURI;
-    utterance.voice=speechSynthesis.getVoices().find(v=>v.voiceURI===voiceURI)||null;
-    utterance.lang=utterance.voice?.lang||document.documentElement.lang||'pt-BR';
+    const lang=this.idiomaAtual();
+    let voz=speechSynthesis.getVoices().find(v=>v.voiceURI===voiceURI)||null;
+    /* Uma voz em português lendo um livro em tailandês não serve para
+       nada: se o idioma do livro é conhecido e a voz escolhida é de
+       outro, deixa o sistema escolher a voz certa pelo idioma. */
+    if(voz&&lang&&!(voz.lang||'').toLowerCase().startsWith(lang.split('-')[0]))voz=null;
+    utterance.voice=voz;
+    utterance.lang=voz?.lang||lang||document.documentElement.lang||'pt-BR';
     utterance.rate=Number(App.state.settings.ttsRate)||1;
     utterance.onend=()=>{
       if(!this.playing||run!==this.runId)return;
@@ -4991,6 +5720,107 @@ class TextToSpeechController{
     utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled'){console.warn(e);this.stop();Utils.toast(T('app.a_voz_foi_interrompida_pelo_navegador'),'alert-triangle')}};
     speechSynthesis.speak(utterance);
   }
+
+  /* ---------- voz natural -------------------------------------- */
+  opcoesNaturais(){
+    const rate=Number(App.state.settings.ttsRate)||1;
+    const alvo=1.05*rate;
+    const velocidade=Utils.clamp(alvo,0.8,1.6);
+    const q=App.state.settings.ttsQualidade||'auto';
+    let passos=q==='rapida'?4:q==='maxima'?8:(VozNatural.estado.backend==='webgpu'?8:6);
+    if(q==='auto'&&this.passosAuto)passos=Math.min(passos,this.passosAuto);
+    return {velocidade,passos,playbackRate:alvo/velocidade,voz:App.state.settings.ttsVozNatural||'feminina'};
+  }
+  pedirAudio(pagina,trecho,texto){
+    const chave=pagina+':'+trecho;
+    if(this.preparados.has(chave))return this.preparados.get(chave);
+    const o=this.opcoesNaturais();
+    const lang=(this.idiomaAtual()||'na').split('-')[0];
+    const p=VozNatural.sintetizar(texto,lang,o.voz,{passos:o.passos,velocidade:o.velocidade}).then(r=>{
+      if(r.tipo!=='audio')return {vazio:true,cancelado:r.tipo==='cancelado'};
+      if(r.backend)VozNatural.estado.backend=r.backend;
+      /* Mede a folga: gerar mais devagar do que se ouve causa pausas.
+         No modo automático, a qualidade desce um degrau sozinha. */
+      const ritmo=r.tempo/Math.max(0.5,r.duracao);
+      if(ritmo>0.85){
+        this.lentidao++;
+        if((App.state.settings.ttsQualidade||'auto')==='auto'&&this.lentidao>=2){
+          const atual=this.passosAuto||o.passos;
+          if(atual>4){this.passosAuto=atual>6?6:4;this.lentidao=0}
+        }
+        if(this.lentidao>=3&&!this.avisouLento&&ritmo>1.1){this.avisouLento=true;Utils.toast(T('vn.aparelho_lento'),'hourglass')}
+      }else this.lentidao=Math.max(0,this.lentidao-1);
+      return {url:URL.createObjectURL(new Blob([r.wav],{type:'audio/wav'})),duracao:r.duracao};
+    });
+    this.preparados.set(chave,p);
+    return p;
+  }
+  /* Prepara os próximos dois trechos enquanto o atual toca — inclusive
+     o começo da página seguinte, para a virada não ter silêncio. */
+  async preBuscar(run){
+    let p=this.pageIndex,t=this.segmentIndex;
+    for(let k=0;k<2;k++){
+      t++;
+      let lista=p===this.pageIndex?this.segments:await this.trechosDa(p).catch(()=>[]);
+      while(t>=lista.length){
+        p++;t=0;
+        if(p>=this.reader.pagesData.length)return;
+        lista=await this.trechosDa(p).catch(()=>[]);
+        if(run!==this.runId)return;
+      }
+      if(run!==this.runId)return;
+      this.pedirAudio(p,t,lista[t]).catch(()=>{});
+    }
+  }
+  limparPreparados(){
+    this.preparados.forEach(p=>p.then(r=>{if(r?.url)URL.revokeObjectURL(r.url)}).catch(()=>{}));
+    this.preparados.clear();
+  }
+  garantirAudio(){
+    if(this.audio)return this.audio;
+    const a=new Audio();a.preload='auto';
+    try{a.preservesPitch=true;a.mozPreservesPitch=true;a.webkitPreservesPitch=true}catch(e){}
+    this.audio=a;return a;
+  }
+  falarNatural(run){
+    const pagina=this.pageIndex,trecho=this.segmentIndex;
+    const chave=pagina+':'+trecho;
+    const pronto=this.preparados.has(chave);
+    if(!pronto){this.gerando=true;this.refreshPanel()}
+    const promessa=this.pedirAudio(pagina,trecho,this.segments[trecho]);
+    this.preBuscar(run);
+    promessa.then(async r=>{
+      if(!this.playing||run!==this.runId)return;
+      if(this.gerando){this.gerando=false;this.refreshPanel()}
+      const seguir=()=>{
+        if(!this.playing||run!==this.runId)return;
+        this.preparados.delete(chave);if(r.url)URL.revokeObjectURL(r.url);
+        this.segmentIndex++;
+        if(this.segmentIndex<this.segments.length)this.speakSegment(run);else this.advance();
+      };
+      if(r.vazio){seguir();return}
+      const a=this.garantirAudio();
+      a.onended=seguir;
+      a.onerror=()=>{if(run===this.runId)seguir()};
+      a.src=r.url;a.playbackRate=this.opcoesNaturais().playbackRate;
+      try{await a.play()}
+      catch(e){
+        /* Sem gesto recente o navegador pode barrar o play(): fica em
+           pausa, e o botão de tocar retoma dali. */
+        if(run!==this.runId)return;
+        this.paused=true;this.updateMediaSession('paused');this.refreshPanel();
+      }
+    }).catch(e=>{
+      if(!this.playing||run!==this.runId)return;
+      if(String(e?.message||'')==='encerrado')return;
+      console.warn('[voz natural]',e);
+      this.naturalFalhou=true;
+      Utils.toast(T('vn.parou_usando_sistema'),'alert-triangle');
+      const pg=this.pageIndex,sg=this.segmentIndex;
+      this.stop(false);this.start(pg,sg);
+    });
+  }
+
   advance(){
     if(!this.playing)return;
     if(this.pageIndex>=this.reader.pagesData.length-1){this.stop();Utils.toast(T('app.leitura_concluida'),'check-circle');return}
@@ -5018,7 +5848,15 @@ class TextToSpeechController{
     }catch(e){}
   }
   stop(release=true){
-    this.runId++;if(this.supported)speechSynthesis.cancel();this.playing=false;this.paused=false;if(release)this.releaseWakeLock();this.updateMediaSession('none');this.refreshPanel();
+    this.runId++;
+    if(this.supported)speechSynthesis.cancel();
+    if(this.audio){try{this.audio.onended=null;this.audio.onerror=null;this.audio.pause();this.audio.removeAttribute('src');this.audio.load()}catch(e){}}
+    if(this.preparados.size){VozNatural.cancelarTudo();this.limparPreparados()}
+    this.trechosPorPagina.clear();
+    const eraNatural=this.motor==='natural'&&this.playing;
+    this.playing=false;this.paused=false;this.gerando=false;
+    if(release){this.releaseWakeLock();if(eraNatural||VozNatural._trab)VozNatural.soltarDepois()}
+    this.updateMediaSession('none');this.refreshPanel();
   }
 }
 
@@ -10647,7 +11485,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 31';
+const BUILD='2026-09-20 · 32';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -10663,7 +11501,13 @@ const Docs={
     'lic-pdfjs':{title:'PDF.js',subtitle:'Licença Apache 2.0',icon:'scale',path:'licencas/LICENSE-Apache.txt',kind:'txt'},
     'lic-mammoth':{title:'Mammoth.js',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-mammoth.txt',kind:'txt'},
     'lic-libarchivejs':{title:'libarchive.js',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-libarchivejs.txt',kind:'txt'},
-    'lic-libarchive':{title:'libarchive',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-libarchive.txt',kind:'txt'}
+    'lic-libarchive':{title:'libarchive',subtitle:'Licença BSD-2-Clause',icon:'scale',path:'licencas/LICENSE-libarchive.txt',kind:'txt'},
+    'lic-onnxruntime':{title:'ONNX Runtime Web',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-onnxruntime.txt',kind:'txt'},
+    'lic-onnxruntime-terceiros':{title:'ONNX Runtime',subtitle:'Third-party notices',icon:'scale',path:'licencas/ThirdPartyNotices-onnxruntime.txt',kind:'txt'},
+    'lic-supertonic':{title:'Supertonic',subtitle:'Licença MIT',icon:'scale',path:'licencas/LICENSE-Supertonic-codigo.txt',kind:'txt'},
+    'lic-supertonic-modelo':{title:'Supertonic 3 (modelo)',subtitle:'BigScience OpenRAIL-M',icon:'scale',path:'licencas/LICENSE-Supertonic-modelo-OpenRAIL-M.txt',kind:'txt'},
+    'lic-inter':{title:'Inter',subtitle:'SIL Open Font License 1.1',icon:'scale',path:'licencas/LICENSE-Inter.txt',kind:'txt'},
+    'lic-literata':{title:'Literata',subtitle:'SIL Open Font License 1.1',icon:'scale',path:'licencas/LICENSE-Literata.txt',kind:'txt'}
   },
   fallbacks:{
     /* Sobre, Política e Termos não têm cópia aqui: vêm de
@@ -10796,8 +11640,14 @@ const Docs={
       'Texto completo em licencas/LICENSE-mammoth.txt',
       'Projeto: https://github.com/mwilliamson/mammoth.js'
     ].join('\n'),
-    'lic-libarchivejs':'libarchive.js — Licença MIT\\n\\nO empacotamento do libarchive para o navegador, usado pelo leitor de\\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\\nO texto completo da licença deve estar em licencas/LICENSE-libarchivejs.txt.\\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
-    'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\\n\\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\\nquadrinhos em CBR, CB7 e CBT.\\nO texto completo da licença deve estar em licencas/LICENSE-libarchive.txt.\\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
+    'lic-libarchivejs':'libarchive.js — Licença MIT\n\nO empacotamento do libarchive para o navegador, usado pelo leitor de\nquadrinhos em CBR, CB7 e CBT, deriva deste projeto.\nO texto completo da licença está em licencas/LICENSE-libarchivejs.txt.\nReferência oficial: https://github.com/nika-begiashvili/libarchivejs/blob/master/LICENSE',
+    'lic-libarchive':'libarchive — Licença BSD de 2 cláusulas\n\nO aplicativo distribui uma compilação de libarchive para WebAssembly,\nembutida em vendor/libarchive/libarchive-embutido.js e usada para abrir\nquadrinhos em CBR, CB7 e CBT.\nO texto completo da licença está em licencas/LICENSE-libarchive.txt.\nReferência oficial: https://github.com/libarchive/libarchive/blob/master/COPYING'
+    ,'lic-onnxruntime':'ONNX Runtime Web — Licença MIT\n\nCopyright (c) Microsoft Corporation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.'
+    ,'lic-onnxruntime-terceiros':'ONNX Runtime — Third-party notices\n\nThe full list of third-party components included in ONNX Runtime, with their licenses, is in licencas/ThirdPartyNotices-onnxruntime.txt.\nOfficial reference: https://github.com/microsoft/onnxruntime/blob/v1.30.0/ThirdPartyNotices.txt'
+    ,'lic-supertonic':'Supertonic — Licença MIT\n\nCopyright (c) 2025 Supertone Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.'
+    ,'lic-supertonic-modelo':'Supertonic 3 (model weights) — BigScience OpenRAIL-M\n\nCopyright (c) 2026 Supertone Inc.\nThe model is not shipped with the app: it is downloaded only if you choose to, from https://huggingface.co/supertone-oss-archive/supertonic-3\n\nThe full license is in licencas/LICENSE-Supertonic-modelo-OpenRAIL-M.txt and at https://huggingface.co/supertone-oss-archive/supertonic-3/blob/main/LICENSE\n\nUse restrictions (Attachment A): you agree not to use the model (a) in any way that violates any applicable law; (b) to exploit or harm minors; (c) to generate or disseminate verifiably false information with the purpose of harming others; (d) to generate or disseminate personal information that can be used to harm an individual; (e) to disseminate generated content without stating that it is machine generated; (f) to defame, disparage or harass others; (g) to impersonate others without their consent (e.g. deepfakes); (h) for fully automated decision making that adversely impacts legal rights; (i) and (k) to discriminate against individuals or groups; (j) to exploit vulnerabilities of specific groups to cause harm; (l) to provide medical advice or interpret medical results; (m) for administration of justice, law enforcement, immigration or asylum processes.'
+    ,'lic-inter':'Inter — SIL Open Font License 1.1\n\nCopyright (c) 2016 The Inter Project Authors.\nThe full license is in licencas/LICENSE-Inter.txt and at https://openfontlicense.org'
+    ,'lic-literata':'Literata — SIL Open Font License 1.1\n\nCopyright 2017 The Literata Project Authors.\nThe full license is in licencas/LICENSE-Literata.txt and at https://openfontlicense.org'
   },
   init(){
     this.el=document.getElementById('doc-modal');
@@ -10899,7 +11749,11 @@ const Docs={
       ['PDF.js','2.16.105','Apache 2.0'],
       ['Mammoth.js','1.6.0','BSD-2-Clause'],
       ['libarchive','—','BSD-2-Clause'],
-      ['libarchive.js','—','MIT']
+      ['libarchive.js','—','MIT'],
+      ['ONNX Runtime Web','1.30.0','MIT'],
+      ['Supertonic','3','MIT'],
+      ['Inter','4','OFL-1.1'],
+      ['Literata','3','OFL-1.1']
     ].map(([n,v,l])=>
       `<div class="doc-dep"><i data-lucide="package"></i>${n}`+
       (v!=='—'?`<span class="doc-dep-ver">${v}</span>`:'')+
@@ -10910,7 +11764,12 @@ const Docs={
       `<p>${en
         ?'All of them come with the app and stay on your device. None is downloaded from the internet, which is why reading works the same in airplane mode.'
         :'Todas acompanham o aplicativo e ficam no seu aparelho. Nenhuma é baixada da internet: é por isso que a leitura funciona igual em modo avião.'}</p>`+
-      `<div class="doc-dep-list">${deps}</div>`;
+      `<div class="doc-dep-list">${deps}</div>`+
+      `<h2>${en?'Optional AI model':'Modelo de IA opcional'}</h2>`+
+      `<p>${en
+        ?'The natural voice uses the Supertonic 3 model by Supertone Inc. (about 380 MB), licensed under BigScience OpenRAIL-M. It is not part of the app: it is downloaded only if you ask for it, from Supertone’s public repository on Hugging Face, and then runs entirely on your device.'
+        :'A voz natural usa o modelo Supertonic 3, da Supertone Inc. (cerca de 380 MB), licenciado sob a BigScience OpenRAIL-M. Ele não faz parte do aplicativo: só é baixado se você pedir, do repositório público da Supertone no Hugging Face, e depois roda inteiramente no seu aparelho.'}</p>`+
+      `<div class="doc-dep-list"><div class="doc-dep"><i data-lucide="audio-lines"></i>Supertonic 3<span class="doc-dep-ver">aafc6e3</span><span class="lic-tag">OpenRAIL-M</span></div></div>`;
   },
   async open(key){
     const src=this.sources[key];
@@ -11761,6 +12620,7 @@ const App={
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('visible'));
     if(id==='panel-settings'){
       this.syncReadingModeUi();
+      VozNatural.verificar().catch(()=>{});VozNaturalUI.renderizarTodos();
       if(this.reader&&this.reader.updateComicControls)this.reader.updateComicControls();
     }
     document.getElementById(id).classList.add('visible');

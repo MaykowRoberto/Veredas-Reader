@@ -16,7 +16,7 @@ O **Veredas Reader** abre arquivos **EPUB, MOBI, PDF, TXT, MD e DOCX**, lê quad
 
 - **Quadrinhos:** zoom por pinça e por duplo toque, revista aberta (duas páginas) no modo paisagem, sentido mangá (da direita para a esquerda) e rolagem contínua no estilo webtoon. Título, série, autor e capa são lidos do próprio arquivo quando ele traz essas informações.
 
-- **Leitura em voz alta:** lê o texto usando as vozes disponíveis no dispositivo.
+- **Leitura em voz alta:** lê o texto com uma **voz natural**, gerada por inteligência artificial no próprio aparelho, em 31 idiomas (entre eles português, inglês e espanhol), ou com as vozes do sistema. A voz natural é opcional e, depois de baixada uma vez, funciona sem internet.
 
 - **Audiolivros e vídeos:** capítulos, marcadores, velocidade ajustável, timer de sono e retomada exata de onde você parou.
 
@@ -30,7 +30,9 @@ O **Veredas Reader** abre arquivos **EPUB, MOBI, PDF, TXT, MD e DOCX**, lê quad
 
 A leitura, a organização da estante e todas as suas anotações funcionam **sem internet**. Todos os componentes de que o leitor precisa (ícones, leitura de PDF, leitura de DOCX, descompactação de arquivos e quadrinhos) já vêm com o aplicativo e ficam no seu aparelho.
 
-Recursos que dependem de conexão, como a exibição de anúncios na versão gratuita, estão descritos na **Política de Privacidade**. As licenças dos componentes de código aberto estão em **Sobre > Licenças de código aberto**.
+A voz natural usa o modelo Supertonic 3, da Supertone Inc., que não vem dentro do aplicativo: você decide se quer baixá-lo (cerca de 380 MB). Depois de baixado, ele roda no seu aparelho e o texto lido não é enviado a lugar nenhum.
+
+Recursos que dependem de conexão, como a exibição de anúncios na versão gratuita e o download opcional da voz natural, estão descritos na **Política de Privacidade**. As licenças dos componentes de código aberto estão em **Sobre > Licenças de código aberto**.
 
 ## Privacidade
 

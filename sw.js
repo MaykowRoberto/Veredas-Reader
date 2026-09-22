@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-20-31';
+const VERSAO = 'veredas-2026-09-20-32';
 
 const ESSENCIAIS = [
   './',
@@ -67,13 +67,26 @@ const ESSENCIAIS = [
 
   './idioma.js',
   './idiomas/pt-BR.js',
-  './idiomas/en.js'
+  './idiomas/en.js',
+
+  /* O trabalhador da voz natural (13 KB). O motor dele (ONNX Runtime,
+     28 MB) e o modelo (380 MB) NÃO entram aqui: veja MOTOR abaixo. */
+  './vendor/supertonic/voz-natural-worker.js'
 
   /* vendor/libarchive/libarchive-embutido.js fica de fora de
      propósito: são 1,4 MB que só fazem falta para CBR, CB7 e CBT.
      É buscado na primeira vez que alguém abre um desses e, a
      partir daí, o próprio tratador de `fetch` abaixo o guarda. */
 ];
+
+/* O motor da voz natural (ONNX Runtime Web) mora num cache à parte,
+   com a versão do próprio motor no nome. Ele não é apagado a cada
+   publicação do aplicativo — seriam 28 MB baixados de novo a cada
+   atualização — e só é guardado para quem baixou a voz natural
+   (recado 'guardar-motor-de-voz'). O modelo em si fica no IndexedDB,
+   fora do service worker. */
+const MOTOR = 'veredas-motor-ort-1.30.0';
+const PASTA_MOTOR = '/vendor/onnxruntime-web/';
 
 self.addEventListener('install', evento => {
   evento.waitUntil(
@@ -98,7 +111,8 @@ self.addEventListener('install', evento => {
 self.addEventListener('activate', evento => {
   evento.waitUntil(
     caches.keys()
-      .then(chaves => Promise.all(chaves.map(k => k !== VERSAO ? caches.delete(k) : null)))
+      .then(chaves => Promise.all(chaves.map(k =>
+        (k === VERSAO || k === MOTOR) ? null : caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -112,6 +126,23 @@ self.addEventListener('fetch', evento => {
   if (url.origin !== self.location.origin) return;       /* CDN e afins: fora daqui */
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   if (req.headers.has('range')) return;                  /* áudio e vídeo pedem fatias */
+
+  /* Motor da voz natural: arquivos que nunca mudam dentro de uma
+     versão. Cache primeiro; a rede só quando ainda não foi guardado. */
+  if (url.pathname.includes(PASTA_MOTOR)) {
+    evento.respondWith(
+      caches.open(MOTOR).then(cache =>
+        cache.match(req, { ignoreSearch: true }).then(guardado => guardado || fetch(req).then(resposta => {
+          /* Só quem usa a voz natural chega a pedir estes arquivos:
+             guardá-los aqui cobre quem baixou a voz na primeira
+             visita, antes de o service worker assumir a página. */
+          if (resposta && resposta.ok && resposta.type === 'basic') cache.put(req, resposta.clone()).catch(() => {});
+          return resposta;
+        }))
+      )
+    );
+    return;
+  }
 
   evento.respondWith(
     fetch(req)
@@ -152,6 +183,18 @@ self.addEventListener('message', evento => {
 
      Com este recado, o idioma é guardado de verdade já na primeira
      visita. */
+  if (evento.data && evento.data.tipo === 'guardar-motor-de-voz') {
+    const urls = Array.isArray(evento.data.urls) ? evento.data.urls : [];
+    evento.waitUntil(
+      caches.open(MOTOR).then(cache =>
+        Promise.all(urls.map(u =>
+          cache.match(u).then(ja => ja ? null : cache.add(new Request(u, { cache: 'reload' })).catch(() => {}))
+        ))
+      )
+    );
+    return;
+  }
+
   if (evento.data && evento.data.tipo === 'guardar-idiomas') {
     const urls = Array.isArray(evento.data.urls) ? evento.data.urls : [];
     evento.waitUntil(

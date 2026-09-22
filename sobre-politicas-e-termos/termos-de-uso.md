@@ -1,6 +1,6 @@
 # Termos e Condições de Uso
 
-**Última atualização:** 21 de setembro de 2026
+**Última atualização:** 22 de setembro de 2026
 
 Estes Termos e Condições de Uso ("Termos") regulam o uso do aplicativo **Veredas Reader** ("Aplicativo"), desenvolvido e disponibilizado por **Torres Software**, marca utilizada pelo desenvolvedor independente **Maykow Roberto Lima Torres**, com atuação em Pernambuco, Brasil ("Torres Software", "nós"). Leia com atenção: eles explicam o que o Aplicativo faz, o que você pode e o que não pode fazer com ele e quais são as responsabilidades de cada parte.
 
@@ -21,6 +21,8 @@ Contato: **torres.software.app@gmail.com**
 2.2. O Aplicativo **não hospeda, não vende, não fornece e não distribui** livros, textos, áudios, vídeos, quadrinhos ou qualquer outro conteúdo. Todo conteúdo aberto no Aplicativo é escolhido e importado por você.
 
 2.3. A leitura e a reprodução acontecem **localmente, no seu dispositivo**. Nenhuma cópia do seu acervo, das suas anotações ou do seu progresso é enviada a servidores da Torres Software.
+
+2.4. **Leitura em voz alta.** O Aplicativo pode ler os textos em voz alta usando a voz do sistema operacional do seu aparelho ou, se você quiser, uma **voz natural** gerada por um modelo de inteligência artificial que roda no próprio aparelho, nos termos do item 12.
 
 ## 3. Licença de uso
 
@@ -96,9 +98,28 @@ Você pode deixar de usar o Aplicativo a qualquer momento, bastando desinstalá-
 
 Estes Termos podem ser atualizados para refletir mudanças no Aplicativo ou na legislação. A data no topo indica a versão vigente. Alterações relevantes serão comunicadas no próprio Aplicativo antes de entrarem em vigor e, quando a lei exigir, será pedido um novo aceite.
 
-## 12. Licenças de código aberto
+## 12. Licenças de terceiros e voz natural
 
-O Aplicativo inclui componentes de código aberto de terceiros (por exemplo, leitura de PDF, descompactação de arquivos e ícones). Cada componente é licenciado sob sua própria licença (como MIT, ISC, Apache 2.0 e BSD), cujos textos completos podem ser consultados em **Sobre > Licenças de código aberto**. Nada nestes Termos restringe direitos concedidos por essas licenças em relação aos respectivos componentes.
+12.1. O Aplicativo inclui componentes de código aberto de terceiros (por exemplo, leitura de PDF, descompactação de arquivos, ícones, fontes e o motor que executa a voz natural). Cada componente é licenciado sob sua própria licença (como MIT, ISC, Apache 2.0, BSD e SIL Open Font License), cujos textos completos podem ser consultados em **Sobre > Licenças de código aberto**. Nada nestes Termos restringe direitos concedidos por essas licenças em relação aos respectivos componentes.
+
+12.2. **Voz natural.** A voz natural usa o modelo **Supertonic 3**, de titularidade da **Supertone Inc.**, licenciado sob a **BigScience OpenRAIL-M**. O modelo **não faz parte do Aplicativo**: ele só é baixado se você escolher, diretamente do repositório público da Supertone no Hugging Face, e passa a ficar guardado no seu aparelho, de onde pode ser removido a qualquer momento. A Torres Software não modifica o modelo, não é sua titular e não responde pela sua disponibilidade na origem.
+
+12.3. **Restrições de uso do modelo.** Por exigência da licença OpenRAIL-M, ao usar a voz natural você concorda em **não** usar o modelo, nem o áudio gerado por ele:
+
+- de forma que viole qualquer lei ou regulamento aplicável, nacional ou internacional;
+- para explorar, prejudicar ou tentar explorar ou prejudicar menores de idade, de qualquer forma;
+- para gerar ou divulgar informações comprovadamente falsas com o objetivo de prejudicar outras pessoas;
+- para gerar ou divulgar dados pessoais que possam ser usados para prejudicar alguém;
+- para divulgar conteúdo gerado sem informar, de forma expressa e compreensível, que ele foi gerado por máquina;
+- para difamar, depreciar ou assediar outras pessoas;
+- para se passar por outra pessoa ou tentar fazê-lo (por exemplo, *deepfakes*) sem o consentimento dela;
+- para decisões totalmente automatizadas que afetem negativamente direitos de alguém ou criem ou modifiquem obrigações juridicamente vinculantes;
+- para qualquer uso que tenha a intenção ou o efeito de discriminar ou prejudicar pessoas ou grupos com base em comportamento social ou em características pessoais, conhecidas ou presumidas, ou em características ou categorias protegidas por lei;
+- para explorar vulnerabilidades de um grupo específico de pessoas, ligadas à idade ou a características sociais, físicas ou mentais, de modo a distorcer o comportamento de alguém desse grupo e causar, ou poder causar, dano físico ou psicológico;
+- para dar conselhos médicos ou interpretar resultados médicos;
+- para gerar ou divulgar informações destinadas à administração da justiça, à atividade policial ou a processos de imigração ou de asilo, como prever que alguém cometerá fraude ou crime.
+
+12.4. O áudio gerado pela voz natural serve à sua leitura pessoal do conteúdo que você mesmo importou, nos limites do item 6. Você é responsável pelo uso que fizer desse áudio. O texto completo da licença do modelo está em **Sobre > Licenças de código aberto > Supertonic 3 (modelo)**.
 
 ## 13. Lei aplicável e foro
 

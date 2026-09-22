@@ -1,6 +1,6 @@
 # Política de Privacidade
 
-**Última atualização:** 21 de setembro de 2026
+**Última atualização:** 22 de setembro de 2026
 
 A sua privacidade é um princípio de projeto do **Veredas Reader**. Esta Política explica, de forma clara, quais dados são tratados, por quem, para quê e como você pode exercer os seus direitos, em conformidade com a **Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 – LGPD)** e com o **Marco Civil da Internet (Lei nº 12.965/2014)**.
 
@@ -17,6 +17,7 @@ Canal de atendimento ao titular de dados: **torres.software.app@gmail.com**
 - A leitura funciona **sem internet**.
 - Na **versão gratuita**, o Google AdMob exibe anúncios e coleta alguns dados técnicos do aparelho, conforme o item 5.
 - Na **assinatura**, o pagamento é feito pela loja de aplicativos. Nós nunca vemos os dados do seu cartão.
+- A **voz natural** é opcional. Se você decidir usá-la, o modelo de voz é baixado uma única vez do Hugging Face; depois disso, ela funciona sem internet e **o texto lido nunca sai do aparelho**.
 
 ## 3. O que NÃO coletamos (privacidade desde a concepção)
 
@@ -33,7 +34,13 @@ Tudo isso é gravado no armazenamento local do Aplicativo, dentro do seu aparelh
 
 4.1. O Aplicativo só acessa os arquivos e as pastas que **você escolher**, no momento em que escolher. A busca de livros no dispositivo examina apenas a pasta que você indicar e só quando você pedir. Não há varredura automática nem em segundo plano.
 
-4.2. **Leitura em voz alta.** Esse recurso usa o mecanismo de voz do sistema operacional do seu aparelho. Alguns mecanismos de voz, dependendo do fabricante e da voz escolhida, podem processar o texto on-line, de acordo com as políticas do fornecedor do sistema. Se preferir, escolha uma voz instalada no aparelho.
+4.2. **Leitura em voz alta com a voz do sistema.** Esse modo usa o mecanismo de voz do sistema operacional do seu aparelho. Alguns mecanismos de voz, dependendo do fabricante e da voz escolhida, podem processar o texto on-line, de acordo com as políticas do fornecedor do sistema. Se preferir, escolha uma voz instalada no aparelho ou use a voz natural.
+
+4.3. **Leitura em voz alta com a voz natural (opcional).** A voz natural transforma o texto em áudio **inteiramente dentro do seu aparelho**, com o modelo de voz Supertonic 3, da Supertone Inc. O texto lido e o áudio gerado **não são enviados** à Torres Software nem a terceiros.
+
+Para usar a voz natural, você precisa baixar o modelo (cerca de 380 MB) uma única vez, e somente se quiser, tocando em **Baixar voz natural**. O download é feito diretamente do repositório público da Supertone hospedado no **Hugging Face** (huggingface.co). Como em qualquer acesso a um site, o Hugging Face recebe dados técnicos da conexão, como o endereço IP, o tipo de navegador ou aparelho e a data e hora do acesso, e os trata como controlador independente, conforme a própria política de privacidade: [huggingface.co/privacy](https://huggingface.co/privacy). **Nenhum dado seu ou da sua leitura é enviado nesse download**, e a Torres Software não recebe esses dados técnicos.
+
+O modelo fica guardado no armazenamento local do Aplicativo, separado dos seus dados de leitura e fora do arquivo de backup. Você pode apagá-lo a qualquer momento pela opção **Remover**, em **Ouvir leitura** ou em **Configurações**. Para escolher o idioma certo da pronúncia, o Aplicativo analisa trechos do texto no próprio aparelho; essa análise não é guardada nem enviada a lugar nenhum.
 
 ## 5. Anúncios na versão gratuita (Google AdMob)
 
@@ -63,11 +70,11 @@ As lojas de aplicativos podem coletar, de forma automática e agregada, relatór
 
 ## 8. Compartilhamento de dados
 
-A Torres Software **não vende, não aluga e não compartilha** dados pessoais. Os únicos fluxos de dados com terceiros são os descritos nos itens 5, 6 e 7 (Google AdMob, loja de aplicativos e diagnóstico de falhas da loja). Os dados também podem ser fornecidos a autoridades quando houver obrigação legal ou ordem judicial, nos termos do Marco Civil da Internet.
+A Torres Software **não vende, não aluga e não compartilha** dados pessoais. Os únicos fluxos de dados com terceiros são os descritos nos itens 4.3, 5, 6 e 7 (download opcional da voz natural pelo Hugging Face, Google AdMob, loja de aplicativos e diagnóstico de falhas da loja). Os dados também podem ser fornecidos a autoridades quando houver obrigação legal ou ordem judicial, nos termos do Marco Civil da Internet.
 
 ## 9. Transferência internacional
 
-O Google e as lojas de aplicativos podem tratar dados em servidores localizados fora do Brasil. Essas transferências ocorrem nas hipóteses do art. 33 da LGPD e com as salvaguardas adotadas por esses fornecedores.
+O Google, as lojas de aplicativos e o Hugging Face (no download opcional da voz natural) podem tratar dados em servidores localizados fora do Brasil. Essas transferências ocorrem nas hipóteses do art. 33 da LGPD e com as salvaguardas adotadas por esses fornecedores.
 
 ## 10. Backup
 
@@ -84,6 +91,8 @@ Como seus dados de leitura ficam no próprio aparelho, a principal proteção é
 12.1. **Dados de leitura:** permanecem no seu aparelho enquanto você quiser. Você pode excluir livros e anotações pelo próprio Aplicativo, e a remoção completa acontece ao **limpar os dados do Aplicativo** ou **desinstalá-lo**.
 
 12.2. **Dados do AdMob:** são mantidos pelo Google pelos prazos da política de privacidade do Google.
+
+12.3. **Modelo da voz natural:** permanece no seu aparelho até você removê-lo, limpar os dados do Aplicativo ou desinstalá-lo. Os dados técnicos do download ficam com o Hugging Face, pelos prazos da política dele.
 
 ## 13. Seus direitos (art. 18 da LGPD)
 

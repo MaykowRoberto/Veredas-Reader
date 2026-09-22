@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260920-31">
+<link rel="stylesheet" href="styles.css?v=20260920-32">
 
 <!-- ============================================================
      DEPENDÊNCIAS
@@ -23,10 +23,10 @@
      arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
      versão, de onde veio e a impressão digital do arquivo.
      ============================================================ -->
-<script src="vendor/lucide/lucide.min.js?v=20260920-31"></script>
-<script src="vendor/jszip/jszip.min.js?v=20260920-31"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=20260920-31"></script>
-<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-31"></script>
+<script src="vendor/lucide/lucide.min.js?v=20260920-32"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260920-32"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260920-32"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-32"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -124,6 +124,12 @@
                 <button class="nav-item nav-sub-item" data-doc="lic-mammoth"><i data-lucide="file-code-2"></i>Mammoth.js<span class="lic-tag">BSD-2-Clause</span></button>
                 <button class="nav-item nav-sub-item" data-doc="lic-libarchivejs"><i data-lucide="file-code-2"></i>libarchive.js<span class="lic-tag">MIT</span></button>
                 <button class="nav-item nav-sub-item" data-doc="lic-libarchive"><i data-lucide="file-code-2"></i>libarchive<span class="lic-tag">BSD-2-Clause</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-onnxruntime"><i data-lucide="file-code-2"></i>ONNX Runtime Web<span class="lic-tag">MIT</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-onnxruntime-terceiros"><i data-lucide="file-code-2"></i>ONNX Runtime · Third-party notices</button>
+                <button class="nav-item nav-sub-item" data-doc="lic-supertonic"><i data-lucide="file-code-2"></i>Supertonic<span class="lic-tag">MIT</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-supertonic-modelo"><i data-lucide="audio-lines"></i>Supertonic 3 (modelo)<span class="lic-tag">OpenRAIL-M</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-inter"><i data-lucide="type"></i>Inter<span class="lic-tag">OFL-1.1</span></button>
+                <button class="nav-item nav-sub-item" data-doc="lic-literata"><i data-lucide="type"></i>Literata<span class="lic-tag">OFL-1.1</span></button>
               </div>
               <button class="nav-item nav-sub-item" data-doc="privacidade" data-i18n="app.politica_de_privacidade"><i data-lucide="shield-check"></i>Política de privacidade</button>
               <button class="nav-item nav-sub-item" data-doc="termos" data-i18n="app.termos_de_uso"><i data-lucide="file-text"></i>Termos de uso</button>
@@ -450,6 +456,10 @@
       </div>
       <div class="drag-tip" data-i18n="ui.na_leitura_horizontal_arraste_a_pagina">Na leitura horizontal, arraste a página a partir da borda para dobrá-la com o dedo. Solte no meio do caminho para desistir da virada.</div>
     </div>
+    <div class="setting-section">
+      <h4 data-i18n="vn.leitura_em_voz_alta">Leitura em voz alta</h4>
+      <div data-vn-bloco></div>
+    </div>
     <div class="setting-section" style="border:none; text-align:center; padding-top:10px;">
       <button class="soft-btn" id="btn-restore-settings" data-i18n="ui.restaurar_padroes"><i data-lucide="rotate-ccw"></i>Restaurar Padrões</button>
     </div>
@@ -468,14 +478,24 @@
       <button class="reader-icon primary" id="btn-tts-play" aria-label="Iniciar leitura" data-i18n-aria="ui.iniciar_leitura"><i data-lucide="play"></i></button>
       <button class="reader-icon" id="btn-tts-forward" aria-label="Próximo trecho" data-i18n-aria="ui.proximo_trecho"><i data-lucide="fast-forward"></i></button>
     </div>
+    <!-- Voz: o bloco da voz natural é desenhado pelo app.js
+         (VozNaturalUI); o seletor de vozes do aparelho aparece
+         quando é o sistema quem lê. -->
+    <div class="setting-section" id="tts-voz-secao"><h4 data-i18n="ui.voz">Voz</h4>
+      <div data-vn-bloco></div>
+      <p class="tts-motor-aviso" id="tts-motor-aviso" hidden></p>
+      <div id="tts-sistema-bloco">
+        <label class="form-label" for="tts-voice" data-i18n="ui.escolha_uma_voz_disponivel_no_disposit">Escolha uma voz disponível no dispositivo</label>
+        <select class="field" id="tts-voice"><option value="" data-i18n="ui.voz_padrao_do_sistema">Voz padrão do sistema</option></select>
+      </div>
+      <label class="form-label vn-idioma-rotulo" for="tts-idioma" data-i18n="vn.idioma_do_texto">Idioma do texto</label>
+      <select class="field" id="tts-idioma"><option value="auto" data-i18n="vn.automatico">Automático</option></select>
+      <p class="setting-hint" data-i18n="vn.idioma_do_texto_dica">Detectado pelo próprio texto. Troque se a leitura sair com sotaque errado.</p>
+    </div>
     <div class="setting-section"><h4 data-i18n="ui.velocidade">Velocidade</h4>
       <div class="seg" id="tts-rate-grid">
         <button data-tts-rate="0.8">0,8×</button><button data-tts-rate="1" class="active">1×</button><button data-tts-rate="1.25">1,25×</button><button data-tts-rate="1.5">1,5×</button><button data-tts-rate="2">2×</button>
       </div>
-    </div>
-    <div class="setting-section"><h4 data-i18n="ui.voz">Voz</h4>
-      <label class="form-label" for="tts-voice" data-i18n="ui.escolha_uma_voz_disponivel_no_disposit">Escolha uma voz disponível no dispositivo</label>
-      <select class="field" id="tts-voice"><option value="" data-i18n="ui.voz_padrao_do_sistema">Voz padrão do sistema</option></select>
     </div>
     <div class="setting-section"><h4 data-i18n="ui.durante_a_reproducao">Durante a reprodução</h4>
       <p style="font-size:12px;line-height:1.5;color:var(--muted)" data-i18n="ui.a_leitura_avanca_pagina_a_pagina_os_co">A leitura avança página a página. Os controles do sistema aparecem quando o navegador oferece suporte.</p>
@@ -774,12 +794,12 @@
      ficam em idiomas/ e são carregados sob demanda: só o idioma
      escolhido, a língua-base dele e o inglês de reserva.
      ============================================================ -->
-<script>window.BUILD_QS="20260920-31";</script>
-<script src="idioma.js?v=20260920-31"></script>
+<script>window.BUILD_QS="20260920-32";</script>
+<script src="idioma.js?v=20260920-32"></script>
 
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260920-31"></script>
+<script src="epub-pdf-converter.js?v=20260920-32"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260920-31"></script>
+<script src="app.js?v=20260920-32"></script>
 </body>
 </html>
