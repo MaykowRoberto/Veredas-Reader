@@ -2376,3 +2376,5 @@ html[dir="rtl"] .select{
 @media (prefers-reduced-motion:reduce){.vn-barra.ativa span,.vn-gira{animation:none}}
 .vn-detalhe{margin-top:8px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
 .vn-detalhe code{font-size:10.5px;line-height:1.45;word-break:break-word;color:var(--muted);display:block}
+.vn-cautela{display:flex;gap:8px;align-items:flex-start;color:var(--muted)}
+.vn-cautela svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--aviso-forte)}

@@ -5109,11 +5109,31 @@ const VozNatural={
   async motor(){
     try{return await this._motor()}
     catch(e){
-      if(this._modoSeguro)throw e;
+      if(this._modoSeguro){this.estado.falhouMotor=true;this.emitir();throw e}
       this._modoSeguro=true;
       console.warn('[voz natural] tentando em modo seguro:',e&&e.message||e);
-      return await this._motor();
+      const primeiro=String(e&&e.message||e);
+      try{return await this._motor()}
+      catch(e2){
+        this.estado.falhouMotor=true;
+        this.estado.erroMotor='1ª: '+primeiro+'  ||  2ª (modo seguro): '+String(e2&&e2.message||e2);
+        this.emitir();
+        throw e2;
+      }
     }
+  },
+  /* Retrato do aparelho, para ler junto com a mensagem de erro. */
+  ambiente(){
+    const n=navigator;
+    return [
+      'etapa: '+(this.estado.etapa||'?'),
+      'nucleos: '+(n.hardwareConcurrency||'?'),
+      'memoria: '+(n.deviceMemory?n.deviceMemory+' GB':'?'),
+      'isolado: '+(self.crossOriginIsolated?'sim':'nao'),
+      'gpu: '+(n.gpu?'sim':'nao'),
+      'sab: '+(typeof SharedArrayBuffer!=='undefined'?'sim':'nao'),
+      'ua: '+String(n.userAgent||'').slice(0,120)
+    ].join(' · ');
   },
   _motor(){
     if(this._iniciando)return this._iniciando;
@@ -5125,12 +5145,12 @@ const VozNatural={
       const fim=(erro,backend)=>{
         w.removeEventListener('message',primeira);
         if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;this.estado.erroMotor=String(erro.message||erro);falha(erro)}
-        else{this.estado.backend=backend;ok(backend)}
+        else{this.estado.backend=backend;this.estado.falhouMotor=false;this.estado.erroMotor='';this.emitir();ok(backend)}
       };
       const primeira=e=>{
         const m=e.data||{};
         if(m.tipo==='pronto'){this.estado.threads=m.threads||1;fim(null,m.backend)}
-        else if(m.tipo==='erro'&&m.pedido==='iniciar')fim(new Error(m.mensagem));
+        else if(m.tipo==='erro'&&m.pedido==='iniciar'){this.estado.etapa=m.etapa||'';fim(new Error(m.mensagem))}
       };
       w.addEventListener('message',primeira);
       w.addEventListener('message',e=>this._receber(e.data||{}));
@@ -5334,6 +5354,7 @@ const VozNaturalUI={
           <li><i data-lucide="shield-check"></i><span>${T('vn.fato_privacidade')}</span></li>
           <li><i data-lucide="languages"></i><span>${T('vn.fato_idiomas')}</span></li>
         </ul>
+        ${(navigator.deviceMemory&&navigator.deviceMemory<=4)?`<p class="vn-texto vn-cautela"><i data-lucide="alert-triangle"></i><span>${T('vn.aviso_aparelho_justo')}</span></p>`:''}
         <button type="button" class="soft-btn primary vn-largo" data-vn-acao="baixar"><i data-lucide="download"></i>${T('vn.baixar_voz_natural',{tamanho:total})}</button>
         <p class="setting-hint">${T('vn.licenca_curta')}</p>
       </div>`;
@@ -5352,6 +5373,19 @@ const VozNaturalUI={
           <button type="button" class="soft-btn primary" data-vn-acao="baixar"><i data-lucide="play"></i>${T('vn.continuar_download')}</button>
           <button type="button" class="soft-btn" data-vn-acao="remover"><i data-lucide="trash-2"></i>${T('vn.descartar')}</button>
         </div>
+      </div>`;
+    }
+    if(est.falhouMotor){
+      const txt=VozNatural.semMemoria()?T('vn.falhou_memoria_texto'):T('vn.falhou_texto');
+      return seg+`<div class="vn-cartao">${topo}
+        <p class="vn-texto vn-erro">${T('vn.falhou_titulo')}</p>
+        <p class="vn-texto">${txt}</p>
+        <div class="vn-detalhe"><code>${Utils.esc(String(est.erroMotor||'').slice(0,700))}</code><code>${Utils.esc(VozNatural.ambiente())}</code></div>
+        <div class="vn-botoes">
+          <button type="button" class="soft-btn primary" data-vn-acao="tentar"${this._tentando?' disabled':''}><i data-lucide="${this._tentando?'loader':'refresh-cw'}" class="${this._tentando?'vn-gira':''}"></i>${T(this._tentando?'vn.tentando':'vn.tentar_de_novo')}</button>
+          <button type="button" class="soft-btn" data-vn-acao="copiar"><i data-lucide="copy"></i>${T('vn.copiar_detalhe')}</button>
+        </div>
+        <div class="vn-rodape"><span><i data-lucide="hard-drive"></i>${T('vn.ocupa',{tamanho:total})}</span><button type="button" class="vn-link" data-vn-acao="remover">${T('vn.remover')}</button></div>
       </div>`;
     }
     /* pronto */
@@ -5435,6 +5469,24 @@ const VozNaturalUI={
       return;
     }
     if(acao==='pausar'){VozNatural.pausar();return}
+    if(acao==='copiar'){
+      const txt=String(VozNatural.estado.erroMotor||'')+'\n'+VozNatural.ambiente();
+      try{await navigator.clipboard.writeText(txt);Utils.toast(T('vn.copiado'),'check-circle')}
+      catch(e){Utils.toast(txt.slice(0,300),'info')}
+      return;
+    }
+    if(acao==='tentar'){
+      this._tentando=true;this.renderizarTodos();
+      VozNatural.soltar();
+      VozNatural.estado.falhouMotor=false;VozNatural.estado.erroMotor='';
+      try{
+        await VozNatural.motor();
+        Utils.toast(T('vn.pronta'),'check-circle');
+        this.aoMudar?.();
+      }catch(e){console.warn('[voz natural]',e)}
+      finally{this._tentando=false;this.renderizarTodos();VozNatural.soltarDepois()}
+      return;
+    }
     if(acao==='remover'){
       const baixada=VozNatural.estado.fase==='pronto';
       const ok=await AppModal.confirm({
@@ -11539,7 +11591,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 35';
+const BUILD='2026-09-20 · 36';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
