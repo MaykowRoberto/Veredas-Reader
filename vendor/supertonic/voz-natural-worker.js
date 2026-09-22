@@ -36,6 +36,7 @@ const cancelados = new Set();
 let cancelarTudoAte = 0;  /* ids menores ou iguais a este são descartados */
 let fila = Promise.resolve();
 let ultimoInicio = null;
+let enderecoDoMotor = null;
 
 /* Modelo de teste: soma dois números. Serve só para confirmar que o
    WebAssembly acordou neste aparelho, com erro claro quando não. */
@@ -115,10 +116,14 @@ async function iniciar(msg) {
     if (wasm[0] !== 0 || wasm[1] !== 0x61 || wasm[2] !== 0x73 || wasm[3] !== 0x6d) throw new Error('binario corrompido (' + total + ' bytes)');
 
     self.__etapa = 'motor: carga';
-    const endereco = URL.createObjectURL(new Blob([texto], { type: 'text/javascript' }));
+    /* Este endereço blob: NÃO pode ser liberado. Quando o motor usa
+       mais de um núcleo, ele abre cada linha paralela a partir do
+       próprio endereço de onde foi carregado; liberado, as linhas
+       nunca sobem e a preparação da voz fica esperando para sempre. */
+    enderecoDoMotor = URL.createObjectURL(new Blob([texto], { type: 'text/javascript' }));
     let modulo = null, erroBlob = '';
     try {
-      modulo = await import(endereco);
+      modulo = await import(enderecoDoMotor);
     } catch (e) {
       /* Se nem pelo blob der, resta o caminho antigo: o programa como
          script comum, com o carregador do WebAssembly à parte. */
@@ -127,7 +132,7 @@ async function iniciar(msg) {
       importScripts(msg.ortBase + 'ort.min.js');
       modulo = self.ort;
       if (modulo) modulo.env.wasm.wasmPaths = { mjs: msg.ortBase + 'ort-wasm-simd-threaded.jsep.js' };
-    } finally { try { URL.revokeObjectURL(endereco); } catch (_) {} }
+    }
     ORT = modulo && modulo.default && modulo.default.InferenceSession ? modulo.default : modulo;
     if (!ORT || !ORT.InferenceSession) throw new Error('programa sem InferenceSession' + (erroBlob ? ' (blob: ' + erroBlob + ')' : ''));
 

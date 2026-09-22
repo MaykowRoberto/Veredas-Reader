@@ -5135,6 +5135,11 @@ const VozNatural={
       'ua: '+String(n.userAgent||'').slice(0,120)
     ].join(' · ');
   },
+  /* Quanto esperar pela carga antes de desistir. Já houve um caso em
+     que o motor ficava esperando linhas paralelas que nunca subiam, e
+     a tela ficava em "Preparando a voz…" sem fim. Agora desiste, diz
+     por quê e devolve a leitura para a voz do sistema. */
+  LIMITE_DE_CARGA:180000,
   _motor(){
     if(this._iniciando)return this._iniciando;
     clearTimeout(this._tSoltar);
@@ -5142,7 +5147,7 @@ const VozNatural={
       let w;
       try{w=new Worker(this.TRABALHADOR)}catch(e){falha(e);return}
       this._trab=w;
-      const fim=(erro,backend)=>{
+      let fim=(erro,backend)=>{
         w.removeEventListener('message',primeira);
         if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;this.estado.erroMotor=String(erro.message||erro);falha(erro)}
         else{this.estado.backend=backend;this.estado.falhouMotor=false;this.estado.erroMotor='';this.emitir();ok(backend)}
@@ -5152,6 +5157,11 @@ const VozNatural={
         if(m.tipo==='pronto'){this.estado.threads=m.threads||1;fim(null,m.backend)}
         else if(m.tipo==='erro'&&m.pedido==='iniciar'){this.estado.etapa=m.etapa||'';fim(new Error(m.mensagem))}
       };
+      const relogio=setTimeout(()=>{
+        fim(new Error('tempo esgotado ao carregar o motor ('+Math.round(this.LIMITE_DE_CARGA/1000)+'s)'));
+      },this.LIMITE_DE_CARGA);
+      const fimOriginal=fim;
+      fim=(erro,backend)=>{clearTimeout(relogio);fimOriginal(erro,backend)};
       w.addEventListener('message',primeira);
       w.addEventListener('message',e=>this._receber(e.data||{}));
       w.onerror=ev=>{
@@ -11591,7 +11601,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 37';
+const BUILD='2026-09-20 · 38';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
