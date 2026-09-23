@@ -1024,6 +1024,23 @@ Idiomas.registrar('fil', {
     "sem_memoria_usando_sistema": "Hindi kasya ang natural na boses sa memory ng device na ito. System voice muna ang magbabasa.",
     "aviso_falha_memoria": "Kulang ang memory para sa natural na boses sa device na ito. Kadalasan, nakakatulong ang pagsara ng ibang app at muling pagsubok; pansamantala, system voice ang gagamitin.",
     "copiar_detalhe": "Kopyahin ang detalye",
-    "copiado": "Nakopya ang detalye."
+    "copiado": "Nakopya ang detalye.",
+    "falhou_titulo": "Hindi na-load ang natural na boses sa device na ito.",
+    "falhou_texto": "Hindi naihanda ng device ang natural na boses. Magpapatuloy ang pagbasa gamit ang system voice. Para makatulong, kopyahin ang detalye sa ibaba at ipadala sa suporta.",
+    "falhou_memoria_texto": "Kulang ang memory para sa natural na boses sa device na ito. Kadalasan, nakakatulong ang pagsara ng ibang app at muling pagsubok.",
+    "tentar_de_novo": "Subukan ulit",
+    "tentando": "Naglo-load…",
+    "aviso_aparelho_justo": "Kaunti ang memory ng device na ito para sa natural na boses. Baka hindi ito mag-load; kung gayon, alisin na lang ito at mababawi ang espasyo.",
+    "preparando_demora": "Inihahanda ang boses. Maaaring tumagal ito nang ilang minuto.",
+    "incompativel_titulo": "Hindi gumagana ang natural na boses sa device na ito.",
+    "incompativel_memoria": "Kulang ang memory para ihanda ito. Mananatili sa system voice ang pagbasa, at nasa ibaba ang mga opsyon nito.",
+    "incompativel_lento": "Masyado itong mabagal para makasabay sa pagbasa. Mananatili sa system voice ang pagbasa, at nasa ibaba ang mga opsyon nito.",
+    "incompativel_queda": "Nagsara ang app habang naglo-load ito. Mananatili sa system voice ang pagbasa, at nasa ibaba ang mga opsyon nito.",
+    "incompativel_falha": "Hindi ito ma-load dito. Mananatili sa system voice ang pagbasa, at nasa ibaba ang mga opsyon nito.",
+    "testar_de_novo": "Subukan ulit",
+    "remover_e_liberar": "Alisin at makabawi ng {tamanho}",
+    "tela_durante_a_leitura": "Screen habang nagbabasa",
+    "manter_tela_ligada": "Panatilihing naka-on ang screen",
+    "manter_tela_ligada_dica": "Habang bukas ang libro, hindi kusang mamamatay ang screen. Pagsara ng libro, babalik sa normal ang lahat."
   }
 });

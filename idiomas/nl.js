@@ -1009,6 +1009,23 @@ Idiomas.registrar('nl', {
     "sem_memoria_usando_sistema": "De natuurlijke stem paste niet in het geheugen van dit apparaat. De systeemstem leest voor.",
     "aviso_falha_memoria": "Er was niet genoeg geheugen voor de natuurlijke stem op dit apparaat. Andere apps sluiten en het opnieuw proberen helpt meestal; zolang leest de systeemstem voor.",
     "copiar_detalhe": "Details kopiëren",
-    "copiado": "Details gekopieerd."
+    "copiado": "Details gekopieerd.",
+    "falhou_titulo": "De natuurlijke stem is niet geladen op dit apparaat.",
+    "falhou_texto": "Het apparaat kon de natuurlijke stem niet klaarzetten. Het voorlezen gaat verder met de systeemstem. Kopieer de details hieronder en stuur ze naar de ondersteuning om te helpen.",
+    "falhou_memoria_texto": "Er was te weinig geheugen voor de natuurlijke stem op dit apparaat. Andere apps sluiten en opnieuw proberen helpt meestal.",
+    "tentar_de_novo": "Opnieuw proberen",
+    "tentando": "Laden…",
+    "aviso_aparelho_justo": "Dit apparaat heeft weinig geheugen voor de natuurlijke stem. Mogelijk laadt hij niet; verwijder hem dan gewoon en krijg de ruimte terug.",
+    "preparando_demora": "De stem wordt voorbereid. Dit kan een paar minuten duren.",
+    "incompativel_titulo": "De natuurlijke stem werkt niet op dit apparaat.",
+    "incompativel_memoria": "Er was te weinig geheugen om hem klaar te zetten. Het voorlezen blijft bij de systeemstem; de opties daarvoor staan hieronder.",
+    "incompativel_lento": "Hij was te traag om het voorlezen bij te houden. Het voorlezen blijft bij de systeemstem; de opties daarvoor staan hieronder.",
+    "incompativel_queda": "De app sloot tijdens het laden. Het voorlezen blijft bij de systeemstem; de opties daarvoor staan hieronder.",
+    "incompativel_falha": "Hij kon hier niet laden. Het voorlezen blijft bij de systeemstem; de opties daarvoor staan hieronder.",
+    "testar_de_novo": "Opnieuw testen",
+    "remover_e_liberar": "Verwijderen en {tamanho} vrijmaken",
+    "tela_durante_a_leitura": "Scherm tijdens het lezen",
+    "manter_tela_ligada": "Scherm aan laten",
+    "manter_tela_ligada_dica": "Zolang een boek open is, gaat het scherm niet vanzelf uit. Bij het sluiten van het boek is alles weer normaal."
   }
 });

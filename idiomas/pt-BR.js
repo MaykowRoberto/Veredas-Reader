@@ -1022,6 +1022,23 @@ Idiomas.registrar('pt-BR', {
     "sem_memoria_usando_sistema": "A voz natural não coube na memória deste aparelho. Lendo com a voz do sistema.",
     "aviso_falha_memoria": "Não houve memória suficiente para a voz natural neste aparelho. Fechar outros aplicativos e tentar de novo costuma resolver; enquanto isso, a leitura usa a voz do sistema.",
     "copiar_detalhe": "Copiar detalhe",
-    "copiado": "Detalhe copiado."
+    "copiado": "Detalhe copiado.",
+    "falhou_titulo": "A voz natural não carregou neste aparelho.",
+    "falhou_texto": "O aparelho não conseguiu montar a voz natural. A leitura segue com a voz do sistema. Se quiser ajudar a resolver, copie o detalhe abaixo e envie para o suporte.",
+    "falhou_memoria_texto": "Faltou memória para a voz natural neste aparelho. Fechar outros aplicativos e tentar de novo costuma resolver.",
+    "tentar_de_novo": "Tentar de novo",
+    "tentando": "Carregando…",
+    "aviso_aparelho_justo": "Este aparelho tem pouca memória para a voz natural. Pode ser que ela não carregue; nesse caso, é só remover e recuperar o espaço.",
+    "preparando_demora": "Preparando a voz. Isso pode levar alguns minutos.",
+    "incompativel_titulo": "A voz natural não funciona neste aparelho.",
+    "incompativel_memoria": "Não houve memória suficiente para montá-la. A leitura fica com a voz do sistema, e as opções dela aparecem abaixo.",
+    "incompativel_lento": "Ela ficou lenta demais para acompanhar a leitura. A leitura fica com a voz do sistema, e as opções dela aparecem abaixo.",
+    "incompativel_queda": "O aplicativo foi encerrado enquanto ela carregava. A leitura fica com a voz do sistema, e as opções dela aparecem abaixo.",
+    "incompativel_falha": "Ela não conseguiu carregar aqui. A leitura fica com a voz do sistema, e as opções dela aparecem abaixo.",
+    "testar_de_novo": "Testar de novo",
+    "remover_e_liberar": "Remover e liberar {tamanho}",
+    "tela_durante_a_leitura": "Tela durante a leitura",
+    "manter_tela_ligada": "Manter a tela ligada",
+    "manter_tela_ligada_dica": "Enquanto um livro estiver aberto, a tela não apaga sozinha. Ao fechar o livro, tudo volta ao normal."
   }
 });

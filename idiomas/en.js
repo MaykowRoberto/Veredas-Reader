@@ -1019,6 +1019,23 @@ Idiomas.registrar('en', {
     "sem_memoria_usando_sistema": "The natural voice didn’t fit in this device’s memory. Reading with the system voice.",
     "aviso_falha_memoria": "There wasn’t enough memory for the natural voice on this device. Closing other apps and trying again usually helps; meanwhile, reading uses the system voice.",
     "copiar_detalhe": "Copy details",
-    "copiado": "Details copied."
+    "copiado": "Details copied.",
+    "falhou_titulo": "The natural voice didn’t load on this device.",
+    "falhou_texto": "The device couldn’t set up the natural voice. Reading continues with the system voice. To help get this fixed, copy the details below and send them to support.",
+    "falhou_memoria_texto": "There wasn’t enough memory for the natural voice on this device. Closing other apps and trying again usually helps.",
+    "tentar_de_novo": "Try again",
+    "tentando": "Loading…",
+    "aviso_aparelho_justo": "This device has little memory for the natural voice. It may not load; if so, just remove it and get the space back.",
+    "preparando_demora": "Preparing the voice. This can take a few minutes.",
+    "incompativel_titulo": "The natural voice doesn’t work on this device.",
+    "incompativel_memoria": "There wasn’t enough memory to set it up. Reading stays with the system voice, and its options are below.",
+    "incompativel_lento": "It was too slow to keep up with the reading. Reading stays with the system voice, and its options are below.",
+    "incompativel_queda": "The app closed while it was loading. Reading stays with the system voice, and its options are below.",
+    "incompativel_falha": "It couldn’t load here. Reading stays with the system voice, and its options are below.",
+    "testar_de_novo": "Test again",
+    "remover_e_liberar": "Remove and free {tamanho}",
+    "tela_durante_a_leitura": "Screen while reading",
+    "manter_tela_ligada": "Keep the screen on",
+    "manter_tela_ligada_dica": "While a book is open, the screen won’t turn itself off. Closing the book puts everything back to normal."
   }
 });

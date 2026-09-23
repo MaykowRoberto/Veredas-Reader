@@ -1007,6 +1007,23 @@ Idiomas.registrar('zh', {
     "sem_memoria_usando_sistema": "此设备的内存放不下自然声音，将使用系统声音朗读。",
     "aviso_falha_memoria": "此设备没有足够内存运行自然声音。关闭其他应用后重试通常可以解决；在此之前将使用系统声音朗读。",
     "copiar_detalhe": "复制详情",
-    "copiado": "详情已复制。"
+    "copiado": "详情已复制。",
+    "falhou_titulo": "自然声音未能在此设备上加载。",
+    "falhou_texto": "设备无法准备自然声音，将继续使用系统声音朗读。如需帮助排查，请复制下面的详情并发送给支持人员。",
+    "falhou_memoria_texto": "此设备没有足够内存运行自然声音。关闭其他应用后重试通常可以解决。",
+    "tentar_de_novo": "重试",
+    "tentando": "加载中…",
+    "aviso_aparelho_justo": "此设备可用于自然声音的内存较少，可能无法加载；若是如此，删除即可收回空间。",
+    "preparando_demora": "正在准备声音，可能需要几分钟。",
+    "incompativel_titulo": "自然声音在此设备上无法使用。",
+    "incompativel_memoria": "内存不足，无法完成准备。朗读将使用系统声音，其选项在下方。",
+    "incompativel_lento": "生成速度跟不上朗读。朗读将使用系统声音，其选项在下方。",
+    "incompativel_queda": "加载过程中应用被关闭。朗读将使用系统声音，其选项在下方。",
+    "incompativel_falha": "在此设备上无法加载。朗读将使用系统声音，其选项在下方。",
+    "testar_de_novo": "重新测试",
+    "remover_e_liberar": "删除并释放 {tamanho}",
+    "tela_durante_a_leitura": "阅读时的屏幕",
+    "manter_tela_ligada": "保持屏幕常亮",
+    "manter_tela_ligada_dica": "打开书籍期间屏幕不会自动熄灭。关闭书籍后一切恢复正常。"
   }
 });

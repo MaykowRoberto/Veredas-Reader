@@ -1009,6 +1009,23 @@ Idiomas.registrar('fr', {
     "sem_memoria_usando_sistema": "La voix naturelle n’a pas tenu dans la mémoire de cet appareil. Lecture avec la voix du système.",
     "aviso_falha_memoria": "Il n’y avait pas assez de mémoire pour la voix naturelle sur cet appareil. Fermer d’autres applications et réessayer suffit souvent ; en attendant, la lecture utilise la voix du système.",
     "copiar_detalhe": "Copier le détail",
-    "copiado": "Détail copié."
+    "copiado": "Détail copié.",
+    "falhou_titulo": "La voix naturelle ne s’est pas chargée sur cet appareil.",
+    "falhou_texto": "L’appareil n’a pas réussi à préparer la voix naturelle. La lecture continue avec la voix du système. Pour aider à résoudre le problème, copiez le détail ci-dessous et envoyez-le au support.",
+    "falhou_memoria_texto": "Il a manqué de la mémoire pour la voix naturelle sur cet appareil. Fermer d’autres applications et réessayer suffit souvent.",
+    "tentar_de_novo": "Réessayer",
+    "tentando": "Chargement…",
+    "aviso_aparelho_justo": "Cet appareil a peu de mémoire pour la voix naturelle. Elle risque de ne pas se charger ; dans ce cas, il suffit de la supprimer pour récupérer l’espace.",
+    "preparando_demora": "Préparation de la voix. Cela peut prendre quelques minutes.",
+    "incompativel_titulo": "La voix naturelle ne fonctionne pas sur cet appareil.",
+    "incompativel_memoria": "Il n’y avait pas assez de mémoire pour la préparer. La lecture reste avec la voix du système, dont les options sont ci-dessous.",
+    "incompativel_lento": "Elle était trop lente pour suivre la lecture. La lecture reste avec la voix du système, dont les options sont ci-dessous.",
+    "incompativel_queda": "L’application s’est fermée pendant le chargement. La lecture reste avec la voix du système, dont les options sont ci-dessous.",
+    "incompativel_falha": "Elle n’a pas pu se charger ici. La lecture reste avec la voix du système, dont les options sont ci-dessous.",
+    "testar_de_novo": "Réessayer le test",
+    "remover_e_liberar": "Supprimer et libérer {tamanho}",
+    "tela_durante_a_leitura": "Écran pendant la lecture",
+    "manter_tela_ligada": "Garder l’écran allumé",
+    "manter_tela_ligada_dica": "Tant qu’un livre est ouvert, l’écran ne s’éteint pas tout seul. À la fermeture du livre, tout revient à la normale."
   }
 });

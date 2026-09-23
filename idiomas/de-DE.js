@@ -1014,6 +1014,23 @@ Idiomas.registrar('de-DE', {
     "sem_memoria_usando_sistema": "Die natürliche Stimme passte nicht in den Speicher dieses Geräts. Es liest die Systemstimme.",
     "aviso_falha_memoria": "Auf diesem Gerät war nicht genug Speicher für die natürliche Stimme. Andere Apps zu schließen und es erneut zu versuchen hilft meistens; solange liest die Systemstimme.",
     "copiar_detalhe": "Details kopieren",
-    "copiado": "Details kopiert."
+    "copiado": "Details kopiert.",
+    "falhou_titulo": "Die natürliche Stimme wurde auf diesem Gerät nicht geladen.",
+    "falhou_texto": "Das Gerät konnte die natürliche Stimme nicht einrichten. Es liest die Systemstimme weiter. Zur Fehlersuche die Details unten kopieren und an den Support senden.",
+    "falhou_memoria_texto": "Auf diesem Gerät war zu wenig Speicher für die natürliche Stimme. Andere Apps zu schließen und es erneut zu versuchen hilft meistens.",
+    "tentar_de_novo": "Erneut versuchen",
+    "tentando": "Wird geladen…",
+    "aviso_aparelho_justo": "Dieses Gerät hat wenig Speicher für die natürliche Stimme. Sie lädt möglicherweise nicht; dann einfach entfernen und den Platz zurückbekommen.",
+    "preparando_demora": "Die Stimme wird vorbereitet. Das kann einige Minuten dauern.",
+    "incompativel_titulo": "Die natürliche Stimme funktioniert auf diesem Gerät nicht.",
+    "incompativel_memoria": "Es war zu wenig Speicher vorhanden, um sie einzurichten. Es liest die Systemstimme, deren Optionen unten stehen.",
+    "incompativel_lento": "Sie war zu langsam, um mit dem Lesen mitzuhalten. Es liest die Systemstimme, deren Optionen unten stehen.",
+    "incompativel_queda": "Die App wurde beim Laden beendet. Es liest die Systemstimme, deren Optionen unten stehen.",
+    "incompativel_falha": "Sie konnte hier nicht geladen werden. Es liest die Systemstimme, deren Optionen unten stehen.",
+    "testar_de_novo": "Erneut testen",
+    "remover_e_liberar": "Entfernen und {tamanho} freigeben",
+    "tela_durante_a_leitura": "Bildschirm beim Lesen",
+    "manter_tela_ligada": "Bildschirm anlassen",
+    "manter_tela_ligada_dica": "Solange ein Buch geöffnet ist, schaltet sich der Bildschirm nicht von selbst aus. Beim Schließen des Buchs ist alles wieder wie zuvor."
   }
 });

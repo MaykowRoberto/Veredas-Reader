@@ -2378,3 +2378,10 @@ html[dir="rtl"] .select{
 .vn-detalhe code{font-size:10.5px;line-height:1.45;word-break:break-word;color:var(--muted);display:block}
 .vn-cautela{display:flex;gap:8px;align-items:flex-start;color:var(--muted)}
 .vn-cautela svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--aviso-forte)}
+/* A espera pela voz é longa; a linha de status pulsa devagar para a
+   pessoa saber que o aplicativo continua trabalhando. */
+@keyframes vn-pulsa{0%,100%{opacity:1}50%{opacity:.35}}
+.tts-now-playing small.pulsando{animation:vn-pulsa 2.2s ease-in-out infinite;color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.tts-now-playing small.pulsando{animation:none;font-weight:700}}
+.vn-sub-topo{margin:0 0 6px}
+.vn-motor{margin-bottom:12px}

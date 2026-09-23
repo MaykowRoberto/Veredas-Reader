@@ -1007,6 +1007,23 @@ Idiomas.registrar('es-419', {
     "sem_memoria_usando_sistema": "La voz natural no cupo en la memoria de este dispositivo. La lectura sigue con la voz del sistema.",
     "aviso_falha_memoria": "No hubo memoria suficiente para la voz natural en este dispositivo. Cerrar otras apps y volver a intentarlo suele funcionar; mientras tanto, la lectura usa la voz del sistema.",
     "copiar_detalhe": "Copiar detalle",
-    "copiado": "Detalle copiado."
+    "copiado": "Detalle copiado.",
+    "falhou_titulo": "La voz natural no se cargó en este dispositivo.",
+    "falhou_texto": "El dispositivo no pudo montar la voz natural. La lectura sigue con la voz del sistema. Si quieres ayudar a resolverlo, copia el detalle de abajo y envíalo al soporte.",
+    "falhou_memoria_texto": "Faltó memoria para la voz natural en este dispositivo. Cerrar otras apps y volver a intentarlo suele funcionar.",
+    "tentar_de_novo": "Reintentar",
+    "tentando": "Cargando…",
+    "aviso_aparelho_justo": "Este dispositivo tiene poca memoria para la voz natural. Puede que no cargue; si pasa, basta con eliminarla y recuperar el espacio.",
+    "preparando_demora": "Preparando la voz. Esto puede tardar unos minutos.",
+    "incompativel_titulo": "La voz natural no funciona en este dispositivo.",
+    "incompativel_memoria": "No hubo memoria suficiente para montarla. La lectura se queda con la voz del sistema, y sus opciones están abajo.",
+    "incompativel_lento": "Fue demasiado lenta para seguir la lectura. La lectura se queda con la voz del sistema, y sus opciones están abajo.",
+    "incompativel_queda": "La app se cerró mientras cargaba. La lectura se queda con la voz del sistema, y sus opciones están abajo.",
+    "incompativel_falha": "No pudo cargarse aquí. La lectura se queda con la voz del sistema, y sus opciones están abajo.",
+    "testar_de_novo": "Probar de nuevo",
+    "remover_e_liberar": "Eliminar y liberar {tamanho}",
+    "tela_durante_a_leitura": "Pantalla durante la lectura",
+    "manter_tela_ligada": "Mantener la pantalla encendida",
+    "manter_tela_ligada_dica": "Mientras haya un libro abierto, la pantalla no se apaga sola. Al cerrar el libro, todo vuelve a la normalidad."
   }
 });

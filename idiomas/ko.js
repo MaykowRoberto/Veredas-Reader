@@ -1007,6 +1007,23 @@ Idiomas.registrar('ko', {
     "sem_memoria_usando_sistema": "이 기기의 메모리에 자연스러운 음성이 들어가지 못했습니다. 시스템 음성으로 읽습니다.",
     "aviso_falha_memoria": "이 기기에서 자연스러운 음성에 쓸 메모리가 부족했습니다. 다른 앱을 닫고 다시 시도하면 대개 해결됩니다. 그때까지는 시스템 음성으로 읽습니다.",
     "copiar_detalhe": "자세한 내용 복사",
-    "copiado": "자세한 내용을 복사했습니다."
+    "copiado": "자세한 내용을 복사했습니다.",
+    "falhou_titulo": "이 기기에서 자연스러운 음성을 불러오지 못했습니다.",
+    "falhou_texto": "기기가 자연스러운 음성을 준비하지 못했습니다. 시스템 음성으로 계속 읽습니다. 해결에 도움이 되도록 아래 자세한 내용을 복사해 지원팀에 보내 주세요.",
+    "falhou_memoria_texto": "이 기기에서 자연스러운 음성에 쓸 메모리가 부족했습니다. 다른 앱을 닫고 다시 시도하면 대개 해결됩니다.",
+    "tentar_de_novo": "다시 시도",
+    "tentando": "불러오는 중…",
+    "aviso_aparelho_justo": "이 기기는 자연스러운 음성에 쓸 메모리가 넉넉하지 않습니다. 불러오지 못할 수 있으며, 그럴 때는 삭제하면 용량이 돌아옵니다.",
+    "preparando_demora": "음성을 준비하고 있습니다. 몇 분 걸릴 수 있습니다.",
+    "incompativel_titulo": "이 기기에서는 자연스러운 음성을 쓸 수 없습니다.",
+    "incompativel_memoria": "준비할 메모리가 부족했습니다. 읽기는 시스템 음성으로 하며, 설정은 아래에 있습니다.",
+    "incompativel_lento": "읽는 속도를 따라가지 못했습니다. 읽기는 시스템 음성으로 하며, 설정은 아래에 있습니다.",
+    "incompativel_queda": "불러오는 중에 앱이 종료됐습니다. 읽기는 시스템 음성으로 하며, 설정은 아래에 있습니다.",
+    "incompativel_falha": "여기서는 불러오지 못했습니다. 읽기는 시스템 음성으로 하며, 설정은 아래에 있습니다.",
+    "testar_de_novo": "다시 시험하기",
+    "remover_e_liberar": "삭제하고 {tamanho} 확보",
+    "tela_durante_a_leitura": "읽는 동안 화면",
+    "manter_tela_ligada": "화면 켜 두기",
+    "manter_tela_ligada_dica": "책이 열려 있는 동안에는 화면이 저절로 꺼지지 않습니다. 책을 닫으면 원래대로 돌아갑니다."
   }
 });

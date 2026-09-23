@@ -1007,6 +1007,23 @@ Idiomas.registrar('zh-TW', {
     "sem_memoria_usando_sistema": "這台裝置的記憶體放不下自然語音，將使用系統語音朗讀。",
     "aviso_falha_memoria": "這台裝置沒有足夠的記憶體執行自然語音。關閉其他應用程式後再試通常可以解決；在此之前會使用系統語音朗讀。",
     "copiar_detalhe": "複製詳細資訊",
-    "copiado": "已複製詳細資訊。"
+    "copiado": "已複製詳細資訊。",
+    "falhou_titulo": "自然語音未能在這台裝置上載入。",
+    "falhou_texto": "裝置無法準備自然語音，將繼續使用系統語音朗讀。如需協助排查，請複製下方的詳細資訊並傳送給支援人員。",
+    "falhou_memoria_texto": "這台裝置沒有足夠的記憶體執行自然語音。關閉其他應用程式後再試通常可以解決。",
+    "tentar_de_novo": "重試",
+    "tentando": "載入中…",
+    "aviso_aparelho_justo": "這台裝置可用於自然語音的記憶體較少，可能無法載入；若是如此，移除即可收回空間。",
+    "preparando_demora": "正在準備語音，可能需要幾分鐘。",
+    "incompativel_titulo": "自然語音在這台裝置上無法使用。",
+    "incompativel_memoria": "記憶體不足，無法完成準備。朗讀將使用系統語音，其選項在下方。",
+    "incompativel_lento": "產生速度跟不上朗讀。朗讀將使用系統語音，其選項在下方。",
+    "incompativel_queda": "載入過程中應用程式被關閉。朗讀將使用系統語音，其選項在下方。",
+    "incompativel_falha": "在這台裝置上無法載入。朗讀將使用系統語音，其選項在下方。",
+    "testar_de_novo": "重新測試",
+    "remover_e_liberar": "移除並釋出 {tamanho}",
+    "tela_durante_a_leitura": "閱讀時的螢幕",
+    "manter_tela_ligada": "保持螢幕開啟",
+    "manter_tela_ligada_dica": "開著書籍時螢幕不會自動熄滅。關閉書籍後一切恢復正常。"
   }
 });

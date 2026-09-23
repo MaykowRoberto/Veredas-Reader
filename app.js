@@ -644,7 +644,7 @@ class DBManager{
 const AppDefaults={settings:{
   theme:'light',fontFamily:"'Literata',Georgia,serif",fontSize:18,lineHeight:1.65,margin:6,brightness:100,
   readerBg:'',readerText:'',orientation:'auto',sort:'custom',groupAuthors:true,
-  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,ttsRate:1,ttsVoiceURI:'',ttsMotor:'natural',ttsVozNatural:'feminina',ttsQualidade:'auto',ttsIdiomaLivro:{},pageTurn:'curl',
+  readingMode:'auto',pdfReadingMode:'vertical',pdfZoom:1,telaAcesa:true,ttsRate:1,ttsVoiceURI:'',ttsMotor:'natural',ttsVozNatural:'feminina',ttsQualidade:'auto',ttsIdiomaLivro:{},pageTurn:'curl',
   audioSpeed:1,audioSkipBack:15,audioSkipForward:30,audioSmartRewind:true,audioAutoplay:true,audioScope:'chapter',audioVolume:1,
   comicFit:'page',comicSpread:true,comicRtl:false,
   lastBackupAt:0,backupSnoozeAt:0,backupLembretes:true,
@@ -4935,6 +4935,56 @@ const VozNatural={
   IDIOMAS:new Set(['en','ko','ja','ar','bg','cs','da','de','el','es','et','fi','fr','hi','hr','hu','id','it','lt','lv','nl','pl','pt','ro','ru','sk','sl','sv','tr','uk','vi']),
 
   estado:{fase:'desconhecido',baixados:0,erro:'',backend:''},
+
+  /* ---------- este aparelho dá conta? -------------------------
+     Um aparelho que não conseguiu montar a voz não vai conseguir na
+     próxima vez: insistir só entrega ao leitor uma espera longa que
+     termina em nada. O veredito fica no localStorage, e não nas
+     configurações, de propósito — ele é deste aparelho, e não pode
+     viajar no backup para um celular novo, que talvez dê conta.
+     Motivos: 'memoria', 'lento', 'queda' (o app fechou no meio) e
+     'falha'. */
+  CHAVE_VEREDITO:'veredas.voz-natural.incompativel',
+  CHAVE_TENTATIVA:'veredas.voz-natural.tentando',
+  veredito(){
+    if(this._veredito!==undefined)return this._veredito;
+    try{this._veredito=JSON.parse(localStorage.getItem(this.CHAVE_VEREDITO)||'null')}
+    catch(e){this._veredito=null}
+    return this._veredito;
+  },
+  incompativel(){return !!this.veredito()},
+  marcarIncompativel(motivo,detalhe){
+    if(this.incompativel())return;
+    this._veredito={motivo,detalhe:String(detalhe||'').slice(0,400),quando:Date.now()};
+    try{localStorage.setItem(this.CHAVE_VEREDITO,JSON.stringify(this._veredito))}catch(e){}
+    this.soltar();
+    this.emitir();
+  },
+  limparVeredito(){
+    this._veredito=null;
+    try{localStorage.removeItem(this.CHAVE_VEREDITO)}catch(e){}
+    this.estado.falhouMotor=false;this.estado.erroMotor='';
+    this.emitir();
+  },
+  /* Quedas do aplicativo não deixam recado: o que fica é a marca de
+     "estava tentando" gravada antes da carga. Se ela ainda estiver lá
+     na abertura seguinte, o app fechou no meio — e isso conta como
+     incompatível. */
+  marcarTentativa(){try{localStorage.setItem(this.CHAVE_TENTATIVA,String(Date.now()))}catch(e){}},
+  encerrarTentativa(){try{localStorage.removeItem(this.CHAVE_TENTATIVA)}catch(e){}},
+  conferirQueda(){
+    /* Uma vez por abertura do aplicativo, e nunca no meio de uma
+       carga: a marca de "estava tentando" só significa queda quando
+       sobrou de outra sessão. */
+    if(this._conferido||this._iniciando)return false;
+    this._conferido=true;
+    let marca=0;
+    try{marca=Number(localStorage.getItem(this.CHAVE_TENTATIVA))||0}catch(e){}
+    if(!marca)return false;
+    this.encerrarTentativa();
+    this.marcarIncompativel('queda','o aplicativo foi encerrado enquanto a voz carregava');
+    return true;
+  },
   ouvintes:new Set(),
   get total(){return this.ARQUIVOS.reduce((s,a)=>s+a.bytes,0)},
   on(fn){this.ouvintes.add(fn);return()=>this.ouvintes.delete(fn)},
@@ -4971,6 +5021,7 @@ const VozNatural={
   _tx(tx){return new Promise((ok,falha)=>{tx.oncomplete=()=>ok();tx.onerror=()=>falha(tx.error);tx.onabort=()=>falha(tx.error||new Error('abortado'))})},
 
   async verificar(){
+    this.conferirQueda();
     if(!this.ambienteOk()){this.estado.fase='indisponivel';this.emitir();return this.estado}
     if(this.estado.fase==='baixando')return this.estado;
     try{
@@ -5107,16 +5158,30 @@ const VozNatural={
      mínimo (um núcleo, sem placa de vídeo). Aparelhos mais simples às
      vezes tropeçam justamente no que é opcional. */
   async motor(){
+    if(this.incompativel())throw new Error('aparelho-incompativel');
+    this._conferido=true;          /* a partir daqui a marca é desta sessão */
+    this.marcarTentativa();
+    try{return await this._carregar()}
+    finally{this.encerrarTentativa()}
+  },
+  async _carregar(){
     try{return await this._motor()}
     catch(e){
-      if(this._modoSeguro){this.estado.falhouMotor=true;this.emitir();throw e}
+      if(this._modoSeguro){
+        this.encerrarTentativa();
+        this.estado.falhouMotor=true;
+        this.marcarIncompativel(this.semMemoria()?'memoria':'falha',this.estado.erroMotor);
+        this.emitir();throw e;
+      }
       this._modoSeguro=true;
       console.warn('[voz natural] tentando em modo seguro:',e&&e.message||e);
       const primeiro=String(e&&e.message||e);
       try{return await this._motor()}
       catch(e2){
+        this.encerrarTentativa();
         this.estado.falhouMotor=true;
         this.estado.erroMotor='1ª: '+primeiro+'  ||  2ª (modo seguro): '+String(e2&&e2.message||e2);
+        this.marcarIncompativel(this.semMemoria()?'memoria':'falha',this.estado.erroMotor);
         this.emitir();
         throw e2;
       }
@@ -5150,7 +5215,7 @@ const VozNatural={
       let fim=(erro,backend)=>{
         w.removeEventListener('message',primeira);
         if(erro){this._iniciando=null;try{w.terminate()}catch(e){}this._trab=null;this.estado.erroMotor=String(erro.message||erro);falha(erro)}
-        else{this.estado.backend=backend;this.estado.falhouMotor=false;this.estado.erroMotor='';this.emitir();ok(backend)}
+        else{this.encerrarTentativa();this.estado.backend=backend;this.estado.falhouMotor=false;this.estado.erroMotor='';this.emitir();ok(backend)}
       };
       const primeira=e=>{
         const m=e.data||{};
@@ -5341,14 +5406,39 @@ const VozNaturalUI={
   html(){
     const s=App.state.settings;
     const est=VozNatural.estado;
-    /* A voz natural é sempre a preferida. A voz do sistema só lê
-       quando a natural não foi baixada, não fala o idioma do livro ou
-       não conseguiu rodar no aparelho — não existe chave para trocar. */
-    const seg='';
+    /* A voz natural é a padrão. A chave para trocar só aparece quando
+       ela está pronta para usar: oferecer a escolha antes disso seria
+       oferecer algo que ainda não existe. */
+    const escolhaSistema=s.ttsMotor==='sistema';
+    const seg=(est.fase==='pronto'&&!VozNatural.incompativel()&&!est.falhouMotor)
+      ? `<h5 class="vn-sub vn-sub-topo">${T('vn.quem_le')}</h5>
+         <div class="seg two vn-motor" role="radiogroup" aria-label="${Utils.esc(T('vn.quem_le'))}">
+           <button type="button" role="radio" aria-checked="${!escolhaSistema}" class="${!escolhaSistema?'active':''}" data-vn-motor="natural"><i data-lucide="sparkles"></i>${T('vn.natural')}</button>
+           <button type="button" role="radio" aria-checked="${escolhaSistema}" class="${escolhaSistema?'active':''}" data-vn-motor="sistema"><i data-lucide="smartphone"></i>${T('vn.do_sistema')}</button>
+         </div>`
+      : '';
     const total=this.mb(VozNatural.total);
     const topo=`<div class="vn-topo"><span class="vn-selo"><i data-lucide="audio-lines"></i></span><div><strong>${T('vn.voz_natural')}</strong><small>${T('vn.gerada_no_aparelho')}</small></div></div>`;
     const barra=(b,ativo)=>`<div class="vn-barra${ativo?' ativa':''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(b/VozNatural.total*100)}" aria-label="${Utils.esc(T('vn.progresso_download'))}"><span style="width:${Math.min(100,b/VozNatural.total*100).toFixed(1)}%"></span></div>
       <div class="vn-numeros"><span>${T('vn.x_de_y',{x:this.mb(b),y:total})}</span><span>${this.pct(b)}</span></div>`;
+    const vereditoRuim=VozNatural.veredito();
+    if(vereditoRuim){
+      const porque={
+        memoria:T('vn.incompativel_memoria'),
+        lento:T('vn.incompativel_lento'),
+        queda:T('vn.incompativel_queda')
+      }[vereditoRuim.motivo]||T('vn.incompativel_falha');
+      const temArquivos=est.fase==='pronto'||est.fase==='parcial'||est.baixados>0;
+      return `<div class="vn-cartao">${topo}
+        <p class="vn-texto vn-erro">${T('vn.incompativel_titulo')}</p>
+        <p class="vn-texto">${porque}</p>
+        ${vereditoRuim.detalhe?`<div class="vn-detalhe"><code>${Utils.esc(vereditoRuim.detalhe)}</code></div>`:''}
+        <div class="vn-botoes">
+          ${temArquivos?`<button type="button" class="soft-btn primary" data-vn-acao="remover"><i data-lucide="trash-2"></i>${T('vn.remover_e_liberar',{tamanho:this.mb(Math.max(est.baixados,VozNatural.total))})}</button>`:''}
+          <button type="button" class="soft-btn" data-vn-acao="tentar"${this._tentando?' disabled':''}><i data-lucide="${this._tentando?'loader':'refresh-cw'}" class="${this._tentando?'vn-gira':''}"></i>${T(this._tentando?'vn.tentando':'vn.testar_de_novo')}</button>
+        </div>
+      </div>`;
+    }
     const motivo=VozNatural.motivoAmbiente();
     if(motivo||est.fase==='indisponivel'){
       return seg+`<div class="vn-cartao vn-aviso">${topo}<p>${motivo==='arquivo'?T('vn.aviso_arquivo'):T('vn.aviso_navegador')}</p></div>`;
@@ -5400,7 +5490,7 @@ const VozNaturalUI={
     }
     /* pronto */
     const voz=s.ttsVozNatural==='masculina'?'masculina':'feminina';
-    const q=['auto','rapida','maxima'].includes(s.ttsQualidade)?s.ttsQualidade:'auto';
+    const q=s.ttsQualidade==='maxima'?'maxima':'auto';
     const opcao=(v,icone)=>{
       const ativa=voz===v;
       const gerando=this._gerandoAmostra===v;
@@ -5418,8 +5508,8 @@ const VozNaturalUI={
     return seg+`<div class="vn-cartao vn-pronto">${topo}
       <div class="vn-vozes" role="radiogroup" aria-label="${Utils.esc(T('vn.escolha_a_voz'))}">${opcao('feminina')}${opcao('masculina')}</div>
       <h5 class="vn-sub">${T('vn.qualidade')}</h5>
-      <div class="seg vn-qualidade" role="radiogroup" aria-label="${Utils.esc(T('vn.qualidade'))}">
-        ${['auto','rapida','maxima'].map(x=>`<button type="button" role="radio" aria-checked="${q===x}" class="${q===x?'active':''}" data-vn-qualidade="${x}">${T('vn.q_'+x)}</button>`).join('')}
+      <div class="seg two vn-qualidade" role="radiogroup" aria-label="${Utils.esc(T('vn.qualidade'))}">
+        ${['auto','maxima'].map(x=>`<button type="button" role="radio" aria-checked="${q===x}" class="${q===x?'active':''}" data-vn-qualidade="${x}">${T('vn.q_'+x)}</button>`).join('')}
       </div>
       <p class="setting-hint">${T('vn.q_'+q+'_desc')}</p>
       <div class="vn-rodape"><span><i data-lucide="hard-drive"></i>${T('vn.ocupa',{tamanho:total})}</span><button type="button" class="vn-link" data-vn-acao="remover">${T('vn.remover')}</button></div>
@@ -5488,7 +5578,12 @@ const VozNaturalUI={
     if(acao==='tentar'){
       this._tentando=true;this.renderizarTodos();
       VozNatural.soltar();
+      VozNatural.limparVeredito();
+      VozNatural._modoSeguro=false;
       VozNatural.estado.falhouMotor=false;VozNatural.estado.erroMotor='';
+      if(App.reader?.tts){App.reader.tts.naturalFalhou=false;App.reader.tts.naturalLento=false;App.reader.tts.passosAuto=0;App.reader.tts.lentidao=0}
+      await VozNatural.verificar();
+      if(VozNatural.estado.fase!=='pronto'){this._tentando=false;this.renderizarTodos();return}
       try{
         await VozNatural.motor();
         Utils.toast(T('vn.pronta'),'check-circle');
@@ -5527,7 +5622,7 @@ const VozNaturalUI={
     this._gerandoAmostra=voz;this.renderizarTodos();
     try{
       const {lang,texto}=VozNatural.amostraTexto();
-      const r=await VozNatural.sintetizar(texto,lang,voz,{passos:VozNatural.estado.backend==='webgpu'?6:(App.reader?.tts?.passosAuto||3),velocidade:1.05});
+      const r=await VozNatural.sintetizar(texto,lang,voz,{passos:App.reader?.tts?.passosAuto||6,velocidade:1.05});
       if(r.tipo!=='audio')throw new Error(r.tipo);
       const a=new Audio(URL.createObjectURL(new Blob([r.wav],{type:'audio/wav'})));
       this._amostra=a;this._amostraVoz=voz;
@@ -5636,8 +5731,12 @@ class TextToSpeechController{
      motivo volta junto, para a tela explicar a troca. */
   escolherMotor(){
     const lang=this.idiomaAtual();
+    /* A escolha da pessoa vem antes de tudo: quem preferiu a voz do
+       sistema não é levado de volta para a natural por nenhum motivo. */
+    if(App.state.settings.ttsMotor==='sistema')return {motor:'sistema',lang,motivo:'escolha'};
     const amb=VozNatural.motivoAmbiente();
     if(amb)return {motor:'sistema',lang,motivo:amb};
+    if(VozNatural.incompativel())return {motor:'sistema',lang,motivo:'incompativel'};
     if(VozNatural.estado.fase!=='pronto')return {motor:'sistema',lang,motivo:'nao-baixada'};
     if(!lang)return {motor:'sistema',lang,motivo:'idioma-desconhecido'};
     if(!VozNatural.IDIOMAS.has(lang.split('-')[0]))return {motor:'sistema',lang,motivo:'idioma'};
@@ -5695,6 +5794,8 @@ class TextToSpeechController{
         'idioma-desconhecido':T('vn.aviso_idioma_desconhecido'),
         'falha':T('vn.aviso_falha'),
         'lento':T('vn.aviso_lento'),
+        'incompativel':'',
+        'escolha':'',
         'arquivo':T('vn.aviso_arquivo'),
         'navegador':T('vn.aviso_navegador')
       };
@@ -5825,11 +5926,14 @@ class TextToSpeechController{
     const alvo=1.05*rate;
     const velocidade=Utils.clamp(alvo,0.8,1.6);
     const q=App.state.settings.ttsQualidade||'auto';
-    let passos=q==='rapida'?2:q==='maxima'?8:(VozNatural.estado.backend==='webgpu'?6:4);
+    /* Menos de quatro passos deixa a voz com um chiado metálico: não
+       vale a pena. Se o aparelho não acompanha nem com quatro, a voz
+       do sistema assume — é melhor do que uma voz feia. */
+    let passos=q==='maxima'?8:(VozNatural.estado.backend==='webgpu'?8:6);
     /* Automática: sem placa de vídeo, o primeiro trecho sai com o
        mínimo (2 passos) para a leitura começar logo; depois a medida
        real do aparelho diz quantos passos cabem no tempo da fala. */
-    if(q==='auto')passos=this.passosAuto||(VozNatural.estado.backend==='webgpu'?passos:2);
+    if(q==='auto'&&this.passosAuto)passos=this.passosAuto;
     return {velocidade,passos,playbackRate:alvo/velocidade,voz:App.state.settings.ttsVozNatural||'feminina'};
   }
   pedirAudio(pagina,trecho,texto){
@@ -5848,17 +5952,18 @@ class TextToSpeechController{
       const custo=n=>((r.fixo||0)+(r.porPasso||0)*n)/Math.max(0.5,r.duracao);
       if(r.porPasso){
         if(q==='auto'){
-          const teto=VozNatural.estado.backend==='webgpu'?6:4;
-          let n=teto;while(n>2&&custo(n)>0.8)n--;
+          const teto=8;
+          let n=teto;while(n>4&&custo(n)>0.8)n--;
           this.passosAuto=n;
         }
         /* Nem com o mínimo de passos a voz sai na velocidade da fala:
            neste aparelho a voz natural não dá conta. A leitura segue
            com a voz do sistema, e o painel explica o porquê. */
-        if(q!=='maxima'&&custo(2)>1.3){
+        if(q!=='maxima'&&custo(4)>1.3){
           this.lentidao++;
-          if((this.lentidao>=2||custo(2)>2)&&!this.naturalLento){
+          if((this.lentidao>=2||custo(4)>2)&&!this.naturalLento){
             this.naturalLento=true;
+            VozNatural.marcarIncompativel('lento','o aparelho gera a voz mais devagar do que a fala');
             Utils.toast(T('vn.lento_usando_sistema'),'hourglass');
             const pg=this.pageIndex,sg=this.segmentIndex;
             setTimeout(()=>{if(this.playing&&this.motor==='natural'){this.stop(false);this.start(pg,sg)}},0);
@@ -5931,6 +6036,8 @@ class TextToSpeechController{
       if(String(e?.message||'')==='encerrado')return;
       console.warn('[voz natural]',e);
       this.naturalFalhou=Date.now();
+      VozNatural.estado.erroMotor=String(e&&e.message||e);
+      VozNatural.marcarIncompativel(VozNatural.semMemoria()?'memoria':'falha',VozNatural.estado.erroMotor);
       Utils.toast(T('vn.parou_usando_sistema'),'alert-triangle');
       const pg=this.pageIndex,sg=this.segmentIndex;
       this.stop(false);this.start(pg,sg);
@@ -6451,6 +6558,33 @@ class ReaderEngine{
     const s=this.state.settings;
     return `${book.id}__${s.fontFamily}__${s.fontSize}__${s.lineHeight}__${s.margin}__${Math.round(w)}x${Math.round(h)}__paginator-v4`;
   }
+  /* ---------- tela acesa -------------------------------------
+     Ler é ficar parado olhando: sem toque na tela, o aparelho apaga
+     no meio de uma página. Enquanto um livro está aberto, o app pede
+     ao sistema para manter a tela ligada e devolve esse pedido ao
+     fechar o livro, ao trocar de aba ou ao sair. Quem preferir o
+     comportamento normal desliga em Configurações. */
+  async manterTelaAcesa(){
+    if(App.state.settings.telaAcesa===false)return this.soltarTela();
+    if(!('wakeLock' in navigator)||this.travaDaTela||document.visibilityState!=='visible')return;
+    try{
+      this.travaDaTela=await navigator.wakeLock.request('screen');
+      this.travaDaTela.addEventListener?.('release',()=>{this.travaDaTela=null});
+    }catch(e){this.travaDaTela=null}
+  }
+  async soltarTela(){
+    try{await this.travaDaTela?.release?.()}catch(e){}
+    this.travaDaTela=null;
+  }
+  ligarVigiaDaTela(){
+    if(this._vigiaDaTela)return;
+    this._vigiaDaTela=()=>{
+      const lendo=document.getElementById('view-reader')?.classList.contains('active');
+      if(document.visibilityState==='visible'&&lendo)this.manterTelaAcesa();
+      else this.soltarTela();
+    };
+    document.addEventListener('visibilitychange',this._vigiaDaTela);
+  }
   async openBook(book){
     /* Audiolivros têm player próprio; todo ponto do app que "abre um livro"
        passa por aqui, então nenhum outro lugar precisa saber a diferença. */
@@ -6458,6 +6592,7 @@ class ReaderEngine{
     if(this.navigating)return;
     App.player?.pauseForOtherMedia();
     this.navigating=true;
+    this.ligarVigiaDaTela();this.manterTelaAcesa();
     this.currentBook=Utils.normalizeBook(book);
     /* cada livro entra com o SEU sentido de rolagem */
     this.readingMode=this.resolveReadingMode(this.currentBook.format,this.currentBook);
@@ -8220,6 +8355,7 @@ class ReaderEngine{
     this.openController?.abort();
     this.hideUI();
     this.tts?.stop();
+    this.soltarTela();
     this.destroy();
     App.switchView('home');
     App.library.render();
@@ -11601,7 +11737,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 38';
+const BUILD='2026-09-20 · 39';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -12735,6 +12871,14 @@ const App={
   openPanel(id){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('visible'));
     if(id==='panel-settings'){
+      const tela=document.getElementById('set-tela-acesa');
+      if(tela){
+        tela.checked=this.state.settings.telaAcesa!==false;
+        tela.onchange=async()=>{
+          await this.updateSetting('telaAcesa',tela.checked);
+          if(tela.checked)this.reader?.manterTelaAcesa();else this.reader?.soltarTela();
+        };
+      }
       this.syncReadingModeUi();
       VozNatural.verificar().catch(()=>{});VozNaturalUI.renderizarTodos();
       if(this.reader&&this.reader.updateComicControls)this.reader.updateComicControls();

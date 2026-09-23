@@ -1009,6 +1009,23 @@ Idiomas.registrar('it', {
     "sem_memoria_usando_sistema": "La voce naturale non è entrata nella memoria di questo dispositivo. Legge la voce di sistema.",
     "aviso_falha_memoria": "Non c’era memoria sufficiente per la voce naturale su questo dispositivo. Chiudere altre app e riprovare di solito risolve; nel frattempo legge la voce di sistema.",
     "copiar_detalhe": "Copia il dettaglio",
-    "copiado": "Dettaglio copiato."
+    "copiado": "Dettaglio copiato.",
+    "falhou_titulo": "La voce naturale non si è caricata su questo dispositivo.",
+    "falhou_texto": "Il dispositivo non è riuscito a preparare la voce naturale. La lettura continua con la voce di sistema. Per aiutare a risolvere, copia il dettaglio qui sotto e invialo all’assistenza.",
+    "falhou_memoria_texto": "Non c’era memoria sufficiente per la voce naturale su questo dispositivo. Chiudere altre app e riprovare di solito risolve.",
+    "tentar_de_novo": "Riprova",
+    "tentando": "Caricamento…",
+    "aviso_aparelho_justo": "Questo dispositivo ha poca memoria per la voce naturale. Potrebbe non caricarsi; in tal caso basta rimuoverla e recuperare lo spazio.",
+    "preparando_demora": "Preparazione della voce. Può richiedere qualche minuto.",
+    "incompativel_titulo": "La voce naturale non funziona su questo dispositivo.",
+    "incompativel_memoria": "Non c’era memoria sufficiente per prepararla. La lettura resta con la voce di sistema, le cui opzioni sono qui sotto.",
+    "incompativel_lento": "Era troppo lenta per stare al passo con la lettura. La lettura resta con la voce di sistema, le cui opzioni sono qui sotto.",
+    "incompativel_queda": "L’app si è chiusa durante il caricamento. La lettura resta con la voce di sistema, le cui opzioni sono qui sotto.",
+    "incompativel_falha": "Non è riuscita a caricarsi qui. La lettura resta con la voce di sistema, le cui opzioni sono qui sotto.",
+    "testar_de_novo": "Riprova il test",
+    "remover_e_liberar": "Rimuovi e libera {tamanho}",
+    "tela_durante_a_leitura": "Schermo durante la lettura",
+    "manter_tela_ligada": "Tieni lo schermo acceso",
+    "manter_tela_ligada_dica": "Finché un libro è aperto, lo schermo non si spegne da solo. Chiudendo il libro, tutto torna come prima."
   }
 });
