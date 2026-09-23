@@ -991,6 +991,7 @@ Idiomas.registrar('es-419', {
     "removida": "Voz natural eliminada de este dispositivo.",
     "amostra_falhou": "No se pudo reproducir la muestra en este dispositivo.",
     "amostra": "¡Hola! Así van a sonar tus libros con la voz natural.",
+    "pode_demorar_um_minuto": "Esto puede tardar un minuto.",
     "gerando_voz": "Preparando la voz…",
     "automatico_idioma": "Automático ({idioma})",
     "automatico": "Automático",

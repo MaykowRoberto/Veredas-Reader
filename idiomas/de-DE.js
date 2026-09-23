@@ -998,6 +998,7 @@ Idiomas.registrar('de-DE', {
     "removida": "Natürliche Stimme von diesem Gerät entfernt.",
     "amostra_falhou": "Die Hörprobe konnte auf diesem Gerät nicht abgespielt werden.",
     "amostra": "Hallo! So klingen Ihre Bücher mit der natürlichen Stimme.",
+    "pode_demorar_um_minuto": "Das kann eine Minute dauern.",
     "gerando_voz": "Stimme wird vorbereitet…",
     "automatico_idioma": "Automatisch ({idioma})",
     "automatico": "Automatisch",

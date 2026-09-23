@@ -1008,6 +1008,7 @@ Idiomas.registrar('fil', {
     "removida": "Naalis na ang natural na boses sa device na ito.",
     "amostra_falhou": "Hindi ma-play ang sample sa device na ito.",
     "amostra": "Hello! Ganito ang magiging tunog ng mga libro mo sa natural na boses.",
+    "pode_demorar_um_minuto": "Maaari itong tumagal ng isang minuto.",
     "gerando_voz": "Inihahanda ang boses…",
     "automatico_idioma": "Awtomatiko ({idioma})",
     "automatico": "Awtomatiko",

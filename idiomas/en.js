@@ -1003,6 +1003,7 @@ Idiomas.registrar('en', {
     "removida": "Natural voice removed from this device.",
     "amostra_falhou": "Couldn’t play the sample on this device.",
     "amostra": "Hello! This is how your books will sound with the natural voice.",
+    "pode_demorar_um_minuto": "This can take a minute.",
     "gerando_voz": "Preparing the voice…",
     "automatico_idioma": "Automatic ({idioma})",
     "automatico": "Automatic",

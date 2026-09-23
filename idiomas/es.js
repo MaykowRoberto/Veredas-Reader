@@ -993,6 +993,7 @@ Idiomas.registrar('es', {
     "removida": "Voz natural eliminada de este dispositivo.",
     "amostra_falhou": "No se ha podido reproducir la muestra en este dispositivo.",
     "amostra": "¡Hola! Así sonarán tus libros con la voz natural.",
+    "pode_demorar_um_minuto": "Esto puede tardar un minuto.",
     "gerando_voz": "Preparando la voz…",
     "automatico_idioma": "Automático ({idioma})",
     "automatico": "Automático",

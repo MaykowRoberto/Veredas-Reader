@@ -991,6 +991,7 @@ Idiomas.registrar('ja', {
     "removida": "この端末から自然な声を削除しました。",
     "amostra_falhou": "この端末ではサンプルを再生できませんでした。",
     "amostra": "こんにちは！自然な声で読むと、本はこんなふうに聞こえます。",
+    "pode_demorar_um_minuto": "1分ほどかかることがあります。",
     "gerando_voz": "声を準備しています…",
     "automatico_idioma": "自動（{idioma}）",
     "automatico": "自動",

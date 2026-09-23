@@ -991,6 +991,7 @@ Idiomas.registrar('zh', {
     "removida": "已从此设备移除自然声音。",
     "amostra_falhou": "无法在此设备上播放试听。",
     "amostra": "你好！用自然声音朗读，书听起来就是这样。",
+    "pode_demorar_um_minuto": "这可能需要一分钟。",
     "gerando_voz": "正在准备声音…",
     "automatico_idioma": "自动（{idioma}）",
     "automatico": "自动",

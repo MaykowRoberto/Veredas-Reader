@@ -1061,6 +1061,7 @@ Idiomas.registrar('ar', {
     "removida": "أُزيل الصوت الطبيعي من هذا الجهاز.",
     "amostra_falhou": "تعذّر تشغيل العيّنة على هذا الجهاز.",
     "amostra": "مرحبًا! هكذا ستبدو كتبك بالصوت الطبيعي.",
+    "pode_demorar_um_minuto": "قد يستغرق هذا دقيقة.",
     "gerando_voz": "جارٍ تجهيز الصوت…",
     "automatico_idioma": "تلقائي ({idioma})",
     "automatico": "تلقائي",

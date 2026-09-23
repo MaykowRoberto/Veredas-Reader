@@ -991,6 +991,7 @@ Idiomas.registrar('zh-TW', {
     "removida": "已從此裝置移除自然語音。",
     "amostra_falhou": "無法在此裝置上播放試聽。",
     "amostra": "哈囉！用自然語音朗讀，書聽起來就是這樣。",
+    "pode_demorar_um_minuto": "這可能需要一分鐘。",
     "gerando_voz": "正在準備語音…",
     "automatico_idioma": "自動（{idioma}）",
     "automatico": "自動",

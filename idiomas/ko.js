@@ -991,6 +991,7 @@ Idiomas.registrar('ko', {
     "removida": "이 기기에서 자연스러운 음성을 삭제했습니다.",
     "amostra_falhou": "이 기기에서 샘플을 재생할 수 없습니다.",
     "amostra": "안녕하세요! 자연스러운 음성으로 들으면 책이 이렇게 들려요.",
+    "pode_demorar_um_minuto": "1분 정도 걸릴 수 있습니다.",
     "gerando_voz": "음성 준비 중…",
     "automatico_idioma": "자동({idioma})",
     "automatico": "자동",

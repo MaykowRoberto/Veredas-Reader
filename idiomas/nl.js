@@ -993,6 +993,7 @@ Idiomas.registrar('nl', {
     "removida": "Natuurlijke stem verwijderd van dit apparaat.",
     "amostra_falhou": "Het voorbeeld kan op dit apparaat niet worden afgespeeld.",
     "amostra": "Hallo! Zo klinken je boeken met de natuurlijke stem.",
+    "pode_demorar_um_minuto": "Dit kan een minuut duren.",
     "gerando_voz": "Stem voorbereiden…",
     "automatico_idioma": "Automatisch ({idioma})",
     "automatico": "Automatisch",

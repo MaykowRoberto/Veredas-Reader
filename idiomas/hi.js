@@ -993,6 +993,7 @@ Idiomas.registrar('hi', {
     "removida": "प्राकृतिक आवाज़ इस डिवाइस से हटा दी गई।",
     "amostra_falhou": "इस डिवाइस पर नमूना नहीं चल सका।",
     "amostra": "नमस्ते! प्राकृतिक आवाज़ में आपकी पुस्तकें कुछ ऐसी सुनाई देंगी।",
+    "pode_demorar_um_minuto": "इसमें एक मिनट लग सकता है.",
     "gerando_voz": "आवाज़ तैयार हो रही है…",
     "automatico_idioma": "स्वचालित ({idioma})",
     "automatico": "स्वचालित",

@@ -82,7 +82,7 @@ async function sondar(msg) {
   const PAGINA = 4096;
   let blocos = [];
   const tempos = [];
-  let reservado = 0, motivo = '', pior = 0, limite = limiteBloco;
+  let reservado = 0, motivo = '', pior = 0, limite = limiteBloco, seguidos = 0;
   const t0 = performance.now();
   try {
     while (reservado < alvo) {
@@ -102,14 +102,22 @@ async function sondar(msg) {
       try { self.postMessage({ tipo: 'sonda', mb: Math.round(reservado / 1048576), ms: Math.round(gasto) }); } catch (_) {}
       /* O limite fixo é o teto. O que vale mesmo é a comparação com o
          próprio aparelho quando ainda estava folgado: se reservar
-         passou a custar oito vezes mais do que custava no começo, o
+         passou a custar doze vezes mais do que custava no começo, o
          sistema já está apertado, e é hora de sair antes de ser
          posto para fora. */
       if (tempos.length === 4) {
         const meio = tempos.slice().sort((x, y) => x - y)[2];
-        limite = Math.max(60, Math.min(limiteBloco, meio * 8));
+        /* Piso primeiro, teto depois: o teto é um limite absoluto e
+           tem de valer mesmo quando o piso seria maior. */
+        limite = Math.min(limiteBloco, Math.max(400, meio * 12));
       }
-      if (blocos.length > 1 && gasto > limite) { motivo = 'lento'; break; }
+      /* Um pedaço lento sozinho não quer dizer nada: o coletor de lixo
+         do navegador para tudo por um instante de vez em quando, e um
+         aparelho com memória de sobra levava isso como reprovação.
+         Falta de memória não vem em soluço: vem em sequência, e piora.
+         Por isso só três pedaços lentos SEGUIDOS derrubam a sonda. */
+      if (blocos.length > 1 && gasto > limite) seguidos++; else seguidos = 0;
+      if (seguidos >= 3) { motivo = 'lento'; break; }
       if (performance.now() - t0 > limiteTotal) { motivo = 'demorou'; break; }
       await new Promise(r => setTimeout(r, 0));
     }

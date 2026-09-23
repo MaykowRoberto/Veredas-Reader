@@ -5007,13 +5007,19 @@ const VozNatural={
   /* ---------- este aparelho dá conta? (antes, não depois) -----
      Ver adiante a sonda no trabalhador. Aqui ficam o perfil do
      aparelho, o resultado guardado e a decisão. */
-  /* ALVO_MB não é um palpite. Medido aqui com o modelo de verdade
-     (398 MB), o aplicativo passa a ocupar cerca de 900 MB a mais
-     enquanto a voz está carregada, com picos de 1,2 GB na hora de
-     falar. O que a sonda exige é justamente o que a voz vai OCUPAR o
-     tempo todo: um aparelho que não consegue entregar isso não tem a
-     menor chance de chegar ao fim, e é melhor saber antes. */
-  ALVO_MB:896, BLOCO_MB:32, LIMITE_BLOCO:450, LIMITE_SONDA:25000,
+  /* ALVO_MB é o maior PASSO que a carga dá de uma vez, e não o total
+     que ela vai ocupar. Medido com o modelo de verdade: montar o
+     vector_estimator pede 256 MB para o arquivo em JavaScript mais
+     outro tanto para a cópia dentro do motor — meio giga vivo ao
+     mesmo tempo, o momento de aperto.
+
+     A primeira versão exigia 896 MB, que era o total em repouso, e
+     estava errada: reprovava máquinas que rodam a voz sem dificuldade,
+     porque segurar 896 MB num bloco só é bem mais difícil do que o
+     que a carga realmente faz. Recusar um aparelho bom é pior do que
+     aceitar um duvidoso — este, se cair, cai uma vez e a marca de
+     etapa impede a segunda. */
+  ALVO_MB:512, BLOCO_MB:32, LIMITE_BLOCO:600, LIMITE_SONDA:25000,
   CHAVE_SONDA:'veredas.voz-natural.sonda',
   /* 'apertado' recusa na hora: 2 GB não montam um modelo que precisa
      de meio giga só de pico. 'justo' passa pela sonda e, se passar,
@@ -5806,6 +5812,9 @@ class TextToSpeechController{
        depois de uma pausa; e o meio minuto de sossego que recolhe o
        painel sozinho. */
     this.charOffset=0;this._vigiaFala=0;this.RECOLHER_EM=30000;this._avisouSistema=false;
+    /* Alternância do aviso de preparo, e quantas páginas seguidas
+       falharam — a leitura pula a página ruim em vez de morrer. */
+    this._frasePreparo=0;this._tPreparo=0;this.TROCA_FRASE=3500;this.falhasSeguidas=0;
     this.bind();
   }
   bind(){
@@ -5912,10 +5921,18 @@ class TextToSpeechController{
     let status;
     if(!podeTocar)status=T('app.leitura_em_voz_alta_nao_disponivel_nes');
     else if(this.paused)status=T('app.em_pausa');
-    else if(this.playing&&this.gerando)status=T('vn.gerando_voz');
+    else if(this.playing&&this.gerando)status=T(this._frasePreparo?'vn.pode_demorar_um_minuto':'vn.gerando_voz');
     else if(this.playing)status=T('app.lendo_pagina_v_de_length',{v:this.pageIndex+1,length:this.reader.pagesData.length});
     else status=T('ui.pronto_para_comecar');
-    document.getElementById('tts-status').textContent=status;
+    const linha=document.getElementById('tts-status');
+    linha.textContent=status;
+    /* Preparar a voz demora, e espera sem sinal de vida parece
+       travamento. A frase pisca devagar para chamar o olho e se
+       reveza com o aviso do tempo, que responde à pergunta que a
+       pessoa está fazendo: isso ainda vai acontecer? */
+    const preparando=this.playing&&this.gerando;
+    linha.classList.toggle('pulsando',preparando);
+    this.animarPreparo(preparando);
     const btn=document.getElementById('btn-tts-play');
     btn.disabled=!podeTocar;btn.setAttribute('aria-label',this.playing&&!this.paused?T('app.pausar_leitura'):T('ui.iniciar_leitura'));
     btn.innerHTML=`<i data-lucide="${this.playing&&!this.paused?'pause':'play'}"></i>`;
@@ -6094,6 +6111,16 @@ class TextToSpeechController{
     },10000);
   }
   pararVigiaDaFala(){clearInterval(this._vigiaFala);this._vigiaFala=0}
+  animarPreparo(ligar){
+    if(!ligar){clearInterval(this._tPreparo);this._tPreparo=0;this._frasePreparo=0;return}
+    if(this._tPreparo)return;
+    this._tPreparo=setInterval(()=>{
+      const el=document.getElementById('tts-status');
+      if(!el||!this.playing||!this.gerando){clearInterval(this._tPreparo);this._tPreparo=0;this._frasePreparo=0;return}
+      this._frasePreparo=this._frasePreparo?0:1;
+      el.textContent=T(this._frasePreparo?'vn.pode_demorar_um_minuto':'vn.gerando_voz');
+    },this.TROCA_FRASE||3500);
+  }
   async start(pageIndex,segmentIndex=0){
     if(!this.reader.currentBook)return;
     App.player?.pauseForOtherMedia();
@@ -6142,10 +6169,19 @@ class TextToSpeechController{
       const lista=await this.trechosDa(this.pageIndex);
       if(!this.playing||run!==this.runId)return;
       this.segments=lista;
+      this.falhasSeguidas=0;
       if(!this.segments.length){this.advance();return}
       this.segmentIndex=Utils.clamp(this.segmentIndex,0,this.segments.length-1);
       this.speakSegment(run);
-    }catch(e){console.error(e);this.stop();Utils.toast(T('app.nao_foi_possivel_preparar_este_trecho'),'alert-triangle')}
+    }catch(e){
+      console.error(e);
+      /* Uma página que não abre não pode encerrar o livro inteiro: a
+         leitura pula para a seguinte. Só quando várias seguem
+         falhando é que vale parar e dizer por quê. */
+      if(!this.playing||run!==this.runId)return;
+      if(++this.falhasSeguidas<3){this.advance();return}
+      this.stop();Utils.toast(T('app.nao_foi_possivel_preparar_este_trecho'),'alert-triangle');
+    }
   }
   segmentText(text){
     const normalized=(text||'').replace(/\s+/g,' ').trim();if(!normalized)return[];
@@ -6348,7 +6384,7 @@ class TextToSpeechController{
   }
   stop(release=true){
     this.runId++;
-    this.charOffset=0;this.pararVigiaDaFala();
+    this.charOffset=0;this.pararVigiaDaFala();this.animarPreparo(false);
     if(this.supported)speechSynthesis.cancel();
     if(this.audio){try{this.audio.onended=null;this.audio.onerror=null;this.audio.pause();this.audio.removeAttribute('src');this.audio.load()}catch(e){}}
     if(this.preparados.size){VozNatural.cancelarTudo();this.limparPreparados()}
@@ -8304,12 +8340,162 @@ class ReaderEngine{
     if(this.isPdfVertical())this.renderPdfPageIfNeeded(this.currentPageIndex+1);
   }
   async getPageSpeechText(index){
-    if(this.currentBook?.format==='pdf'&&this.pdfDoc){
-      const page=await this.pdfDoc.getPage(index+1);const content=await page.getTextContent();
-      return content.items.map(item=>item.str).join(' ');
-    }
+    if(this.currentBook?.format==='pdf'&&this.pdfDoc)return this.textoFaladoDoPdf(index);
     const temp=document.createElement('div');temp.innerHTML=this.pagesData[index]||'';
     return temp.textContent||'';
+  }
+
+  /* ---------- o texto de um PDF, para ser OUVIDO ----------------
+     Um PDF não guarda texto: guarda desenhos de letras, na ordem em
+     que foram pintadas. Quem extrai recebe tudo o que está na
+     página — cabeçalho, rodapé, número, marca-d'água — e, pior,
+     recebe lixo puro quando o logotipo do cabeçalho usa uma fonte
+     sem tabela de caracteres: aí "DIREITO CONSTITUCIONAL" sai como
+     "1234256 7689525:7268;<".
+
+     Ler isso em voz alta é insuportável: a cada página, antes de
+     qualquer frase, a voz recita uma fila de números e símbolos por
+     quinze segundos. Então a página passa por três peneiras.
+
+       1. MOLDURA. O que se repete em quase toda página é cabeçalho,
+          rodapé ou título corrente — não é o livro. Descobre-se por
+          evidência: as mesmas linhas, em páginas espalhadas pelo
+          documento, com os números trocados por um curinga.
+       2. GARATUJA. Linha sem letras de verdade, ou cheia de sinais
+          de outro alfabeto, é desenho e não frase.
+       3. PONTILHADO. Os pontinhos que ligam o sumário ao número da
+          página viram uma pausa, e não cem pontos falados um a um.
+
+     A peneira 1 é evidência e tem a palavra final. A 2 é palpite, e
+     por isso tem freio: se ela comer quase tudo o que sobrou, é
+     porque errou, e o texto volta como estava. */
+  _linhasDoPdf(conteudo){
+    /* Cada linha guarda a altura em que foi pintada: é isso que
+       distingue o cabeçalho da primeira frase do parágrafo. */
+    const linhas=[];
+    let atual='',altura=null,daLinha=null;
+    const fechar=()=>{
+      const t=this._pontilhado(atual);
+      if(t)linhas.push({t,y:daLinha});
+      atual='';daLinha=null;
+    };
+    for(const it of (conteudo.items||[])){
+      const y=(it.transform&&it.transform.length>5)?it.transform[5]:null;
+      if(altura!==null&&y!==null&&Math.abs(y-altura)>2)fechar();
+      if(daLinha===null)daLinha=y;
+      atual+=(it.str||'');
+      altura=y;
+      if(it.hasEOL){fechar();altura=null}
+    }
+    fechar();
+    return linhas;
+  }
+  /* Os pontinhos que ligam o sumário ao número viram uma pausa. Isto
+     acontece ANTES de qualquer julgamento sobre a linha: sem isso,
+     "Conceito de Constitucionalismo ....... 5" pareceria garatuja,
+     porque tem mais pontos do que letras. */
+  _pontilhado(linha){
+    return String(linha||'')
+      .replace(/\s*[.․·]{3,}[\s.․·]*/g,'. ')
+      .replace(/[_–—-]{4,}/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+  /* Assinatura de uma linha: o que nela não muda de página para
+     página. Sem isso, "Página 12" e "Página 13" pareceriam linhas
+     diferentes e nenhuma seria reconhecida como rodapé. */
+  _assinaturaDeLinha(linha){
+    return linha.toLowerCase().replace(/\d+/g,'#').replace(/\s+/g,' ').trim();
+  }
+  _molduraDoPdf(){
+    if(this._moldura)return this._moldura;
+    this._moldura=(async()=>{
+      const total=this.pdfDoc.numPages||0;
+      const paginas=[];
+      const passo=Math.max(1,Math.floor(total/8));
+      for(let i=1;i<=total&&paginas.length<8;i+=passo)paginas.push(i);
+      /* Com poucas páginas não há como separar moldura de conteúdo:
+         três páginas iguais podem ser só um livro curto. */
+      if(paginas.length<4)return new Set();
+      const conta=new Map();
+      for(const n of paginas){
+        try{
+          const pg=await this.pdfDoc.getPage(n);
+          const vistas=new Set();
+          for(const linha of this._linhasDoPdf(await pg.getTextContent())){
+            if(linha.t.length>100)continue;        /* parágrafo não é moldura */
+            if(!this._naBorda(linha,pg))continue;  /* moldura mora na borda */
+            const a=this._assinaturaDeLinha(linha.t);
+            if(!a||vistas.has(a))continue;
+            vistas.add(a);
+            conta.set(a,(conta.get(a)||0)+1);
+          }
+        }catch(e){}
+      }
+      const minimo=Math.max(3,Math.ceil(paginas.length*0.5));
+      return new Set([...conta].filter(([,c])=>c>=minimo).map(([a])=>a));
+    })().catch(()=>new Set());
+    return this._moldura;
+  }
+  /* Nem toda garatuja ocupa a linha inteira: a chamada de uma nota de
+     rodapé costuma ser um glifo solto grudado no começo de uma frase
+     boa — "∀Lei do Senhor tem, aqui...". A frase fica; o glifo sai.
+     Só quando é minoria na linha, para um livro escrito em grego não
+     perder o próprio alfabeto. */
+  _semForasteiros(linha){
+    const s=linha.replace(/\s/g,'');
+    const fora=(s.match(ReaderEngine.FORASTEIROS)||[]).length;
+    if(!fora||fora/s.length>0.2)return linha;
+    return linha.replace(ReaderEngine.FORASTEIROS,'').replace(/\s{2,}/g,' ').trim();
+  }
+  /* Cabeçalho e rodapé moram nas bordas da página. Uma frase que se
+     repete no meio do texto — "Comentários:" depois de cada questão —
+     é conteúdo, e conteúdo não se apaga. */
+  _naBorda(linha,pagina){
+    if(linha.y===null||linha.y===undefined)return true;
+    const v=pagina.view||[0,0,0,842];
+    const base=v[1],topo=v[3],altura=topo-base;
+    if(!(altura>0))return true;
+    const rel=(linha.y-base)/altura;
+    return rel>0.88||rel<0.12;
+  }
+  /* Uma linha é garatuja quando não é feita de palavras. Três formas
+     de dizer isso, porque o lixo aparece em três tamanhos: o resto de
+     glifo solto ("∀", "!%"), a marca curta de rodapé (";852Ω6ς") e a
+     faixa inteira do cabeçalho. Nenhuma delas se julga só pelo
+     tamanho — foi esse o engano da primeira versão, que deixava
+     passar tudo o que tivesse menos de oito letras. */
+  _linhaGaratuja(linha){
+    const s=linha.replace(/\s/g,'');
+    if(!s)return true;
+    let letras=0,digitos=0,forasteiros=0;
+    for(const ch of s){
+      /* Grego, sinais matemáticos e área privativa no meio de um
+         texto em letras latinas: é fonte sem tabela, não é idioma. */
+      const fora=ReaderEngine.FORASTEIRO.test(ch);
+      if(fora)forasteiros++;
+      if(/\p{L}/u.test(ch))letras++;
+      else if(/\d/.test(ch))digitos++;
+    }
+    if(!letras&&!digitos)return true;              /* só sinais: "∀", "!%", "! !" */
+    const proporcao=letras/s.length;
+    if(forasteiros&&proporcao<0.7)return true;     /* alfabeto que não é o do livro */
+    return s.length>=8&&proporcao<0.35;            /* mais sinais do que palavra */
+  }
+  async textoFaladoDoPdf(index){
+    const page=await this.pdfDoc.getPage(index+1);
+    const linhas=this._linhasDoPdf(await page.getTextContent());
+    let moldura=new Set();
+    try{moldura=await this._molduraDoPdf()}catch(e){}
+    const semMoldura=linhas
+      .filter(l=>!(this._naBorda(l,page)&&moldura.has(this._assinaturaDeLinha(l.t))))
+      .map(l=>l.t);
+    const limpas=semMoldura.filter(l=>!this._linhaGaratuja(l)).map(l=>this._semForasteiros(l)).filter(Boolean);
+    const medir=a=>a.join('').replace(/\s/g,'').length;
+    /* O freio da peneira de palpite: página com texto de sobra que
+       ficou quase vazia é erro da peneira, não da página. */
+    const escolhidas=(medir(semMoldura)>60&&medir(limpas)<medir(semMoldura)*0.3)?semMoldura:limpas;
+    return escolhidas.join('\n').trim();
   }
   updateProgressText(i){
     const slider = document.getElementById('reader-page-slider');
@@ -8651,6 +8837,7 @@ class ReaderEngine{
     this.destroySliderOnly();
     this.pdfDoc?.destroy?.();
     this.pdfDoc=null;
+    this._moldura=null;      /* a moldura é daquele PDF, não do próximo */
     /* Encerra a leitura por pedaços: qualquer trecho ainda a caminho
        é descartado em vez de virar lixo na memória. */
     if(this.pdfTransporte){try{this.pdfTransporte.abort()}catch(e){}this.pdfTransporte=null}
@@ -8664,6 +8851,11 @@ class ReaderEngine{
   }
 }
 /* Tempo máximo para preparar um livro antes de desistir e avisar o leitor. */
+/* Alfabetos e sinais que não pertencem a um livro em letras latinas:
+   é o que sai de uma fonte sem tabela de caracteres. Uma versão para
+   perguntar (sem estado) e outra para apagar (global). */
+ReaderEngine.FORASTEIRO=/[Ͱ-Ͽ℀-⅏∀-⋿⟀-⟯-]/;
+ReaderEngine.FORASTEIROS=new RegExp(ReaderEngine.FORASTEIRO.source,'g');
 ReaderEngine.OPEN_TIMEOUT=90000;
 /* Quadrinhos em RAR/7z são descompactados por inteiro de uma vez:
    um álbum grande pode levar bem mais do que um livro de texto. */
@@ -12015,7 +12207,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 41';
+const BUILD='2026-09-20 · 42';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
