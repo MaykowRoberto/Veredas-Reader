@@ -1,14 +1,12 @@
 # Política de Privacidade
 
-**Última atualização:** 22 de setembro de 2026
+**Última atualização:** 23 de setembro de 2026
 
 A sua privacidade é um princípio de projeto do **Veredas Reader**. Esta Política explica, de forma clara, quais dados são tratados, por quem, para quê e como você pode exercer os seus direitos, em conformidade com a **Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 – LGPD)** e com o **Marco Civil da Internet (Lei nº 12.965/2014)**.
 
 ## 1. Quem é o controlador
 
 O Aplicativo é desenvolvido e disponibilizado por **Torres Software**, marca utilizada pelo desenvolvedor independente **Maykow Roberto Lima Torres**, com atuação em Pernambuco, Brasil, que é o controlador dos dados pessoais eventualmente tratados pelo Aplicativo, nos termos do art. 5º, VI, da LGPD.
-
-Canal de atendimento ao titular de dados: **torres.software.app@gmail.com**
 
 ## 2. Resumo em poucas linhas
 
@@ -70,6 +68,8 @@ As lojas de aplicativos podem coletar, de forma automática e agregada, relatór
 
 ## 8. Compartilhamento de dados
 
+O Aplicativo **não compartilha os arquivos dos seus livros**. O que você pode enviar a outro aplicativo é um **trecho** de até 200 palavras, com o crédito da obra, ou o seu **arquivo de backup**, que não contém livros — em ambos os casos por sua iniciativa e pelo recurso de compartilhamento do próprio sistema. O envio de trechos destina-se a **estudo, crítica, divulgação ou uso privado**, e a responsabilidade por eventual uso abusivo é de quem envia, nos termos do item 6 dos **Termos de Uso**.
+
 A Torres Software **não vende, não aluga e não compartilha** dados pessoais. Os únicos fluxos de dados com terceiros são os descritos nos itens 4.3, 5, 6 e 7 (download opcional da voz natural pelo Hugging Face, Google AdMob, loja de aplicativos e diagnóstico de falhas da loja). Os dados também podem ser fornecidos a autoridades quando houver obrigação legal ou ordem judicial, nos termos do Marco Civil da Internet.
 
 ## 9. Transferência internacional
@@ -103,8 +103,6 @@ Na prática:
 - **Dados de leitura:** como estão apenas no seu aparelho, você mesmo os acessa, corrige e exclui pelo Aplicativo. A **portabilidade** é garantida pela função **Backup e restauração**, que exporta seus dados em arquivo.
 - **Dados de publicidade:** use os controles do item 5.4 e as ferramentas do Google.
 - **Qualquer outra solicitação:** escreva para **torres.software.app@gmail.com**. Responderemos nos prazos da LGPD.
-
-Você também tem o direito de apresentar reclamação à **Autoridade Nacional de Proteção de Dados (ANPD)**: [www.gov.br/anpd](https://www.gov.br/anpd).
 
 ## 14. Crianças e adolescentes
 

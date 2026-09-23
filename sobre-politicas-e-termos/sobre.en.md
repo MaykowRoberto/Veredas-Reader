@@ -32,6 +32,8 @@ Reading, shelf organization and all your notes work **without internet**. Every 
 
 The natural voice uses the Supertonic 3 model by Supertone Inc., which does not come inside the app: you decide whether to download it (about 380 MB). Once downloaded, it runs on your device and the text being read is not sent anywhere.
 
+It needs a good deal of memory, so it works **only on compatible devices** — there is no guarantee it will work on every phone or tablet model. Before downloading, the app tests your device and says so when it cannot cope; read-aloud then continues with the system voice.
+
 Features that require a connection, such as showing ads in the free version and the optional natural voice download, are described in the **Privacy Policy**. Open-source component licenses are available under **About > Open-source licenses**.
 
 ## Privacy

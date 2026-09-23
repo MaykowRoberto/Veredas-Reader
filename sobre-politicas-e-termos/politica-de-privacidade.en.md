@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** September 22, 2026
+**Last updated:** 23 September 2026
 
 > This English version is provided for convenience. In case of any discrepancy, the **Portuguese (Brazil) version prevails**.
 
@@ -9,8 +9,6 @@ Your privacy is a design principle of **Veredas Reader**. This Policy explains c
 ## 1. Who the controller is
 
 The App is developed and made available by **Torres Software**, the brand used by independent developer **Maykow Roberto Lima Torres**, based in Pernambuco, Brazil, who is the controller of any personal data processed through the App, under article 5, VI, of the LGPD.
-
-Data subject contact channel: **torres.software.app@gmail.com**
 
 ## 2. In a few lines
 
@@ -72,6 +70,8 @@ App stores may automatically collect aggregated crash and performance reports (f
 
 ## 8. Data sharing
 
+The App **does not share your book files**. What you can send to another app is a **passage** of up to 200 words, carrying the work's credit, or your **backup file**, which contains no books — in both cases on your own initiative and through your system's own sharing feature. Passage sharing is meant for **study, criticism, review or private use**, and responsibility for any misuse lies with whoever shares, under section 6 of the **Terms of Use**.
+
 Torres Software **does not sell, rent or share** personal data. The only data flows with third parties are those described in sections 4.3, 5, 6 and 7 (the optional natural voice download from Hugging Face, Google AdMob, the app store and the store's crash diagnostics). Data may also be provided to authorities when required by law or court order.
 
 ## 9. International transfers
@@ -105,8 +105,6 @@ In practice:
 - **Reading data:** since it exists only on your device, you access, correct and delete it yourself in the App. **Portability** is provided by the **Backup and restore** feature, which exports your data to a file.
 - **Advertising data:** use the controls in section 5.4 and Google's tools.
 - **Any other request:** write to **torres.software.app@gmail.com**. We will reply within the time limits set by the LGPD.
-
-You also have the right to file a complaint with Brazil's **National Data Protection Authority (ANPD)**: [www.gov.br/anpd](https://www.gov.br/anpd). If you live outside Brazil, you may also contact the data protection authority of your country.
 
 ## 14. Children and teenagers
 

@@ -1,10 +1,8 @@
 # Termos e Condições de Uso
 
-**Última atualização:** 22 de setembro de 2026
+**Última atualização:** 23 de setembro de 2026
 
 Estes Termos e Condições de Uso ("Termos") regulam o uso do aplicativo **Veredas Reader** ("Aplicativo"), desenvolvido e disponibilizado por **Torres Software**, marca utilizada pelo desenvolvedor independente **Maykow Roberto Lima Torres**, com atuação em Pernambuco, Brasil ("Torres Software", "nós"). Leia com atenção: eles explicam o que o Aplicativo faz, o que você pode e o que não pode fazer com ele e quais são as responsabilidades de cada parte.
-
-Contato: **torres.software.app@gmail.com**
 
 ## 1. Aceitação
 
@@ -60,7 +58,9 @@ A violação desta cláusula implica o cancelamento imediato da licença e sujei
 
 6.3. **Proteção técnica (DRM).** O Aplicativo respeita as medidas técnicas de proteção de direitos autorais: ele **não remove, não quebra e não contorna** DRM ou qualquer outra proteção. Arquivos protegidos podem simplesmente não abrir, e isso é esperado.
 
-6.4. **Compartilhamento.** Quando você compartilha um arquivo, um trecho ou um backup, o Aplicativo apenas aciona o recurso de compartilhamento do próprio sistema operacional. O que é compartilhado, e com quem, é decisão e responsabilidade sua.
+6.4. **Compartilhamento.** O Aplicativo **não compartilha os arquivos dos seus livros**: não há, nele, nenhuma função que envie a obra a outra pessoa ou a outro aplicativo. O que pode ser enviado é (a) um **trecho** selecionado durante a leitura, limitado a **200 palavras** por envio e acompanhado do crédito da obra, e (b) o seu **arquivo de backup**, que contém apenas os seus dados de leitura e nenhum livro. Nos dois casos o Aplicativo apenas aciona o recurso de compartilhamento do próprio sistema operacional.
+
+6.5. **Envio de trechos.** O envio de trechos é oferecido exclusivamente para fins de **estudo, crítica, divulgação ou uso privado**, como citação da obra e com indicação da fonte. Você é o único responsável pelo uso que fizer dessa função, inclusive por envios que excedam esses fins ou que violem direitos de autor, e concorda em não utilizá-la para reproduzir ou distribuir a obra, no todo ou em partes sucessivas.
 
 ## 7. Versão gratuita, anúncios e assinatura
 
@@ -104,7 +104,9 @@ Estes Termos podem ser atualizados para refletir mudanças no Aplicativo ou na l
 
 12.2. **Voz natural.** A voz natural usa o modelo **Supertonic 3**, de titularidade da **Supertone Inc.**, licenciado sob a **BigScience OpenRAIL-M**. O modelo **não faz parte do Aplicativo**: ele só é baixado se você escolher, diretamente do repositório público da Supertone no Hugging Face, e passa a ficar guardado no seu aparelho, de onde pode ser removido a qualquer momento. A Torres Software não modifica o modelo, não é sua titular e não responde pela sua disponibilidade na origem.
 
-12.3. **Restrições de uso do modelo.** Por exigência da licença OpenRAIL-M, ao usar a voz natural você concorda em **não** usar o modelo, nem o áudio gerado por ele:
+12.3. **Compatibilidade.** A voz natural depende de recursos de memória e de processamento que **nem todos os aparelhos oferecem**. Ela funciona apenas em **aparelhos compatíveis**, e a Torres Software **não garante o seu funcionamento em todos os modelos** de celular e tablet, nem em todas as versões de sistema operacional ou de navegador. Antes de baixar o modelo, o Aplicativo testa o aparelho e avisa quando ele não é compatível; nesse caso a leitura em voz alta continua disponível pela voz do sistema, sem prejuízo das demais funções. A indisponibilidade da voz natural em um aparelho específico não caracteriza defeito do Aplicativo.
+
+12.4. **Restrições de uso do modelo.** Por exigência da licença OpenRAIL-M, ao usar a voz natural você concorda em **não** usar o modelo, nem o áudio gerado por ele:
 
 - de forma que viole qualquer lei ou regulamento aplicável, nacional ou internacional;
 - para explorar, prejudicar ou tentar explorar ou prejudicar menores de idade, de qualquer forma;
@@ -119,7 +121,7 @@ Estes Termos podem ser atualizados para refletir mudanças no Aplicativo ou na l
 - para dar conselhos médicos ou interpretar resultados médicos;
 - para gerar ou divulgar informações destinadas à administração da justiça, à atividade policial ou a processos de imigração ou de asilo, como prever que alguém cometerá fraude ou crime.
 
-12.4. O áudio gerado pela voz natural serve à sua leitura pessoal do conteúdo que você mesmo importou, nos limites do item 6. Você é responsável pelo uso que fizer desse áudio. O texto completo da licença do modelo está em **Sobre > Licenças de código aberto > Supertonic 3 (modelo)**.
+12.5. O áudio gerado pela voz natural serve à sua leitura pessoal do conteúdo que você mesmo importou, nos limites do item 6. Você é responsável pelo uso que fizer desse áudio. O texto completo da licença do modelo está em **Sobre > Licenças de código aberto > Supertonic 3 (modelo)**.
 
 ## 13. Lei aplicável e foro
 

@@ -749,19 +749,19 @@ const BookFormats={
      outro sobrenome, e muita gente tem a biblioteca inteira assim. */
   ALIASES:{markdown:'md',mkd:'md',mdown:'md',mdtext:'md',text:'txt',prc:'mobi'},
   INFO:{
-    epub:{label:'EPUB',icon:'book-open',scroll:'horizontal',mime:'application/epub+zip',share:false},
-    mobi:{label:'MOBI',icon:'book',scroll:'horizontal',mime:'application/x-mobipocket-ebook',share:false},
-    txt:{label:'TXT',icon:'file-text',scroll:'horizontal',mime:'text/plain',share:true},
-    md:{label:'MD',icon:'file-code-2',scroll:'horizontal',mime:'text/markdown',share:true},
-    pdf:{label:'PDF',icon:'file-type-2',scroll:'vertical',mime:'application/pdf',share:true},
-    docx:{label:'DOCX',icon:'file-text',scroll:'vertical',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',share:true},
-    cbz:{label:'CBZ',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook+zip',share:false,comic:true},
-    cbr:{label:'CBR',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook-rar',share:false,comic:true},
-    cb7:{label:'CB7',icon:'book-image',scroll:'horizontal',mime:'application/x-cb7',share:false,comic:true},
-    cbt:{label:'CBT',icon:'book-image',scroll:'horizontal',mime:'application/x-cbt',share:false,comic:true},
-    mp3:{label:'MP3',icon:'headphones',scroll:null,mime:'audio/mpeg',share:false},
-    m4b:{label:'M4B',icon:'headphones',scroll:null,mime:'audio/mp4',share:false},
-    mp4:{label:'MP4',icon:'film',scroll:null,mime:'video/mp4',share:false}
+    epub:{label:'EPUB',icon:'book-open',scroll:'horizontal',mime:'application/epub+zip'},
+    mobi:{label:'MOBI',icon:'book',scroll:'horizontal',mime:'application/x-mobipocket-ebook'},
+    txt:{label:'TXT',icon:'file-text',scroll:'horizontal',mime:'text/plain'},
+    md:{label:'MD',icon:'file-code-2',scroll:'horizontal',mime:'text/markdown'},
+    pdf:{label:'PDF',icon:'file-type-2',scroll:'vertical',mime:'application/pdf'},
+    docx:{label:'DOCX',icon:'file-text',scroll:'vertical',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'},
+    cbz:{label:'CBZ',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook+zip',comic:true},
+    cbr:{label:'CBR',icon:'book-image',scroll:'horizontal',mime:'application/vnd.comicbook-rar',comic:true},
+    cb7:{label:'CB7',icon:'book-image',scroll:'horizontal',mime:'application/x-cb7',comic:true},
+    cbt:{label:'CBT',icon:'book-image',scroll:'horizontal',mime:'application/x-cbt',comic:true},
+    mp3:{label:'MP3',icon:'headphones',scroll:null,mime:'audio/mpeg'},
+    m4b:{label:'M4B',icon:'headphones',scroll:null,mime:'audio/mp4'},
+    mp4:{label:'MP4',icon:'film',scroll:null,mime:'video/mp4'}
   },
   /* ordem em que os grupos aparecem quando a estante é agrupada por tipo */
   GROUP_ORDER:['epub','mobi','pdf','docx','txt','md','cbz','cbr','cb7','cbt','mp3','m4b','mp4'],
@@ -789,7 +789,6 @@ const BookFormats={
   label:f=>(BookFormats.info(f)||{}).label||String(f||'').toUpperCase()||T('app.outro'),
   icon:f=>(BookFormats.info(f)||{}).icon||'file',
   mime:f=>(BookFormats.info(f)||{}).mime||'application/octet-stream',
-  canShare:f=>!!(BookFormats.info(f)||{}).share,
   /* Sentido de rolagem que cada formato usa quando o leitor ainda não
      escolheu nada para AQUELE livro. */
   defaultScroll:f=>(BookFormats.info(f)||{}).scroll||'horizontal',
@@ -5597,7 +5596,7 @@ const VozNaturalUI={
           <li><i data-lucide="shield-check"></i><span>${T('vn.fato_privacidade')}</span></li>
           <li><i data-lucide="languages"></i><span>${T('vn.fato_idiomas')}</span></li>
         </ul>
-        ${(navigator.deviceMemory&&navigator.deviceMemory<=4)?`<p class="vn-texto vn-cautela"><i data-lucide="alert-triangle"></i><span>${T('vn.aviso_aparelho_justo')}</span></p>`:''}
+        <p class="vn-texto vn-cautela"><i data-lucide="alert-triangle"></i><span>${T('vn.so_aparelhos_compativeis')}${(navigator.deviceMemory&&navigator.deviceMemory<=4)?' '+T('vn.aviso_aparelho_justo'):''}</span></p>
         <button type="button" class="soft-btn primary vn-largo" data-vn-acao="baixar"><i data-lucide="download"></i>${T('vn.baixar_voz_natural',{tamanho:total})}</button>
         <p class="setting-hint">${T('vn.licenca_curta')}</p>
       </div>`;
@@ -8657,9 +8656,29 @@ class ReaderEngine{
     this.applyAnnotationsToRenderedPage(s.pageIndex);
     Utils.toast(type==='highlight'?T('app.trecho_grifado'):T('app.citacao_salva'),type==='highlight'?'highlighter':'quote');
   }
+  /* ---------- enviar um trecho ---------------------------------
+     Enviar uma citação é uso normal de um livro. Enviar o livro
+     inteiro não é — e por isso não existe mais neste aplicativo.
+     Para que o que sai daqui continue sendo uma citação, e não uma
+     cópia, duas regras: no máximo duzentas palavras, e o crédito da
+     obra vai junto, para quem recebe saber de onde veio. */
+  trechoParaEnviar(){
+    const s=this.pendingSelection;
+    if(!s)return '';
+    const palavras=String(s.text||'').trim().split(/\s+/).filter(Boolean);
+    const limite=ReaderEngine.PALAVRAS_POR_ENVIO;
+    let texto=palavras.slice(0,limite).join(' ');
+    if(palavras.length>limite)texto+=' […]';
+    const livro=this.currentBook||{};
+    const obra=livro.title||T('ui.livro');
+    const autor=livro.author?Utils.autorVisivel(livro.author):'';
+    const credito=autor?T('app.credito_do_trecho',{obra,autor}):T('app.credito_do_trecho_sem_autor',{obra});
+    return '“'+texto+'”\n\n'+credito;
+  }
   async shareSelection(){
     if(!this.pendingSelection)return;
-    const text=this.pendingSelection.text;
+    const text=this.trechoParaEnviar();
+    if(!text)return;
     try{
       if(navigator.share){await navigator.share({title:this.currentBook?.title||T('ui.trecho'),text});Utils.toast(T('app.trecho_compartilhado'),'share-2')}
       else if(navigator.clipboard){await navigator.clipboard.writeText(text);Utils.toast(T('app.trecho_copiado'),'copy')}
@@ -8854,6 +8873,9 @@ class ReaderEngine{
 /* Alfabetos e sinais que não pertencem a um livro em letras latinas:
    é o que sai de uma fonte sem tabela de caracteres. Uma versão para
    perguntar (sem estado) e outra para apagar (global). */
+/* Um envio de trecho é uma citação, não uma cópia: duzentas palavras
+   é o teto, e acima disso o texto sai truncado com reticências. */
+ReaderEngine.PALAVRAS_POR_ENVIO=200;
 ReaderEngine.FORASTEIRO=/[Ͱ-Ͽ℀-⅏∀-⋿⟀-⟯-]/;
 ReaderEngine.FORASTEIROS=new RegExp(ReaderEngine.FORASTEIRO.source,'g');
 ReaderEngine.OPEN_TIMEOUT=90000;
@@ -9711,7 +9733,6 @@ class LibraryManager{
     el.innerHTML=`
       <div class="book-menu-wrap">
         ${fmt==='pdf'?`<button class="book-menu convert-btn" title="${T('app.converter_para_epub')}" aria-label="${T('ui.converter_pdf_para_epub')}"><i data-lucide="file-output"></i></button>`:''}
-        ${BookFormats.canShare(fmt)?`<button class="book-menu share-btn" title="${T('app.compartilhar_livro')}" aria-label="${T('app.compartilhar_livro')}"><i data-lucide="share-2"></i></button>`:''}
         <button class="book-menu organize-btn" title="${T('ui.organizar_livro')}" aria-label="${T('ui.organizar_livro')}"><i data-lucide="more-horizontal"></i></button>
         <button class="book-delete" title="${T('app.excluir_da_biblioteca')}" aria-label="${T('app.excluir_da_biblioteca')}"><i data-lucide="trash-2"></i></button>
       </div>
@@ -9741,8 +9762,6 @@ class LibraryManager{
     organizeBtn.onclick=e=>{e.stopPropagation();this.openOrganizer(book)};
     const convertBtn=el.querySelector('.convert-btn');
     if(convertBtn)convertBtn.onclick=async e=>{e.stopPropagation();await this.convertPdf(book)};
-    const shareBtn=el.querySelector('.share-btn');
-    if(shareBtn)shareBtn.onclick=async e=>{e.stopPropagation();await this.shareBook(book)};
     el.querySelector('.book-delete').onclick=async e=>{e.stopPropagation();await this.deleteBook(book)};
     el.onclick=e=>{
       if(this.sorter.suppressClick)return;
@@ -9777,59 +9796,6 @@ class LibraryManager{
       sub.children[1].textContent=this.audioSubText(saved);
     }
   }
-
-async shareBook(book){
-  if(!book)return;
-  if(!BookFormats.canShare(book.format)){
-    await AppModal.alert({
-      title:T('app.compartilhamento_indisponivel'),
-      subtitle:T('app.formato_protegido'),
-      message:AudioFormats.isAudioBook(book)
-        ?T('app.audiolivros_e_videos_ficam_guardados_s')
-        :BookFormats.isComic(book.format)
-        ?T('app.quadrinhos_ficam_guardados_somente_no')
-        :T('app.para_manter_a_politica_de_compartilham'),
-      confirmText:T('app.entendi'),
-      confirmIcon:'lock'
-    });
-    return;
-  }
-  try{
-    const rec=await this.db.getFile(book.id);
-    const origem=DBManager.recordBlob(rec);
-    if(!origem)throw new Error(T('app.a_copia_deste_livro_nao_esta_disponive'));
-    const mime=BookFormats.mime(book.format);
-    const safeTitle=(book.title||'livro').replace(/[\\/:*?"<>|]+/g,'-').trim()||'livro';
-    const name=book.sourceFileName||`${safeTitle}.${book.format}`;
-    const file=new File([origem],name,{type:mime});
-
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({
-        title:book.title||T('ui.livro'),
-        text:`${book.title||T('app.livro')} — ${Utils.autorVisivel(book.author)}`,
-        files:[file]
-      });
-      Utils.toast(T('app.livro_compartilhado'),'share-2');
-      return;
-    }
-
-    // Browser/device sem compartilhamento de arquivos: preserva a intenção do usuário
-    // oferecendo o arquivo pronto para compartilhar manualmente.
-    const url=URL.createObjectURL(file);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    Utils.toast(T('app.o_arquivo_foi_preparado_para_voce_comp'),'download');
-  }catch(err){
-    if(err?.name==='AbortError')return;
-    console.error(err);
-    Utils.toast(err?.message||T('app.nao_foi_possivel_compartilhar_o_livro'),'alert-triangle');
-  }
-}
 
 async convertPdf(book){
   if(!book || book.format!=='pdf')return;
@@ -12207,7 +12173,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 42';
+const BUILD='2026-09-23 · 43';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

@@ -32,6 +32,8 @@ A leitura, a organização da estante e todas as suas anotações funcionam **se
 
 A voz natural usa o modelo Supertonic 3, da Supertone Inc., que não vem dentro do aplicativo: você decide se quer baixá-lo (cerca de 380 MB). Depois de baixado, ele roda no seu aparelho e o texto lido não é enviado a lugar nenhum.
 
+Ela exige bastante memória, e por isso funciona **apenas em aparelhos compatíveis** — não há garantia de funcionamento em todos os modelos de celular e tablet. Antes do download, o aplicativo testa o aparelho e avisa quando ele não dá conta; nesse caso a leitura em voz alta continua pela voz do sistema.
+
 Recursos que dependem de conexão, como a exibição de anúncios na versão gratuita e o download opcional da voz natural, estão descritos na **Política de Privacidade**. As licenças dos componentes de código aberto estão em **Sobre > Licenças de código aberto**.
 
 ## Privacidade
