@@ -4961,8 +4961,9 @@ const VozNatural={
     this.emitir();
   },
   limparVeredito(){
-    this._veredito=null;
+    this._veredito=null;this._sonda=null;
     try{localStorage.removeItem(this.CHAVE_VEREDITO)}catch(e){}
+    try{localStorage.removeItem(this.CHAVE_SONDA)}catch(e){}
     this.estado.falhouMotor=false;this.estado.erroMotor='';
     this.emitir();
   },
@@ -4970,20 +4971,117 @@ const VozNatural={
      "estava tentando" gravada antes da carga. Se ela ainda estiver lá
      na abertura seguinte, o app fechou no meio — e isso conta como
      incompatível. */
-  marcarTentativa(){try{localStorage.setItem(this.CHAVE_TENTATIVA,String(Date.now()))}catch(e){}},
+  marcarTentativa(etapa,mb){
+    try{localStorage.setItem(this.CHAVE_TENTATIVA,JSON.stringify({etapa:String(etapa||''),mb:mb||0,quando:Date.now()}))}catch(e){}
+  },
   encerrarTentativa(){try{localStorage.removeItem(this.CHAVE_TENTATIVA)}catch(e){}},
   conferirQueda(){
     /* Uma vez por abertura do aplicativo, e nunca no meio de uma
        carga: a marca de "estava tentando" só significa queda quando
        sobrou de outra sessão. */
-    if(this._conferido||this._iniciando)return false;
+    if(this._conferido||this._iniciando||this._sondando)return false;
     this._conferido=true;
-    let marca=0;
-    try{marca=Number(localStorage.getItem(this.CHAVE_TENTATIVA))||0}catch(e){}
+    let marca=null;
+    try{
+      const cru=localStorage.getItem(this.CHAVE_TENTATIVA);
+      marca=cru?JSON.parse(cru):null;
+      if(typeof marca==='number')marca={etapa:'',mb:0,quando:marca}; /* marca de versão anterior */
+    }catch(e){marca=null}
     if(!marca)return false;
     this.encerrarTentativa();
-    this.marcarIncompativel('queda','o aplicativo foi encerrado enquanto a voz carregava');
+    /* A etapa em que parou diz o motivo. Parar reservando memória, ou
+       montando os modelos, é falta de memória — e nesse caso a sonda
+       também fica marcada como reprovada, para nem ser refeita. */
+    const etapa=String(marca.etapa||''),mb=marca.mb||0;
+    if(etapa.indexOf('sonda')===0){
+      this._guardarSonda({ok:false,mb,alvo:this.ALVO_MB,motivo:'queda',quando:Date.now()});
+      this.marcarIncompativel('memoria','sonda: '+mb+'/'+this.ALVO_MB+' MB · queda');
+    }else if(/sessoes|modelo guardado|motor: binario/.test(etapa)){
+      this.marcarIncompativel('memoria','queda · etapa: '+etapa);
+    }else{
+      this.marcarIncompativel('queda',etapa?'etapa: '+etapa:'');
+    }
     return true;
+  },
+
+  /* ---------- este aparelho dá conta? (antes, não depois) -----
+     Ver adiante a sonda no trabalhador. Aqui ficam o perfil do
+     aparelho, o resultado guardado e a decisão. */
+  /* ALVO_MB não é um palpite. Medido aqui com o modelo de verdade
+     (398 MB), o aplicativo passa a ocupar cerca de 900 MB a mais
+     enquanto a voz está carregada, com picos de 1,2 GB na hora de
+     falar. O que a sonda exige é justamente o que a voz vai OCUPAR o
+     tempo todo: um aparelho que não consegue entregar isso não tem a
+     menor chance de chegar ao fim, e é melhor saber antes. */
+  ALVO_MB:896, BLOCO_MB:32, LIMITE_BLOCO:450, LIMITE_SONDA:25000,
+  CHAVE_SONDA:'veredas.voz-natural.sonda',
+  /* 'apertado' recusa na hora: 2 GB não montam um modelo que precisa
+     de meio giga só de pico. 'justo' passa pela sonda e, se passar,
+     carrega no modo econômico. 'amplo' segue como sempre. */
+  perfil(){
+    const m=navigator.deviceMemory||0;
+    if(!m)return 'justo';
+    if(m>=6)return 'amplo';
+    if(m>=3)return 'justo';
+    return 'apertado';
+  },
+  sonda(){
+    if(this._sonda!==undefined)return this._sonda;
+    try{this._sonda=JSON.parse(localStorage.getItem(this.CHAVE_SONDA)||'null')}catch(e){this._sonda=null}
+    return this._sonda;
+  },
+  _guardarSonda(v){
+    this._sonda=v;
+    try{localStorage.setItem(this.CHAVE_SONDA,JSON.stringify(v))}catch(e){}
+  },
+  async sondar({forcar=false}={}){
+    if(this.incompativel())return {ok:false,motivo:'veredito'};
+    if(this.perfil()==='apertado'){
+      this.marcarIncompativel('memoria','aparelho com '+(navigator.deviceMemory||'?')+' GB · a voz natural precisa de '+this.ALVO_MB+' MB livres');
+      return {ok:false,motivo:'pouca-memoria'};
+    }
+    const guardada=this.sonda();
+    if(!forcar&&guardada&&guardada.ok&&guardada.alvo>=this.ALVO_MB)return {ok:true,mb:guardada.mb};
+    if(!this.ambienteOk())return {ok:true,mb:0};
+    if(this._sondando)return this._sondando;
+    this._conferido=true;
+    const antes=this.estado.fase;
+    this.estado.fase='sondando';this.estado.sondaMb=0;this.emitir();
+    this._sondando=new Promise(ok=>{
+      let w=null;
+      try{w=new Worker(this.TRABALHADOR)}catch(e){ok({ok:true,mb:0,motivo:'sem-trabalhador'});return}
+      let terminou=false;
+      const fim=r=>{
+        if(terminou)return;terminou=true;
+        clearTimeout(relogio);
+        try{w.terminate()}catch(e){}
+        ok(r);
+      };
+      const relogio=setTimeout(()=>fim({ok:false,mb:this.estado.sondaMb||0,motivo:'demorou'}),this.LIMITE_SONDA+15000);
+      /* A sonda só tem autoridade para dizer "falta memória". Se ela
+         mesma não conseguiu subir, quem responde é a carga de
+         verdade, com a mensagem de erro que ela souber dar. */
+      w.onerror=ev=>{ev.preventDefault?.();fim({ok:true,mb:0,motivo:'sem-trabalhador'})};
+      w.onmessage=e=>{
+        const m=e.data||{};
+        if(m.tipo==='sonda'){
+          /* Cada degrau fica gravado antes do próximo: se o aparelho
+             for fechado aqui, a abertura seguinte sabe onde foi. */
+          this.marcarTentativa('sonda',m.mb);
+          this.estado.sondaMb=m.mb;this._emitirDepois();
+        }else if(m.tipo==='sondou')fim(m);
+      };
+      w.postMessage({tipo:'sondar',alvo:this.ALVO_MB*1048576,bloco:this.BLOCO_MB*1048576,limiteBloco:this.LIMITE_BLOCO,limiteTotal:this.LIMITE_SONDA});
+    }).then(r=>{
+      this.encerrarTentativa();
+      this._sondando=null;
+      if(r.motivo!=='sem-trabalhador')this._guardarSonda({ok:!!r.ok,mb:r.mb||0,alvo:this.ALVO_MB,motivo:r.motivo||'',quando:Date.now()});
+      if(this.estado.fase==='sondando')this.estado.fase=antes;
+      if(!r.ok)this.marcarIncompativel('memoria','sonda: '+(r.mb||0)+'/'+this.ALVO_MB+' MB'+(r.motivo?' · '+r.motivo:''));
+      else this.emitir();
+      return r;
+    });
+    return this._sondando;
   },
   ouvintes:new Set(),
   get total(){return this.ARQUIVOS.reduce((s,a)=>s+a.bytes,0)},
@@ -5044,6 +5142,10 @@ const VozNatural={
   /* ---------- download ---------------------------------------- */
   async baixar(){
     if(this.estado.fase==='baixando'||!this.ambienteOk())return;
+    /* Nem começa se o aparelho não dá conta: 380 MB de dados gastos
+       para terminar num aviso de erro seria a segunda falta de
+       respeito seguida. */
+    if(this.incompativel())return;
     const ctl=new AbortController();this._ctl=ctl;
     this.estado.fase='baixando';this.estado.erro='';this.emitir();
     let db=null;
@@ -5160,7 +5262,17 @@ const VozNatural={
   async motor(){
     if(this.incompativel())throw new Error('aparelho-incompativel');
     this._conferido=true;          /* a partir daqui a marca é desta sessão */
-    this.marcarTentativa();
+    /* A sonda vem antes de qualquer coisa grande. Se o aparelho não
+       reservou o que o modelo precisa, não há carga nenhuma: a leitura
+       segue com a voz do sistema e ninguém é surpreendido. */
+    const s=await this.sondar();
+    if(!s.ok)throw new Error('aparelho-incompativel');
+    this.marcarTentativa('motor',0);
+    /* Esta pausa existe para a marca chegar ao disco. O navegador
+       grava o localStorage em segundo plano; se o sistema encerrar o
+       aplicativo no instante seguinte, sem a pausa a marca se perde e
+       a abertura seguinte tentaria tudo de novo. */
+    await new Promise(r=>setTimeout(r,250));
     try{return await this._carregar()}
     finally{this.encerrarTentativa()}
   },
@@ -5228,6 +5340,13 @@ const VozNatural={
       const fimOriginal=fim;
       fim=(erro,backend)=>{clearTimeout(relogio);fimOriginal(erro,backend)};
       w.addEventListener('message',primeira);
+      /* Cada etapa fica gravada assim que acontece: é o que transforma
+         uma queda em resposta honesta na abertura seguinte, em vez de
+         mais uma tentativa que termina do mesmo jeito. */
+      w.addEventListener('message',e=>{
+        const m=e.data||{};
+        if(m.tipo==='etapa'){this.estado.etapa=m.etapa;this.marcarTentativa(m.etapa,0)}
+      });
       w.addEventListener('message',e=>this._receber(e.data||{}));
       w.onerror=ev=>{
         ev.preventDefault?.();
@@ -5236,8 +5355,12 @@ const VozNatural={
         this._falharPendentes(erro);
       };
       const nucleos=navigator.hardwareConcurrency||2;
+      /* Medido com o modelo de verdade: o modo econômico não gasta
+         menos memória — gasta um pouco mais na hora de falar, e é mais
+         lento. Ele continua valendo como segunda tentativa, quando a
+         primeira falha, e é para lá que o modo seguro vai direto. */
       const threads=(self.crossOriginIsolated&&!this._modoSeguro)?Math.max(1,Math.min(4,nucleos-1)):1;
-      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,ortBundle:new URL(this.ORT+'ort-bundle.min.js',location.href).href,preferirGpu:!this._modoSeguro,threads});
+      w.postMessage({tipo:'iniciar',ortBase:new URL(this.ORT,location.href).href,ortBundle:new URL(this.ORT+'ort-bundle.min.js',location.href).href,preferirGpu:!this._modoSeguro,economico:this._modoSeguro,threads});
     });
     return this._iniciando;
   },
@@ -5266,7 +5389,11 @@ const VozNatural={
   /* A voz ocupa perto de 1 GB de memória enquanto está carregada.
      Parada a leitura, o trabalhador é encerrado depois de um tempo,
      para o celular não ficar pesado à toa. */
-  soltarDepois(ms=120000){
+  /* Em aparelho justo a voz sai da memória bem mais cedo: guardar
+     400 MB parados é convidar o sistema a fechar o aplicativo
+     enquanto a pessoa lê. */
+  soltarDepois(ms){
+    if(!ms)ms=this.perfil()==='amplo'?120000:30000;
     clearTimeout(this._tSoltar);
     this._tSoltar=setTimeout(()=>this.soltar(),ms);
   },
@@ -5436,6 +5563,7 @@ const VozNaturalUI={
         <div class="vn-botoes">
           ${temArquivos?`<button type="button" class="soft-btn primary" data-vn-acao="remover"><i data-lucide="trash-2"></i>${T('vn.remover_e_liberar',{tamanho:this.mb(Math.max(est.baixados,VozNatural.total))})}</button>`:''}
           <button type="button" class="soft-btn" data-vn-acao="tentar"${this._tentando?' disabled':''}><i data-lucide="${this._tentando?'loader':'refresh-cw'}" class="${this._tentando?'vn-gira':''}"></i>${T(this._tentando?'vn.tentando':'vn.testar_de_novo')}</button>
+          <button type="button" class="soft-btn" data-vn-acao="copiar"><i data-lucide="copy"></i>${T('vn.copiar_detalhe')}</button>
         </div>
       </div>`;
     }
@@ -5445,6 +5573,15 @@ const VozNaturalUI={
     }
     if(est.fase==='desconhecido'||est.fase==='verificando'){
       return seg+`<div class="vn-cartao">${topo}<p class="vn-texto">${T('vn.verificando')}</p></div>`;
+    }
+    if(est.fase==='sondando'){
+      const alvo=VozNatural.ALVO_MB*1048576;
+      return seg+`<div class="vn-cartao">${topo}
+        <p class="vn-texto">${T('vn.sondando')}</p>
+        <div class="vn-barra ativa" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor((est.sondaMb||0)*1048576/alvo*100)}" aria-label="${Utils.esc(T('vn.sondando'))}"><span style="width:${Math.min(100,(est.sondaMb||0)*1048576/alvo*100).toFixed(1)}%"></span></div>
+        <div class="vn-numeros"><span>${T('vn.x_de_y',{x:this.mb((est.sondaMb||0)*1048576),y:this.mb(alvo)})}</span></div>
+        <p class="setting-hint">${T('vn.sonda_explica')}</p>
+      </div>`;
     }
     if(est.fase==='ausente'){
       return seg+`<div class="vn-cartao">${topo}
@@ -5559,6 +5696,15 @@ const VozNaturalUI={
     if(b.dataset.vnAmostra){this.tocarAmostra(b.dataset.vnAmostra);return}
     const acao=b.dataset.vnAcao;
     if(acao==='baixar'){
+      /* Antes dos 380 MB, a pergunta que importa: este aparelho
+         aguenta? Alguns segundos agora poupam o download inteiro de
+         quem não vai conseguir usar a voz. */
+      if(VozNatural.estado.baixados===0){
+        this._tentando=true;this.renderizarTodos();
+        const s=await VozNatural.sondar();
+        this._tentando=false;this.renderizarTodos();
+        if(!s.ok){this.aoMudar?.();return}
+      }
       if(navigator.connection?.saveData||['cellular'].includes(navigator.connection?.type)){
         const ok=await AppModal.confirm({title:T('vn.baixar_pelos_dados'),message:T('vn.baixar_pelos_dados_msg',{tamanho:this.mb(VozNatural.total-VozNatural.estado.baixados)}),confirmText:T('vn.baixar_agora'),confirmIcon:'download',icon:'wifi-off'});
         if(!ok)return;
@@ -5570,7 +5716,10 @@ const VozNaturalUI={
     }
     if(acao==='pausar'){VozNatural.pausar();return}
     if(acao==='copiar'){
-      const txt=String(VozNatural.estado.erroMotor||'')+'\n'+VozNatural.ambiente();
+      const v=VozNatural.veredito();
+      const erro=String(VozNatural.estado.erroMotor||'');
+      const linhas=[v?'['+v.motivo+'] '+(v.detalhe||''):'',v&&v.detalhe===erro?'':erro,VozNatural.ambiente()];
+      const txt=linhas.filter(Boolean).join('\n');
       try{await navigator.clipboard.writeText(txt);Utils.toast(T('vn.copiado'),'check-circle')}
       catch(e){Utils.toast(txt.slice(0,300),'info')}
       return;
@@ -5584,6 +5733,10 @@ const VozNaturalUI={
       if(App.reader?.tts){App.reader.tts.naturalFalhou=false;App.reader.tts.naturalLento=false;App.reader.tts.passosAuto=0;App.reader.tts.lentidao=0}
       await VozNatural.verificar();
       if(VozNatural.estado.fase!=='pronto'){this._tentando=false;this.renderizarTodos();return}
+      /* Tentar de novo refaz a sonda do zero. Se o aparelho continuar
+         sem dar conta, para aqui — sem carga e sem susto. */
+      const s=await VozNatural.sondar({forcar:true});
+      if(!s.ok){this._tentando=false;this.renderizarTodos();return}
       try{
         await VozNatural.motor();
         Utils.toast(T('vn.pronta'),'check-circle');
@@ -11737,7 +11890,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 39';
+const BUILD='2026-09-20 · 40';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

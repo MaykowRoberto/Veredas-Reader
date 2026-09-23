@@ -38,12 +38,101 @@ let fila = Promise.resolve();
 let ultimoInicio = null;
 let enderecoDoMotor = null;
 
+/* Em que ponto estamos. A página guarda isso a cada passo: se o
+   sistema fechar o aplicativo no meio, é a única pista que sobra
+   para a abertura seguinte saber o que aconteceu. */
+function marcar(etapa) {
+  self.__etapa = etapa;
+  try { self.postMessage({ tipo: 'etapa', etapa }); } catch (_) {}
+}
+
 /* Modelo de teste: soma dois números. Serve só para confirmar que o
    WebAssembly acordou neste aparelho, com erro claro quando não. */
 const MODELO_DE_TESTE = Uint8Array.from(atob('CAg6RgoOCgFhCgFiEgFjIgNBZGQSAXRaDwoBYRIKCggIARIECgIIAVoPCgFiEgoKCAgBEgQKAggBYg8KAWMSCgoICAESBAoCCAFCBAoAEA0='), c => c.charCodeAt(0));
 /* Quanto custa cada parte da síntese: a página usa isso para escolher
    quantos passos cabem no tempo da fala neste aparelho. */
 let medida = { fixo: 0, passos: 0, n: 0 };
+
+/* ---------- sonda de memória -----------------------------------------
+   A pergunta "este aparelho aguenta a voz natural?" precisa ser feita
+   ANTES de o modelo inteiro estar na mão. Perguntada depois, a resposta
+   vem na forma pior que existe: o sistema fecha o aplicativo na cara de
+   quem estava lendo, sem aviso e sem volta.
+
+   Aqui a mesma pergunta é feita de um jeito que dá para interromper:
+   pedaços de 32 MB, um de cada vez, tocando cada página para que a
+   memória seja de verdade e não uma promessa, até chegar ao tamanho
+   que o modelo vai precisar. Entre um pedaço e outro o trabalhador
+   respira, e a página grava até onde chegamos.
+
+   Dois sinais fazem a sonda parar antes do limite:
+     - o pedaço foi recusado (acabou a memória, e isso o navegador
+       avisa direito, com erro);
+     - o pedaço demorou demais. Esse é o sinal que interessa: quando o
+       Android está perto de fechar o aplicativo, ele primeiro passa a
+       comprimir e a devolver páginas, e reservar memória fica lento.
+       Desistir nesse momento é desistir a tempo.
+   No fim, tudo é devolvido. Custa alguns segundos uma vez na vida do
+   aparelho, e troca um fechamento repentino por uma frase honesta. */
+async function sondar(msg) {
+  const bloco = msg.bloco || 32 * 1048576;
+  const alvo = msg.alvo || 560 * 1048576;
+  const limiteBloco = msg.limiteBloco != null ? msg.limiteBloco : 450;
+  const limiteTotal = msg.limiteTotal != null ? msg.limiteTotal : 15000;
+  const PAGINA = 4096;
+  let blocos = [];
+  const tempos = [];
+  let reservado = 0, motivo = '', pior = 0, limite = limiteBloco;
+  const t0 = performance.now();
+  try {
+    while (reservado < alvo) {
+      const t = performance.now();
+      let b = null;
+      try { b = new Uint8Array(Math.min(bloco, alvo - reservado)); }
+      catch (e) { motivo = 'recusado'; break; }
+      /* Sem tocar, o sistema só promete a memória — e promessa de
+         memória é exatamente o que ele quebra fechando o aplicativo. */
+      for (let i = 0; i < b.length; i += PAGINA) b[i] = 1;
+      b[b.length - 1] = 1;
+      blocos.push(b);
+      reservado += b.length;
+      const gasto = performance.now() - t;
+      tempos.push(gasto);
+      if (blocos.length > 1 && gasto > pior) pior = gasto;
+      try { self.postMessage({ tipo: 'sonda', mb: Math.round(reservado / 1048576), ms: Math.round(gasto) }); } catch (_) {}
+      /* O limite fixo é o teto. O que vale mesmo é a comparação com o
+         próprio aparelho quando ainda estava folgado: se reservar
+         passou a custar oito vezes mais do que custava no começo, o
+         sistema já está apertado, e é hora de sair antes de ser
+         posto para fora. */
+      if (tempos.length === 4) {
+        const meio = tempos.slice().sort((x, y) => x - y)[2];
+        limite = Math.max(60, Math.min(limiteBloco, meio * 8));
+      }
+      if (blocos.length > 1 && gasto > limite) { motivo = 'lento'; break; }
+      if (performance.now() - t0 > limiteTotal) { motivo = 'demorou'; break; }
+      await new Promise(r => setTimeout(r, 0));
+    }
+  } catch (e) {
+    motivo = motivo || 'falha';
+  } finally {
+    blocos.length = 0;
+    blocos = null;
+  }
+  /* Devolver leva um instante: sem essa pausa, a carga do motor
+     começaria disputando memória com a sonda que acabou de sair. */
+  await new Promise(r => setTimeout(r, 120));
+  return {
+    tipo: 'sondou',
+    ok: !motivo && reservado >= alvo,
+    mb: Math.round(reservado / 1048576),
+    alvo: Math.round(alvo / 1048576),
+    ms: Math.round(performance.now() - t0),
+    pior: Math.round(pior),
+    limite: Math.round(limite),
+    motivo
+  };
+}
 
 async function soltarSessoes() {
   if (!sessoes) return;
@@ -95,13 +184,13 @@ async function iniciar(msg) {
        Android mais simples, mesmo com o arquivo no ar e com o tipo
        certo — e faz cada falha aparecer com nome e número, em vez de
        um "módulo não pôde ser importado" genérico. */
-    self.__etapa = 'motor: programa';
+    marcar('motor: programa');
     const rp = await fetch(msg.ortBundle || (msg.ortBase + 'ort-bundle.min.js'), { cache: 'force-cache' });
     if (!rp.ok) throw new Error('programa http ' + rp.status);
     const texto = await rp.text();
     if (texto.length < 100000) throw new Error('programa incompleto (' + texto.length + ' bytes)');
 
-    self.__etapa = 'motor: binario';
+    marcar('motor: binario');
     const partes = msg.wasmPartes || [msg.ortBase + 'ort-wasm-jsep-parte1.bin', msg.ortBase + 'ort-wasm-jsep-parte2.bin'];
     const buffers = [];
     for (const u of partes) {
@@ -115,7 +204,7 @@ async function iniciar(msg) {
     for (const b of buffers) { wasm.set(b, o); o += b.length; }
     if (wasm[0] !== 0 || wasm[1] !== 0x61 || wasm[2] !== 0x73 || wasm[3] !== 0x6d) throw new Error('binario corrompido (' + total + ' bytes)');
 
-    self.__etapa = 'motor: carga';
+    marcar('motor: carga');
     /* Este endereço blob: NÃO pode ser liberado. Quando o motor usa
        mais de um núcleo, ele abre cada linha paralela a partir do
        próprio endereço de onde foi carregado; liberado, as linhas
@@ -128,7 +217,7 @@ async function iniciar(msg) {
       /* Se nem pelo blob der, resta o caminho antigo: o programa como
          script comum, com o carregador do WebAssembly à parte. */
       erroBlob = String(e && e.message || e).slice(0, 160);
-      self.__etapa = 'motor: carga (2)';
+      marcar('motor: carga (2)');
       importScripts(msg.ortBase + 'ort.min.js');
       modulo = self.ort;
       if (modulo) modulo.env.wasm.wasmPaths = { mjs: msg.ortBase + 'ort-wasm-simd-threaded.jsep.js' };
@@ -141,13 +230,13 @@ async function iniciar(msg) {
     ORT.env.wasm.wasmBinary = wasm.buffer;
     ORT.env.logLevel = 'error';
 
-    self.__etapa = 'motor: teste';
+    marcar('motor: teste');
     /* Um modelo minúsculo (soma de dois números) acorda o WebAssembly
        agora, com mensagem clara, em vez de deixar a falha aparecer
        mais adiante como "nenhum backend disponível". */
     await ORT.InferenceSession.create(MODELO_DE_TESTE, { executionProviders: ['wasm'] });
   } catch (e) { ORT = null; throw e; }
-  self.__etapa = 'modelo guardado';
+  marcar('modelo guardado');
   const db = await abrirBanco();
   cfg = JSON.parse(await (await lerArquivo(db, 'onnx/tts.json')).text());
   const lista = JSON.parse(await (await lerArquivo(db, 'onnx/unicode_indexer.json')).text());
@@ -161,9 +250,14 @@ async function iniciar(msg) {
     const s = {};
     try {
       for (const n of nomes) {
+        marcar('sessoes: ' + n);
         let bytes = new Uint8Array(await (await lerArquivo(db, 'onnx/' + n + '.onnx')).arrayBuffer());
         s[n] = await ORT.InferenceSession.create(bytes, { executionProviders: provedores, ...opcoes });
         bytes = null;
+        /* Um respiro entre um modelo e outro: é nesse intervalo que a
+           cópia em JavaScript do anterior é de fato devolvida. Sem
+           ele, duas cópias de 256 MB se encontram na memória. */
+        await new Promise(r => setTimeout(r, 30));
       }
       return s;
     } catch (e) {
@@ -181,9 +275,14 @@ async function iniciar(msg) {
   if (msg.preferirGpu && self.navigator && navigator.gpu) {
     try { temGpu = !!(await navigator.gpu.requestAdapter()); } catch (e) { temGpu = false; }
   }
-  self.__etapa = 'sessoes';
-  if (temGpu) planos.push(['webgpu', { graphOptimizationLevel: 'all' }, 'webgpu']);
-  planos.push(['wasm', { graphOptimizationLevel: 'all' }, 'wasm']);
+  marcar('sessoes');
+  /* Em aparelho de pouca memória a primeira tentativa já é a
+     econômica. A otimização do grafo chega a manter duas cópias dos
+     pesos enquanto trabalha, e é justamente esse pico que fazia o
+     sistema fechar o aplicativo: mais vale começar devagar e chegar
+     ao fim do que tentar o caminho rápido e ser encerrado no meio. */
+  if (temGpu && !msg.economico) planos.push(['webgpu', { graphOptimizationLevel: 'all' }, 'webgpu']);
+  if (!msg.economico) planos.push(['wasm', { graphOptimizationLevel: 'all' }, 'wasm']);
   planos.push(['wasm', { graphOptimizationLevel: 'disabled', enableMemPattern: false, enableCpuMemArena: false, executionMode: 'sequential' }, 'wasm-economico']);
   let conjunto = null;
   const falhas = [];
@@ -391,7 +490,10 @@ self.onmessage = e => {
      paralelo numa só linha, e a fila garante a ordem dos trechos. */
   fila = fila.then(async () => {
     try {
-      if (msg.tipo === 'iniciar') {
+      if (msg.tipo === 'sondar') {
+        marcar('sonda');
+        self.postMessage(await sondar(msg));
+      } else if (msg.tipo === 'iniciar') {
         ultimoInicio = msg;
         const r = await iniciar(msg);
         self.postMessage({ tipo: 'pronto', backend: r.backend, threads: r.threads });
