@@ -1010,6 +1010,8 @@ Idiomas.registrar('ar', {
     "do_sistema": "النظام",
     "nota_sistema": "يستخدم الأصوات المثبّتة على جهازك. لقراءة أقرب إلى الصوت البشري، اختر «طبيعي».",
     "nota_sistema_com_natural": "الصوت الطبيعي لا يزال مُنزّلًا. عُد إلى «طبيعي» متى شئت.",
+    "voz_do_sistema": "صوت النظام",
+    "lendo_com_a_voz_do_sistema": "تتم القراءة بصوت النظام.",
     "voz_natural": "الصوت الطبيعي",
     "gerada_no_aparelho": "صوت أقرب بكثير إلى الصوت البشري، يُنشأ على جهازك مباشرةً.",
     "progresso_download": "تقدّم التنزيل",

@@ -940,6 +940,8 @@ Idiomas.registrar('ja', {
     "do_sistema": "システム",
     "nota_sistema": "端末にインストールされている声を使います。より人間らしい読み上げには、ナチュラルを選んでください。",
     "nota_sistema_com_natural": "自然な声はダウンロードしたまま残っています。いつでもナチュラルに戻せます。",
+    "voz_do_sistema": "端末の音声",
+    "lendo_com_a_voz_do_sistema": "端末の音声で読み上げています。",
     "voz_natural": "自然な声",
     "gerada_no_aparelho": "ずっと人間らしい声を、この端末の中で生成します。",
     "progresso_download": "ダウンロードの進行状況",

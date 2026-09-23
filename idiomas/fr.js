@@ -942,6 +942,8 @@ Idiomas.registrar('fr', {
     "do_sistema": "Système",
     "nota_sistema": "Utilise les voix installées sur votre appareil. Pour une lecture plus humaine, choisissez Naturelle.",
     "nota_sistema_com_natural": "La voix naturelle reste téléchargée. Revenez à Naturelle quand vous le souhaitez.",
+    "voz_do_sistema": "Voix du système",
+    "lendo_com_a_voz_do_sistema": "Lecture avec la voix du système.",
     "voz_natural": "Voix naturelle",
     "gerada_no_aparelho": "Une voix bien plus humaine, générée directement sur votre appareil.",
     "progresso_download": "Progression du téléchargement",

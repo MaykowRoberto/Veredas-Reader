@@ -942,6 +942,8 @@ Idiomas.registrar('nl', {
     "do_sistema": "Systeem",
     "nota_sistema": "Gebruikt de stemmen die op je apparaat zijn geïnstalleerd. Kies Natuurlijk voor voorlezen dat menselijker klinkt.",
     "nota_sistema_com_natural": "De natuurlijke stem blijft gedownload. Schakel terug naar Natuurlijk wanneer je wilt.",
+    "voz_do_sistema": "Systeemstem",
+    "lendo_com_a_voz_do_sistema": "Wordt voorgelezen met de systeemstem.",
     "voz_natural": "Natuurlijke stem",
     "gerada_no_aparelho": "Een veel menselijkere stem, direct op je apparaat gemaakt.",
     "progresso_download": "Downloadvoortgang",

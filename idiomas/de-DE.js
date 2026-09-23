@@ -947,6 +947,8 @@ Idiomas.registrar('de-DE', {
     "do_sistema": "System",
     "nota_sistema": "Verwendet die auf Ihrem Gerät installierten Stimmen. Für ein menschlicher klingendes Vorlesen wählen Sie Natürlich.",
     "nota_sistema_com_natural": "Die natürliche Stimme bleibt heruntergeladen. Sie können jederzeit zu Natürlich zurückwechseln.",
+    "voz_do_sistema": "Systemstimme",
+    "lendo_com_a_voz_do_sistema": "Wird mit der Systemstimme vorgelesen.",
     "voz_natural": "Natürliche Stimme",
     "gerada_no_aparelho": "Eine viel menschlichere Stimme, direkt auf Ihrem Gerät erzeugt.",
     "progresso_download": "Download-Fortschritt",

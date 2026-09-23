@@ -5802,6 +5802,10 @@ class TextToSpeechController{
        trechos de cada página e o idioma detectado de cada livro. */
     this.motor='sistema';this.audio=null;this.preparados=new Map();this.trechosPorPagina=new Map();
     this.idiomaCache=new Map();this.naturalFalhou=false;this.gerando=false;this.lentidao=0;this.passosAuto=0;this.avisouLento=false;
+    /* Onde a fala do sistema parou dentro do trecho, para retomar dali
+       depois de uma pausa; e o meio minuto de sossego que recolhe o
+       painel sozinho. */
+    this.charOffset=0;this._vigiaFala=0;this.RECOLHER_EM=30000;this._avisouSistema=false;
     this.bind();
   }
   bind(){
@@ -5916,6 +5920,19 @@ class TextToSpeechController{
     btn.disabled=!podeTocar;btn.setAttribute('aria-label',this.playing&&!this.paused?T('app.pausar_leitura'):T('ui.iniciar_leitura'));
     btn.innerHTML=`<i data-lucide="${this.playing&&!this.paused?'pause':'play'}"></i>`;
     document.getElementById('btn-reader-tts')?.classList.toggle('is-playing',this.playing&&!this.paused);
+    /* A etiqueta de quem lê. Enquanto a leitura corre ela mostra o
+       motor que está realmente falando, não o que seria escolhido; e
+       quando a voz do sistema entrou no lugar da natural sem ter sido
+       pedida, ela fica marcada para não passar despercebida. */
+    const chip=document.getElementById('tts-voz-atual');
+    if(chip){
+      const emUso=this.playing?this.motor:escolha.motor;
+      const natural=emUso==='natural';
+      const trocado=!natural&&!!escolha.motivo&&escolha.motivo!=='escolha';
+      chip.className='tts-voz-atual'+(natural?' natural':'')+(trocado?' trocado':'');
+      chip.innerHTML=`<i data-lucide="${natural?'sparkles':'smartphone'}"></i><span>${T(natural?'vn.voz_natural':'vn.voz_do_sistema')}</span>`;
+      chip.hidden=!podeTocar;
+    }
     document.querySelectorAll('[data-tts-rate]').forEach(x=>x.classList.toggle('active',Number(x.dataset.ttsRate)===Number(App.state.settings.ttsRate||1)));
     this.refreshMotor(escolha);
     lucide.createIcons({root:document.getElementById('panel-tts')});
@@ -5975,29 +5992,114 @@ class TextToSpeechController{
   async openPanel(){
     if(!this.playing)this.pageIndex=this.reader.currentPageIndex;
     this.refreshPanel();App.openPanel('panel-tts');
+    this.ligarRecolhimento();
     VozNatural.verificar().catch(()=>{});
     await this.detectarIdiomaDoLivro().catch(()=>null);
     this.populateVoices();this.refreshPanel();
     const escolha=this.escolherMotor();
     if(escolha.motor!=='natural'&&!this.supported)Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');
   }
+  /* ---------- o painel sai da frente sozinho -------------------
+     Meio minuto parado e ele se recolhe: quem está ouvindo quer a
+     página de volta, não um painel esquecido por cima do texto.
+     Qualquer toque, rolagem ou mudança lá dentro recomeça a
+     contagem — e ele nunca se recolhe por cima de uma pergunta na
+     tela, de um download andando, do teste de memória ou de uma
+     amostra tocando. */
+  ligarRecolhimento(){
+    const painel=document.getElementById('panel-tts');
+    if(!painel)return;
+    if(!this._recolherLigado){
+      this._recolherLigado=true;
+      const adiar=()=>this.adiarRecolhimento();
+      ['pointerdown','pointerup','pointermove','keydown','wheel','scroll','change','input','focusin']
+        .forEach(ev=>painel.addEventListener(ev,adiar,{passive:true}));
+    }
+    this._ultimoToque=0;
+    this.adiarRecolhimento();
+  }
+  adiarRecolhimento(){
+    const painel=document.getElementById('panel-tts');
+    if(!painel||!painel.classList.contains('visible')){clearTimeout(this._tRecolher);return}
+    /* Um dedo parado em cima da tela dispara dezenas de eventos por
+       segundo; reiniciar a contagem uma vez por segundo basta — mas
+       nunca perto da janela inteira, ou o adiamento chegaria tarde. */
+    const agora=Date.now();
+    if(this._tRecolher&&agora-this._ultimoToque<Math.min(1000,this.RECOLHER_EM/10))return;
+    this._ultimoToque=agora;
+    clearTimeout(this._tRecolher);
+    this._tRecolher=setTimeout(()=>this.tentarRecolher(),this.RECOLHER_EM);
+  }
+  ocupado(){
+    if(document.querySelector('.modal.show,#app-modal.show'))return true;
+    const f=VozNatural.estado.fase;
+    if(f==='baixando'||f==='sondando')return true;
+    return !!(VozNaturalUI._tentando||VozNaturalUI._gerandoAmostra||VozNaturalUI._amostra);
+  }
+  tentarRecolher(){
+    const painel=document.getElementById('panel-tts');
+    clearTimeout(this._tRecolher);this._tRecolher=0;
+    if(!painel||!painel.classList.contains('visible'))return;
+    if(this.ocupado()){this._ultimoToque=0;this.adiarRecolhimento();return}
+    App.closePanels();
+  }
+  desligarRecolhimento(){clearTimeout(this._tRecolher);this._tRecolher=0}
   async toggle(){
-    if(this.playing&&!this.paused){
-      if(this.motor==='natural')this.audio?.pause();else speechSynthesis.pause();
-      this.paused=true;this.updateMediaSession('paused');this.refreshPanel();return;
-    }
-    if(this.playing&&this.paused){
-      if(this.motor==='natural'){try{await this.audio?.play()}catch(e){}}else speechSynthesis.resume();
-      this.paused=false;this.updateMediaSession('playing');this.refreshPanel();return;
-    }
+    if(this.playing&&!this.paused){this.pausar();return}
+    if(this.playing&&this.paused){await this.retomar();return}
     await this.start(this.reader.currentPageIndex,0);
   }
+  /* A voz do sistema não sobrevive a pausar e retomar. O
+     `speechSynthesis.pause()` deixa o motor num estado de que ele não
+     volta — em Android o `resume()` simplesmente não faz nada, e quem
+     estava ouvindo fica com um botão de play que não toca mais.
+
+     Então aqui a pausa CORTA a fala e guarda onde ela estava; retomar
+     fala de novo a partir dali. O ponto guardado é a última palavra
+     que o aparelho anunciou (onboundary); quando ele não anuncia
+     nenhuma, o trecho recomeça do início — uma frase repetida é um
+     preço pequeno perto de uma leitura que não volta. */
+  pausar(){
+    if(!this.playing||this.paused)return;
+    this.paused=true;
+    this.pararVigiaDaFala();
+    if(this.motor==='natural'){try{this.audio?.pause()}catch(e){}}
+    else{
+      this.runId++;                      /* invalida os avisos da fala cortada */
+      try{speechSynthesis.cancel()}catch(e){}
+    }
+    this.updateMediaSession('paused');this.refreshPanel();
+  }
+  async retomar(){
+    if(!this.playing||!this.paused)return;
+    this.paused=false;
+    if(this.motor==='natural'){try{await this.audio?.play()}catch(e){}}
+    else{
+      /* Limpa qualquer resto preso na fila antes de falar de novo:
+         é o que evita o silêncio depois de uma pausa. */
+      try{speechSynthesis.cancel()}catch(e){}
+      const run=++this.runId;
+      this.speakSegment(run);
+    }
+    this.updateMediaSession('playing');this.refreshPanel();
+  }
+  /* O Chrome corta sozinho uma fala que passa de uns quinze segundos,
+     sem erro e sem aviso. Um empurrão a cada dez segundos mantém a
+     leitura andando até o fim do trecho. */
+  ligarVigiaDaFala(){
+    clearInterval(this._vigiaFala);
+    this._vigiaFala=setInterval(()=>{
+      if(!this.playing||this.paused||this.motor!=='sistema')return;
+      try{if(speechSynthesis.speaking&&!speechSynthesis.paused)speechSynthesis.resume()}catch(e){}
+    },10000);
+  }
+  pararVigiaDaFala(){clearInterval(this._vigiaFala);this._vigiaFala=0}
   async start(pageIndex,segmentIndex=0){
     if(!this.reader.currentBook)return;
     App.player?.pauseForOtherMedia();
     this.stop(false);
     const run=this.runId;
-    this.playing=true;this.paused=false;this.pageIndex=Utils.clamp(pageIndex,0,this.reader.pagesData.length-1);this.segmentIndex=segmentIndex;
+    this.playing=true;this.paused=false;this.charOffset=0;this.pageIndex=Utils.clamp(pageIndex,0,this.reader.pagesData.length-1);this.segmentIndex=segmentIndex;
     await this.requestWakeLock();this.updateMediaSession('playing');this.refreshPanel();
     if(VozNatural.estado.fase==='desconhecido')await VozNatural.verificar().catch(()=>{});
     if(!this.idiomaAtual())await this.detectarIdiomaDoLivro().catch(()=>null);
@@ -6010,11 +6112,18 @@ class TextToSpeechController{
       catch(e){
         console.warn('[voz natural]',e);
         if(run!==this.runId)return;
-        this.naturalFalhou=Date.now();this.motor='sistema';
+        this.naturalFalhou=Date.now();this.motor='sistema';this._avisouSistema=true;
         Utils.toast(VozNatural.semMemoria()?T('vn.sem_memoria_usando_sistema'):T('vn.nao_carregou_usando_sistema'),'alert-triangle');
       }
       this.gerando=false;
       if(run!==this.runId||!this.playing)return;
+    }
+    /* A troca de voz é dita uma vez por leitura, na hora do play:
+       ninguém deve descobrir que está ouvindo a voz do aparelho só
+       pelo som dela. */
+    if(this.motor==='sistema'&&escolha.motivo&&escolha.motivo!=='escolha'&&!this._avisouSistema){
+      this._avisouSistema=true;
+      Utils.toast(T('vn.lendo_com_a_voz_do_sistema'),'smartphone');
     }
     if(this.motor==='sistema'&&!this.supported){this.stop();Utils.toast(T('app.a_leitura_em_voz_alta_nao_e_suportada'),'alert-triangle');return}
     this.refreshPanel();
@@ -6053,7 +6162,12 @@ class TextToSpeechController{
   speakSegment(run){
     if(!this.playing||run!==this.runId)return;
     if(this.motor==='natural'){this.falarNatural(run);return}
-    const utterance=new SpeechSynthesisUtterance(this.segments[this.segmentIndex]);
+    /* Depois de uma pausa, recomeça de onde o aparelho tinha chegado
+       dentro do trecho, e não do começo dele. */
+    const inteiro=this.segments[this.segmentIndex]||'';
+    const daqui=(this.charOffset>0&&this.charOffset<inteiro.length)?this.charOffset:0;
+    const resto=daqui?inteiro.slice(daqui):inteiro;
+    const utterance=new SpeechSynthesisUtterance(resto);
     const voiceURI=App.state.settings.ttsVoiceURI;
     const lang=this.idiomaAtual();
     let voz=speechSynthesis.getVoices().find(v=>v.voiceURI===voiceURI)||null;
@@ -6064,13 +6178,21 @@ class TextToSpeechController{
     utterance.voice=voz;
     utterance.lang=voz?.lang||lang||document.documentElement.lang||'pt-BR';
     utterance.rate=Number(App.state.settings.ttsRate)||1;
+    /* Onde o aparelho está agora dentro do trecho. É esta marca que
+       permite retomar de onde parou. */
+    utterance.onboundary=e=>{
+      if(run!==this.runId||typeof e.charIndex!=='number')return;
+      this.charOffset=daqui+e.charIndex;
+    };
     utterance.onend=()=>{
       if(!this.playing||run!==this.runId)return;
+      this.charOffset=0;
       this.segmentIndex++;
       if(this.segmentIndex<this.segments.length)this.speakSegment(run);else this.advance();
     };
     utterance.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled'){console.warn(e);this.stop();Utils.toast(T('app.a_voz_foi_interrompida_pelo_navegador'),'alert-triangle')}};
     speechSynthesis.speak(utterance);
+    this.ligarVigiaDaFala();
   }
 
   /* ---------- voz natural -------------------------------------- */
@@ -6200,10 +6322,11 @@ class TextToSpeechController{
   advance(){
     if(!this.playing)return;
     if(this.pageIndex>=this.reader.pagesData.length-1){this.stop();Utils.toast(T('app.leitura_concluida'),'check-circle');return}
-    this.pageIndex++;this.segmentIndex=0;this.reader.turnToPage(this.pageIndex,{fromTts:true});this.refreshPanel();this.loadPageAndSpeak();
+    this.pageIndex++;this.segmentIndex=0;this.charOffset=0;this.reader.turnToPage(this.pageIndex,{fromTts:true});this.refreshPanel();this.loadPageAndSpeak();
   }
   skip(direction){
     const next=Utils.clamp(this.pageIndex+direction,0,this.reader.pagesData.length-1);
+    this.charOffset=0;
     if(next===this.pageIndex&&direction<0){this.segmentIndex=0;if(this.playing){this.stop(false);this.start(next,0)}return}
     if(this.playing){this.stop(false);this.start(next,0)}else{this.reader.turnToPage(next);this.pageIndex=next;this.refreshPanel()}
   }
@@ -6225,12 +6348,14 @@ class TextToSpeechController{
   }
   stop(release=true){
     this.runId++;
+    this.charOffset=0;this.pararVigiaDaFala();
     if(this.supported)speechSynthesis.cancel();
     if(this.audio){try{this.audio.onended=null;this.audio.onerror=null;this.audio.pause();this.audio.removeAttribute('src');this.audio.load()}catch(e){}}
     if(this.preparados.size){VozNatural.cancelarTudo();this.limparPreparados()}
     this.trechosPorPagina.clear();
     const eraNatural=this.motor==='natural'&&this.playing;
     this.playing=false;this.paused=false;this.gerando=false;
+    if(release)this._avisouSistema=false;
     if(release){this.releaseWakeLock();if(eraNatural||VozNatural._trab)VozNatural.soltarDepois()}
     this.updateMediaSession('none');this.refreshPanel();
   }
@@ -11890,7 +12015,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-20 · 40';
+const BUILD='2026-09-20 · 41';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,

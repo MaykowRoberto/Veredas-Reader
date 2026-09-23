@@ -2371,6 +2371,14 @@ html[dir="rtl"] .select{
 .vn-link{background:none;border:0;color:var(--aviso-forte,#b42336);font-weight:700;font-size:12px;padding:8px 4px;min-height:36px}
 .vn-aviso p{font-size:12.5px;line-height:1.5;margin:0}
 .tts-motor-aviso{font-size:12px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--surface-2);border-inline-start:3px solid var(--accent-solid)}
+/* Etiqueta de quem está lendo. Sempre à vista, junto do nome do
+   livro; marcada quando a voz do sistema entrou no lugar da natural
+   sem ter sido pedida. */
+.tts-voz-atual{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:3px 9px 3px 7px;border-radius:999px;font-size:11px;font-weight:600;line-height:1.6;
+  background:var(--surface);border:1px solid var(--border);color:var(--muted)}
+.tts-voz-atual i{width:13px!important;height:13px!important;color:inherit!important}
+.tts-voz-atual.natural{color:var(--accent);border-color:color-mix(in srgb,var(--accent-solid) 45%,transparent)}
+.tts-voz-atual.trocado{color:var(--accent);border-color:var(--accent-solid);background:color-mix(in srgb,var(--accent-solid) 10%,var(--surface))}
 #tts-sistema-bloco{margin-top:12px}
 .vn-idioma-rotulo{margin-top:14px;display:block}
 @media (prefers-reduced-motion:reduce){.vn-barra.ativa span,.vn-gira{animation:none}}

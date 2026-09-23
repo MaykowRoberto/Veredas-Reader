@@ -955,6 +955,8 @@ Idiomas.registrar('pt-BR', {
     "do_sistema": "Do sistema",
     "nota_sistema": "Usa as vozes instaladas no aparelho. Para uma leitura mais humana, escolha Natural.",
     "nota_sistema_com_natural": "A voz natural continua baixada. Volte para Natural quando quiser.",
+    "voz_do_sistema": "Voz do sistema",
+    "lendo_com_a_voz_do_sistema": "Lendo com a voz do sistema.",
     "voz_natural": "Voz natural",
     "gerada_no_aparelho": "Uma voz muito mais humana, criada no próprio aparelho.",
     "progresso_download": "Progresso do download",

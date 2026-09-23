@@ -952,6 +952,8 @@ Idiomas.registrar('en', {
     "do_sistema": "System",
     "nota_sistema": "Uses the voices installed on your device. For a more human-sounding reading, choose Natural.",
     "nota_sistema_com_natural": "The natural voice is still downloaded. Switch back to Natural any time.",
+    "voz_do_sistema": "System voice",
+    "lendo_com_a_voz_do_sistema": "Reading with the system voice.",
     "voz_natural": "Natural voice",
     "gerada_no_aparelho": "A far more human voice, created right on your device.",
     "progresso_download": "Download progress",

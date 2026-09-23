@@ -957,6 +957,8 @@ Idiomas.registrar('fil', {
     "do_sistema": "System",
     "nota_sistema": "Ginagamit ang mga boses na naka-install sa device mo. Para sa mas parang-taong pagbasa, piliin ang Natural.",
     "nota_sistema_com_natural": "Naka-download pa rin ang natural na boses. Bumalik sa Natural kahit kailan mo gusto.",
+    "voz_do_sistema": "Boses ng system",
+    "lendo_com_a_voz_do_sistema": "Binabasa gamit ang boses ng system.",
     "voz_natural": "Natural na boses",
     "gerada_no_aparelho": "Boses na mas parang tao, ginagawa mismo sa device mo.",
     "progresso_download": "Progreso ng download",

@@ -940,6 +940,8 @@ Idiomas.registrar('ko', {
     "do_sistema": "시스템 음성",
     "nota_sistema": "기기에 설치된 음성을 사용합니다. 더 사람 같은 낭독을 원하면 자연스러운 음성을 선택하세요.",
     "nota_sistema_com_natural": "자연스러운 음성은 그대로 다운로드되어 있습니다. 언제든 다시 전환할 수 있어요.",
+    "voz_do_sistema": "시스템 음성",
+    "lendo_com_a_voz_do_sistema": "시스템 음성으로 읽고 있습니다.",
     "voz_natural": "자연스러운 음성",
     "gerada_no_aparelho": "훨씬 사람다운 목소리를 기기 안에서 바로 만들어 냅니다.",
     "progresso_download": "다운로드 진행률",

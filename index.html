@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260920-40">
+<link rel="stylesheet" href="styles.css?v=20260920-41">
 
 <!-- ============================================================
      DEPENDÊNCIAS
@@ -23,10 +23,10 @@
      arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
      versão, de onde veio e a impressão digital do arquivo.
      ============================================================ -->
-<script src="vendor/lucide/lucide.min.js?v=20260920-40"></script>
-<script src="vendor/jszip/jszip.min.js?v=20260920-40"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=20260920-40"></script>
-<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-40"></script>
+<script src="vendor/lucide/lucide.min.js?v=20260920-41"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260920-41"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260920-41"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260920-41"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -480,7 +480,10 @@
     <button class="icon-btn" data-close-panel aria-label="Fechar" data-i18n-aria="ui.fechar"><i data-lucide="x"></i></button>
   </div>
   <div class="panel-body">
-    <div class="tts-now-playing"><i data-lucide="headphones"></i><div><strong id="tts-book-title" data-i18n="ui.livro">Livro</strong><small id="tts-status" data-i18n="ui.pronto_para_comecar">Pronto para começar</small></div></div>
+    <!-- Quem está lendo fica dito com todas as letras, aqui em cima:
+         quando a voz natural não pôde ser usada, isso não pode ficar
+         só no cartão lá embaixo. -->
+    <div class="tts-now-playing"><i data-lucide="headphones"></i><div><strong id="tts-book-title" data-i18n="ui.livro">Livro</strong><small id="tts-status" data-i18n="ui.pronto_para_comecar">Pronto para começar</small><span class="tts-voz-atual" id="tts-voz-atual" hidden></span></div></div>
     <div class="tts-play-row">
       <button class="reader-icon" id="btn-tts-back" aria-label="Trecho anterior" data-i18n-aria="ui.trecho_anterior"><i data-lucide="rewind"></i></button>
       <button class="reader-icon primary" id="btn-tts-play" aria-label="Iniciar leitura" data-i18n-aria="ui.iniciar_leitura"><i data-lucide="play"></i></button>
@@ -802,12 +805,12 @@
      ficam em idiomas/ e são carregados sob demanda: só o idioma
      escolhido, a língua-base dele e o inglês de reserva.
      ============================================================ -->
-<script>window.BUILD_QS="20260920-40";</script>
-<script src="idioma.js?v=20260920-40"></script>
+<script>window.BUILD_QS="20260920-41";</script>
+<script src="idioma.js?v=20260920-41"></script>
 
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260920-40"></script>
+<script src="epub-pdf-converter.js?v=20260920-41"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260920-40"></script>
+<script src="app.js?v=20260920-41"></script>
 </body>
 </html>

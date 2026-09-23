@@ -940,6 +940,8 @@ Idiomas.registrar('zh-TW', {
     "do_sistema": "系統",
     "nota_sistema": "使用裝置上已安裝的語音。想要更像真人的朗讀，請選擇「自然」。",
     "nota_sistema_com_natural": "自然語音仍保留在裝置上。隨時都能切換回「自然」。",
+    "voz_do_sistema": "系統語音",
+    "lendo_com_a_voz_do_sistema": "正在用系統語音朗讀。",
     "voz_natural": "自然語音",
     "gerada_no_aparelho": "更像真人的語音，直接在裝置上產生。",
     "progresso_download": "下載進度",
