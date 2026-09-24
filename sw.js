@@ -23,7 +23,7 @@
    VERSAO precisa mudar a cada publicação: é o que limpa o cache
    antigo do aparelho.
    ============================================================ */
-const VERSAO = 'veredas-2026-09-24-44';
+const VERSAO = 'veredas-2026-09-24-45';
 
 const ESSENCIAIS = [
   './',

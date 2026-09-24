@@ -2475,7 +2475,9 @@ html[dir="rtl"] .select{
 /* O contorno sai de sombras sem deslocamento, e não de um traço em
    cada forma: traço por forma desenharia as costuras entre os dedos
    e o punho, que na mão de verdade não existem. */
-.guia-mao{position:absolute;width:62px;height:72px;margin:-36px 0 0 -31px;
+/* A âncora é a PONTA DO DEDO, e não o meio da mão: num gesto, quem
+   toca a tela é o dedo, e a mão fica pendurada abaixo do ponto. */
+.guia-mao{position:absolute;width:56px;height:82px;margin:-9px 0 0 -25px;
   filter:drop-shadow(0 0 1.1px rgba(24,18,20,.92)) drop-shadow(0 0 1.1px rgba(24,18,20,.75))
          drop-shadow(0 7px 18px rgba(0,0,0,.5))}
 /* Clara, porque o fundo dela é sempre o véu escuro. O contorno

@@ -4988,17 +4988,24 @@ const Guia={
       <div class="guia-foco" aria-hidden="true"></div>
       <div class="guia-gesto" hidden aria-hidden="true">
         <span class="guia-rastro"></span>
-        <svg class="guia-mao" viewBox="0 0 64 74" aria-hidden="true">
-          <!-- Um indicador levantado sobre um punho fechado. Os dedos
-               dobrados são calombos na borda de cima do punho, e não
-               dedos em pé: dois dedos levantados lado a lado formam
-               um gesto que ninguém quer ver num aplicativo. -->
-          <g class="palma" stroke-linejoin="round">
-            <rect x="20" y="5"  width="12.5" height="45" rx="6.25"/>
-            <rect x="33" y="40" width="13"   height="14" rx="6.5"/>
-            <rect x="43" y="42" width="12"   height="12" rx="6"/>
-            <rect x="11" y="42" width="11"   height="15" rx="5.5" transform="rotate(-26 16.5 49.5)"/>
-            <rect x="14" y="43" width="41" height="29" rx="14"/>
+        <!-- Mão apontando para cima, saindo de uma manga: indicador
+             esguio, os outros dedos fechados como nós na borda do
+             punho, o polegar numa saliência à esquerda, e o punho da
+             manga separado por uma fresta. A silhueta é a união de
+             cápsulas arredondadas; o contorno vem de sombras sem
+             deslocamento, no CSS, para não desenhar as costuras
+             entre uma peça e outra. -->
+        <svg class="guia-mao" viewBox="0 0 64 94" aria-hidden="true">
+          <g class="palma">
+            <rect x="25" y="3.5" width="7.6" height="38" rx="3.8"/>
+            <rect x="22.6" y="32" width="10.4" height="18" rx="5.2"/>
+            <rect x="32.4" y="27.5" width="9.6" height="18" rx="4.8"/>
+            <rect x="40.8" y="30.5" width="9" height="16" rx="4.5"/>
+            <rect x="47.4" y="34" width="7" height="14" rx="3.5"/>
+            <rect x="13.4" y="47.5" width="12.6" height="9.2" rx="4.6" transform="rotate(-26 19.7 52.1)"/>
+            <rect x="19.6" y="37" width="33.8" height="35" rx="14"/>
+            <rect x="29.5" y="64" width="19.5" height="11" rx="4"/>
+            <rect x="24.5" y="76" width="30" height="16.8" rx="6"/>
           </g>
         </svg>
       </div>
@@ -12614,7 +12621,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-24 · 44';
+const BUILD='2026-09-24 · 45';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
