@@ -2393,3 +2393,134 @@ html[dir="rtl"] .select{
 @media (prefers-reduced-motion:reduce){.tts-now-playing small.pulsando{animation:none;font-weight:700}}
 .vn-sub-topo{margin:0 0 6px}
 .vn-motor{margin-bottom:12px}
+
+/* ============================================================
+   GUIA — as dicas da primeira vez
+   ------------------------------------------------------------
+   Um guia é uma conversa curta, não um manual. Cada dica aponta
+   para um lugar de verdade da tela, e some quando a pessoa já
+   soube dela. O véu escurece tudo menos o alvo: o recorte é feito
+   com uma sombra gigante em volta de um retângulo pequeno, que é
+   o jeito mais leve de abrir um buraco na tela sem SVG e sem
+   redesenhar nada a cada quadro.
+   ============================================================ */
+.guia{position:fixed;inset:0;z-index:9200;opacity:0;transition:opacity .26s ease;
+  --guia-veu:rgba(12,12,14,.66);--guia-anel:color-mix(in srgb,var(--accent-solid) 55%,transparent)}
+.guia.aberto{opacity:1}
+[data-theme="dark"] .guia{--guia-veu:rgba(0,0,0,.74)}
+
+/* O recorte. A sombra de 9999px é o véu; o retângulo é o buraco. */
+.guia-foco{position:fixed;border-radius:16px;pointer-events:none;
+  box-shadow:0 0 0 3px var(--guia-anel),0 0 0 9999px var(--guia-veu);
+  transition:top .44s cubic-bezier(.32,.72,0,1),left .44s cubic-bezier(.32,.72,0,1),
+             width .44s cubic-bezier(.32,.72,0,1),height .44s cubic-bezier(.32,.72,0,1),
+             border-radius .3s ease}
+.guia-foco::after{content:'';position:absolute;inset:-3px;border-radius:inherit;
+  border:2px solid var(--accent-solid);opacity:0;animation:guia-pulso 2.6s ease-out infinite}
+@keyframes guia-pulso{
+  0%{opacity:.85;transform:scale(1)}
+  60%{opacity:0;transform:scale(1.14)}
+  100%{opacity:0;transform:scale(1.14)}
+}
+/* Sem alvo (uma dica sobre a tela inteira): só o véu, sem buraco. */
+.guia-foco.sem-alvo{box-shadow:0 0 0 9999px var(--guia-veu);border-radius:0}
+.guia-foco.sem-alvo::after{display:none}
+
+.guia-balao{position:fixed;inset-inline-start:0;top:0;width:min(336px,calc(100vw - 32px));
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:20px;
+  box-shadow:0 2px 6px rgba(15,15,18,.10),0 22px 48px -14px rgba(15,15,18,.34);
+  padding:15px 16px 11px;opacity:0;transform:translate3d(0,8px,0) scale(.97);
+  transition:opacity .3s ease,transform .36s cubic-bezier(.32,.72,0,1);will-change:transform}
+.guia-balao.posto{opacity:1;transform:none}
+.guia-seta{position:absolute;width:13px;height:13px;background:var(--surface);
+  border-inline-start:1px solid var(--border);border-block-start:1px solid var(--border);
+  border-start-start-radius:3px}
+.guia-balao[data-lado="baixo"] .guia-seta{top:-7px;transform:rotate(45deg)}
+.guia-balao[data-lado="cima"]  .guia-seta{bottom:-7px;transform:rotate(225deg)}
+.guia-balao[data-lado="direita"] .guia-seta{inset-inline-start:-7px;transform:rotate(-45deg)}
+.guia-balao[data-lado="esquerda"] .guia-seta{inset-inline-end:-7px;transform:rotate(135deg)}
+.guia-balao[data-lado="centro"] .guia-seta{display:none}
+
+.guia-cabeca{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.guia-conta{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--accent);
+  background:color-mix(in srgb,var(--accent-solid) 11%,transparent);
+  padding:3px 9px;border-radius:999px;font-variant-numeric:tabular-nums}
+.guia-pular{background:none;border:0;padding:4px 2px;color:var(--muted);font-size:12px;
+  font-weight:600;cursor:pointer;border-radius:8px}
+.guia-pular:hover{color:var(--text)}
+.guia-balao h4{margin:0 0 5px;font-size:16px;line-height:1.3;font-weight:750;letter-spacing:-.01em}
+.guia-balao p{margin:0;font-size:13.5px;line-height:1.55;color:var(--muted)}
+.guia-pe{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px}
+.guia-pontos{display:flex;gap:5px;align-items:center}
+.guia-pontos i{display:block;width:6px;height:6px;border-radius:999px;background:var(--border);
+  transition:width .3s cubic-bezier(.32,.72,0,1),background .3s ease}
+.guia-pontos i.feito{background:color-mix(in srgb,var(--accent-solid) 45%,transparent)}
+.guia-pontos i.atual{width:18px;background:var(--accent-solid)}
+.guia-botoes{display:flex;gap:7px;align-items:center}
+.guia-botoes button{font:inherit;font-size:13px;font-weight:650;border-radius:11px;cursor:pointer;
+  padding:8px 15px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+  transition:transform .12s ease,filter .15s ease}
+.guia-botoes button:active{transform:scale(.97)}
+.guia-botoes .guia-ok{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
+.guia-botoes .guia-ok:hover{filter:brightness(1.07)}
+
+/* ---- a mão que mostra o gesto ----
+   A mão precisa ser vista sobre QUALQUER página, clara ou escura, e
+   precisa percorrer a área de verdade — um movimentinho de meio dedo
+   não ensina gesto nenhum. Por isso ela anda em `left`/`top`, que são
+   porcentagens do alvo, e não em `translate`, que seria porcentagem
+   do próprio tamanho dela. */
+.guia-gesto{position:fixed;pointer-events:none;z-index:1}
+.guia-gesto[hidden]{display:none}
+/* O contorno sai de sombras sem deslocamento, e não de um traço em
+   cada forma: traço por forma desenharia as costuras entre os dedos
+   e o punho, que na mão de verdade não existem. */
+.guia-mao{position:absolute;width:62px;height:72px;margin:-36px 0 0 -31px;
+  filter:drop-shadow(0 0 1.1px rgba(24,18,20,.92)) drop-shadow(0 0 1.1px rgba(24,18,20,.75))
+         drop-shadow(0 7px 18px rgba(0,0,0,.5))}
+/* Clara, porque o fundo dela é sempre o véu escuro. O contorno
+   escuro segura a silhueta quando a página por baixo é clara. */
+.guia-mao .palma{fill:#fff;stroke:none}
+.guia-gesto[data-gesto="passar"] .guia-mao{top:50%;animation:guia-passar 2.8s cubic-bezier(.5,0,.2,1) infinite}
+.guia-gesto[data-gesto="rolar"]  .guia-mao{left:50%;animation:guia-rolar 2.8s cubic-bezier(.5,0,.2,1) infinite}
+.guia-gesto[data-gesto="pinca"]  .guia-mao{left:50%;top:50%;animation:guia-pinca 2.6s ease-in-out infinite}
+@keyframes guia-passar{
+  0%{left:84%;opacity:0;transform:scale(.86) rotate(6deg)}
+  12%{left:80%;opacity:1;transform:scale(1) rotate(6deg)}
+  58%{left:20%;opacity:1;transform:scale(1) rotate(-6deg)}
+  74%,100%{left:16%;opacity:0;transform:scale(.86) rotate(-6deg)}
+}
+@keyframes guia-rolar{
+  0%{top:80%;opacity:0;transform:scale(.86)}
+  12%{top:76%;opacity:1;transform:scale(1)}
+  58%{top:24%;opacity:1;transform:scale(1)}
+  74%,100%{top:20%;opacity:0;transform:scale(.86)}
+}
+@keyframes guia-pinca{
+  0%,100%{transform:scale(1.18) translate(14px,10px)}
+  50%{transform:scale(.8) translate(-10px,-8px)}
+}
+/* O rastro: um traço curto atrás da mão, que dá direção ao gesto. */
+.guia-rastro{position:absolute;border-radius:999px;opacity:0;background:#fff}
+.guia-gesto[data-gesto="passar"] .guia-rastro{left:20%;right:20%;top:50%;height:3px;margin-top:-1.5px;
+  animation:guia-rastro-h 2.8s cubic-bezier(.5,0,.2,1) infinite}
+.guia-gesto[data-gesto="rolar"] .guia-rastro{top:24%;bottom:24%;left:50%;width:3px;margin-left:-1.5px;
+  animation:guia-rastro-v 2.8s cubic-bezier(.5,0,.2,1) infinite}
+.guia-gesto[data-gesto="pinca"] .guia-rastro{display:none}
+@keyframes guia-rastro-h{0%,12%{opacity:0;transform:scaleX(0);transform-origin:right}
+  30%{opacity:.5}58%{opacity:.5;transform:scaleX(1);transform-origin:right}
+  74%,100%{opacity:0;transform:scaleX(1)}}
+@keyframes guia-rastro-v{0%,12%{opacity:0;transform:scaleY(0);transform-origin:bottom}
+  30%{opacity:.5}58%{opacity:.5;transform:scaleY(1);transform-origin:bottom}
+  74%,100%{opacity:0;transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){
+  .guia-foco::after,.guia-gesto .guia-mao{animation:none}
+  .guia-foco,.guia-balao{transition:none}
+  .guia-gesto .guia-mao{opacity:1}
+}
+
+/* Em telas estreitas o balão ocupa a largura e cola embaixo quando
+   o alvo é grande demais para sobrar espaço. */
+@media (max-width:420px){
+  .guia-balao{width:calc(100vw - 24px)}
+}

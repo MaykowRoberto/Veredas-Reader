@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192x192.png">
 
 <!-- FOLHA DE ESTILO -->
-<link rel="stylesheet" href="styles.css?v=20260923-43">
+<link rel="stylesheet" href="styles.css?v=20260924-44">
 
 <!-- ============================================================
      DEPENDÊNCIAS
@@ -23,10 +23,10 @@
      arquivo. Cada pasta tem um PROCEDENCIA.txt dizendo qual é a
      versão, de onde veio e a impressão digital do arquivo.
      ============================================================ -->
-<script src="vendor/lucide/lucide.min.js?v=20260923-43"></script>
-<script src="vendor/jszip/jszip.min.js?v=20260923-43"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=20260923-43"></script>
-<script src="vendor/mammoth/mammoth.browser.min.js?v=20260923-43"></script>
+<script src="vendor/lucide/lucide.min.js?v=20260924-44"></script>
+<script src="vendor/jszip/jszip.min.js?v=20260924-44"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=20260924-44"></script>
+<script src="vendor/mammoth/mammoth.browser.min.js?v=20260924-44"></script>
 </head>
 <body data-theme="light">
 <div id="app">
@@ -464,6 +464,17 @@
       </label>
     </div>
 
+    <!-- As dicas da primeira vez podem ser chamadas de volta: quem
+         pulou sem querer, ou quem está mostrando o aplicativo para
+         outra pessoa, não deveria ficar sem elas. -->
+    <div class="setting-section">
+      <h4 data-i18n="guia.secao">Dicas de uso</h4>
+      <label class="toggle-row">
+        <span class="toggle-label"><strong data-i18n="guia.rever_titulo">Ver as dicas de novo</strong><small data-i18n="guia.rever_dica">As dicas aparecem uma vez, no lugar em que cada coisa acontece. Isto faz todas voltarem do começo.</small></span>
+        <button type="button" class="soft-btn" id="btn-rever-guias"><i data-lucide="sparkles"></i><span data-i18n="guia.rever_botao">Rever</span></button>
+      </label>
+    </div>
+
     <div class="setting-section">
       <h4 data-i18n="vn.leitura_em_voz_alta">Leitura em voz alta</h4>
       <div data-vn-bloco></div>
@@ -805,12 +816,12 @@
      ficam em idiomas/ e são carregados sob demanda: só o idioma
      escolhido, a língua-base dele e o inglês de reserva.
      ============================================================ -->
-<script>window.BUILD_QS="20260923-43";</script>
-<script src="idioma.js?v=20260923-43"></script>
+<script>window.BUILD_QS="20260924-44";</script>
+<script src="idioma.js?v=20260924-44"></script>
 
 <!-- MOTOR DE CONVERSÃO PDF -> EPUB -->
-<script src="epub-pdf-converter.js?v=20260923-43"></script>
+<script src="epub-pdf-converter.js?v=20260924-44"></script>
 <!-- LÓGICA PRINCIPAL DO APLICATIVO -->
-<script src="app.js?v=20260923-43"></script>
+<script src="app.js?v=20260924-44"></script>
 </body>
 </html>

@@ -4048,6 +4048,9 @@ class AudioPlayer{
       this.bindMediaSession();this.updateMediaMetadata();
       this.updateChrome();
       if(wantsPlay)await this.play();
+      /* O player tem três coisas que ninguém acha sozinho: capítulos,
+         velocidade e o botão de minimizar sem parar o áudio. */
+      Guia.talvez('audio',{atraso:1400});
     }catch(e){
       if(token!==this.openToken)return;
       this.collapse();
@@ -4910,6 +4913,411 @@ AudioPlayer.SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAA
    BigScience OpenRAIL-M, cujas restrições de uso estão repetidas
    nos Termos de Uso (exigência do item 4.a da licença).
    ============================================================ */
+/* ============================================================
+   GUIA — as dicas da primeira vez
+   ------------------------------------------------------------
+   Um guia bom é uma conversa curta no momento certo, e não um
+   manual despejado na abertura. Por isso aqui não existe "o tour":
+   existem vários roteiros pequenos, cada um com dois a cinco
+   passos, e cada um aparece na primeira vez em que a pessoa chega
+   à situação em que aquilo importa — o de PDF quando ela importa
+   um PDF, o de quadrinho quando abre um quadrinho, o da aparência
+   quando abre o painel de personalizar.
+
+   Três regras que valem para todos:
+     1. Nunca repetir. Roteiro visto fica marcado nas configurações,
+        e configurações viajam no backup: quem troca de celular não
+        recebe as dicas de novo.
+     2. Nunca prender. "Pular" encerra o roteiro inteiro, Esc faz o
+        mesmo, e tocar fora do balão avança.
+     3. Nunca apontar para o vazio. Se o alvo de um passo não está
+        na tela, o passo é descartado em silêncio — é melhor um
+        roteiro menor do que uma seta apontando para nada.
+   ============================================================ */
+const Guia={
+  CHAVE:'guiasVistos',
+  MARGEM:14,          /* respiro entre o balão e a borda da tela */
+  FOLGA:10,           /* respiro entre o balão e o alvo */
+  RECUO:8,            /* quanto o recorte cresce além do alvo */
+
+  /* ---------- memória ------------------------------------- */
+  vistos(){return App.state.settings[this.CHAVE]||{}},
+  viu(nome){return !!this.vistos()[nome]},
+  async marcar(nome){
+    const m={...this.vistos(),[nome]:Date.now()};
+    try{await App.updateSetting(this.CHAVE,m)}catch(e){}
+  },
+  async esquecerTudo(){
+    try{await App.updateSetting(this.CHAVE,{})}catch(e){}
+  },
+
+  /* ---------- entrada ------------------------------------- */
+  /* O jeito normal de chamar: mostra uma vez e nunca mais. O
+     atraso deixa a tela assentar antes de escurecer — abrir um
+     livro e levar um véu na cara no mesmo instante assusta. */
+  async talvez(nome,{atraso=700}={}){
+    if(this.viu(nome)||this._ativo)return false;
+    if(!this.ROTEIROS[nome])return false;
+    await new Promise(r=>setTimeout(r,atraso));
+    if(this.viu(nome)||this._ativo)return false;
+    return this.correr(nome);
+  },
+  async correr(nome){
+    const roteiro=this.ROTEIROS[nome];
+    if(!roteiro||this._ativo)return false;
+    /* Só entram os passos cujo alvo existe de verdade agora. */
+    const passos=[];
+    for(const p of roteiro.passos){
+      if(p.quando&&!(await this._vale(p.quando)))continue;
+      passos.push(p);
+    }
+    if(!passos.length){await this.marcar(nome);return false}
+    this._nome=nome;this._passos=passos;this._i=0;this._ativo=true;
+    this._montar();
+    await this._ir(0);
+    return true;
+  },
+  async _vale(fn){try{return !!(await fn())}catch(e){return false}},
+
+  /* ---------- a tela -------------------------------------- */
+  _montar(){
+    const d=document.createElement('div');
+    d.className='guia';d.setAttribute('role','dialog');d.setAttribute('aria-modal','true');
+    d.setAttribute('aria-labelledby','guia-titulo');
+    d.innerHTML=`
+      <div class="guia-foco" aria-hidden="true"></div>
+      <div class="guia-gesto" hidden aria-hidden="true">
+        <span class="guia-rastro"></span>
+        <svg class="guia-mao" viewBox="0 0 64 74" aria-hidden="true">
+          <!-- Um indicador levantado sobre um punho fechado. Os dedos
+               dobrados são calombos na borda de cima do punho, e não
+               dedos em pé: dois dedos levantados lado a lado formam
+               um gesto que ninguém quer ver num aplicativo. -->
+          <g class="palma" stroke-linejoin="round">
+            <rect x="20" y="5"  width="12.5" height="45" rx="6.25"/>
+            <rect x="33" y="40" width="13"   height="14" rx="6.5"/>
+            <rect x="43" y="42" width="12"   height="12" rx="6"/>
+            <rect x="11" y="42" width="11"   height="15" rx="5.5" transform="rotate(-26 16.5 49.5)"/>
+            <rect x="14" y="43" width="41" height="29" rx="14"/>
+          </g>
+        </svg>
+      </div>
+      <div class="guia-balao" data-lado="baixo">
+        <span class="guia-seta" aria-hidden="true"></span>
+        <div class="guia-cabeca">
+          <span class="guia-conta"></span>
+          <button type="button" class="guia-pular"></button>
+        </div>
+        <h4 id="guia-titulo"></h4>
+        <p></p>
+        <div class="guia-pe">
+          <div class="guia-pontos" aria-hidden="true"></div>
+          <div class="guia-botoes">
+            <button type="button" class="guia-voltar"></button>
+            <button type="button" class="guia-ok"></button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(d);
+    this._el=d;
+    this._foco=d.querySelector('.guia-foco');
+    this._balao=d.querySelector('.guia-balao');
+    this._gesto=d.querySelector('.guia-gesto');
+
+    d.querySelector('.guia-pular').textContent=T('guia.pular');
+    d.querySelector('.guia-pular').onclick=()=>this.encerrar(true);
+    d.querySelector('.guia-voltar').textContent=T('guia.voltar');
+    d.querySelector('.guia-voltar').onclick=()=>this._ir(this._i-1);
+    d.querySelector('.guia-ok').onclick=()=>this._ir(this._i+1);
+    /* Tocar no véu avança: é o gesto que todo mundo tenta primeiro. */
+    d.onclick=e=>{if(!e.target.closest('.guia-balao'))this._ir(this._i+1)};
+
+    this._teclado=e=>{
+      if(e.key==='Escape'){e.preventDefault();this.encerrar(true)}
+      else if(e.key==='ArrowRight'||e.key==='Enter'||e.key===' '){e.preventDefault();this._ir(this._i+1)}
+      else if(e.key==='ArrowLeft'){e.preventDefault();this._ir(this._i-1)}
+    };
+    document.addEventListener('keydown',this._teclado,true);
+    this._repor=()=>this._posicionar();
+    addEventListener('resize',this._repor);
+    addEventListener('scroll',this._repor,true);
+    requestAnimationFrame(()=>d.classList.add('aberto'));
+  },
+
+  async _ir(n){
+    if(!this._ativo)return;
+    if(n>=this._passos.length)return this.encerrar(false);
+    if(n<0)n=0;
+    const anterior=this._passos[this._i];
+    if(n!==this._i&&anterior&&anterior.depois)await this._vale(anterior.depois);
+    this._i=n;
+    const p=this._passos[n];
+    if(p.antes)await this._vale(p.antes);
+    if(!this._ativo)return;
+    /* O alvo pode ter sumido entre o preparo e agora (um painel que
+       fechou, uma lista que se redesenhou): então pula o passo. */
+    let alvo=this._alvo(p);
+    /* Botão que mora na barra do leitor só existe com a barra à
+       vista: pede a barra e mede de novo. */
+    if(alvo&&App.reader&&alvo.closest&&alvo.closest('.reader-ui')){
+      try{App.reader.showUI()}catch(e){}
+      await new Promise(r=>setTimeout(r,240));
+      alvo=this._alvo(p);
+    }
+    if(!alvo&&!p.semAlvo)return this._ir(n+1);
+    this._pintar(p);
+    if(alvo)await this._trazerParaTela(alvo);
+    if(!this._ativo)return;
+    this._posicionar();
+    this._balao.classList.add('posto');
+    const ok=this._el.querySelector('.guia-ok');
+    ok.focus({preventScroll:true});
+  },
+  _alvo(p){
+    if(!p||p.semAlvo)return null;
+    try{
+      const el=typeof p.alvo==='function'?p.alvo():document.querySelector(p.alvo);
+      if(!el)return null;
+      const r=el.getBoundingClientRect();
+      /* Elemento existe mas está escondido: para o guia é o mesmo
+         que não existir. */
+      if(r.width<2||r.height<2)return null;
+      return el;
+    }catch(e){return null}
+  },
+  async _trazerParaTela(el){
+    const r=el.getBoundingClientRect();
+    const alto=innerHeight;
+    if(r.top>=64&&r.bottom<=alto-64)return;
+    try{el.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}
+    await new Promise(r=>setTimeout(r,420));
+  },
+  _pintar(p){
+    const b=this._balao;
+    b.querySelector('h4').textContent=T(Guia._resolver(p.titulo));
+    b.querySelector('p').textContent=T(Guia._resolver(p.texto));
+    /* Numa dica sozinha, contador, pontinhos e "Pular" não informam
+       nada: o botão de fechar já é a saída. */
+    const varios=this._passos.length>1;
+    const conta=b.querySelector('.guia-conta');
+    conta.textContent=(this._i+1)+' / '+this._passos.length;
+    conta.hidden=!varios;
+    b.querySelector('.guia-pular').hidden=!varios;
+    b.querySelector('.guia-cabeca').style.display=varios?'':'none';
+    b.querySelector('.guia-voltar').hidden=this._i===0;
+    b.querySelector('.guia-ok').textContent=T(this._i===this._passos.length-1?'guia.concluir':'guia.proximo');
+    const pontos=b.querySelector('.guia-pontos');
+    pontos.innerHTML=varios?this._passos.map((_,k)=>
+      `<i class="${k===this._i?'atual':k<this._i?'feito':''}"></i>`).join(''):'';
+    const g=Guia._resolver(p.gesto);
+    if(g){this._gesto.hidden=false;this._gesto.dataset.gesto=g}
+    else{this._gesto.hidden=true;this._gesto.removeAttribute('data-gesto')}
+  },
+
+  /* ---------- onde tudo fica ------------------------------ */
+  _posicionar(){
+    if(!this._ativo||!this._el)return;
+    const p=this._passos[this._i];
+    const alvo=this._alvo(p);
+    const L=innerWidth,A=innerHeight,M=this.MARGEM;
+    const foco=this._foco,balao=this._balao;
+
+    if(!alvo){
+      foco.classList.add('sem-alvo');
+      foco.style.cssText='top:50%;left:50%;width:0;height:0';
+      this._colocarBalao(null,'centro');
+      this._gesto.hidden=true;
+      return;
+    }
+    const r=alvo.getBoundingClientRect();
+    /* Gesto não se ensina com a página acesa: a mão some no branco do
+       papel. Nesses passos o véu cobre tudo, e a mão passa por cima. */
+    if(p.veu==='cheio'){
+      foco.classList.add('sem-alvo');
+      foco.style.cssText='top:50%;left:50%;width:0;height:0';
+      const caixa={cx:r.left,cy:r.top,cl:r.width,ca:r.height};
+      this._colocarBalao(caixa,p.lado&&p.lado!=='auto'?p.lado:'cima');
+      this._porGesto(p,caixa);
+      return;
+    }
+    foco.classList.remove('sem-alvo');
+    const recuo=p.recuo!=null?p.recuo:this.RECUO;
+    /* O recorte é calculado pelas quatro bordas, e não por canto mais
+       tamanho: um botão colado no topo da tela teria o canto preso em
+       zero e a altura inteira, e o buraco acabaria deslocado para
+       baixo do botão que ele deveria mostrar. */
+    const cx=Math.max(0,r.left-recuo),cy=Math.max(0,r.top-recuo);
+    const cl=Math.min(L,r.right+recuo)-cx,ca=Math.min(A,r.bottom+recuo)-cy;
+    foco.style.top=cy+'px';foco.style.left=cx+'px';
+    foco.style.width=cl+'px';foco.style.height=ca+'px';
+    /* Alvo redondo merece recorte redondo. */
+    const raio=getComputedStyle(alvo).borderRadius;
+    foco.style.borderRadius=(parseFloat(raio)>=999||/50%/.test(raio))?'999px':Math.min(24,parseFloat(raio)+recuo||16)+'px';
+
+    /* De que lado cabe o balão? Escolhe o que tiver mais espaço,
+       com preferência pelo que o roteiro pediu. */
+    const alt=balao.offsetHeight||190,larg=balao.offsetWidth||320;
+    const espaco={baixo:A-(cy+ca)-M,cima:cy-M,direita:L-(cx+cl)-M,esquerda:cx-M};
+    let lado=p.lado&&p.lado!=='auto'?p.lado:null;
+    if(!lado||espaco[lado]<(lado==='cima'||lado==='baixo'?alt+this.FOLGA:larg+this.FOLGA)){
+      lado=espaco.baixo>=alt+this.FOLGA?'baixo'
+        :espaco.cima>=alt+this.FOLGA?'cima'
+        :espaco.direita>=larg+this.FOLGA?'direita'
+        :espaco.esquerda>=larg+this.FOLGA?'esquerda'
+        :(espaco.baixo>=espaco.cima?'baixo':'cima');
+    }
+    this._colocarBalao({cx,cy,cl,ca},lado);
+    this._porGesto(p,{cx,cy,cl,ca});
+  },
+  _colocarBalao(caixa,lado){
+    const b=this._balao,L=innerWidth,A=innerHeight,M=this.MARGEM,F=this.FOLGA;
+    const alt=b.offsetHeight||190,larg=b.offsetWidth||320;
+    b.dataset.lado=lado;
+    let x,y;
+    if(!caixa){
+      x=(L-larg)/2;y=(A-alt)/2;
+    }else if(lado==='baixo'||lado==='cima'){
+      x=caixa.cx+caixa.cl/2-larg/2;
+      y=lado==='baixo'?caixa.cy+caixa.ca+F:caixa.cy-alt-F;
+    }else{
+      y=caixa.cy+caixa.ca/2-alt/2;
+      x=lado==='direita'?caixa.cx+caixa.cl+F:caixa.cx-larg-F;
+    }
+    x=Math.max(M,Math.min(x,L-larg-M));
+    y=Math.max(M,Math.min(y,A-alt-M));
+    b.style.left=x+'px';b.style.top=y+'px';
+    /* A seta aponta para o meio do alvo, não para o meio do balão:
+       com o balão encostado numa borda, os dois não coincidem. */
+    const seta=b.querySelector('.guia-seta');
+    if(caixa&&lado!=='centro'){
+      if(lado==='baixo'||lado==='cima'){
+        const alvoX=caixa.cx+caixa.cl/2;
+        seta.style.left=Math.max(16,Math.min(alvoX-x-6.5,larg-29))+'px';
+        seta.style.top='';seta.style.bottom='';
+      }else{
+        const alvoY=caixa.cy+caixa.ca/2;
+        seta.style.top=Math.max(16,Math.min(alvoY-y-6.5,alt-29))+'px';
+        seta.style.left='';
+      }
+    }
+  },
+  /* A mão fica sobre o alvo, mostrando o movimento que se espera. */
+  _porGesto(p,caixa){
+    if(!Guia._resolver(p.gesto)||!caixa){this._gesto.hidden=true;return}
+    const g=this._gesto;
+    g.hidden=false;
+    g.style.left=caixa.cx+'px';g.style.top=caixa.cy+'px';
+    g.style.width=caixa.cl+'px';g.style.height=caixa.ca+'px';
+  },
+
+  /* ---------- fim ----------------------------------------- */
+  async encerrar(pulou){
+    if(!this._ativo)return;
+    const nome=this._nome,passo=this._passos[this._i];
+    this._ativo=false;
+    if(passo&&passo.depois)await this._vale(passo.depois);
+    document.removeEventListener('keydown',this._teclado,true);
+    removeEventListener('resize',this._repor);
+    removeEventListener('scroll',this._repor,true);
+    const el=this._el;
+    if(el){
+      el.classList.remove('aberto');
+      setTimeout(()=>{try{el.remove()}catch(e){}},300);
+    }
+    this._el=this._foco=this._balao=this._gesto=null;
+    this._passos=[];this._nome='';
+    await this.marcar(nome);
+    /* Pular um roteiro é um pedido de sossego, e não um pedido de
+       "pule só este": os demais ficam para quando a pessoa pedir. */
+    if(pulou)this._filaPulada=true;
+    if(this._aguardando){const r=this._aguardando;this._aguardando=null;r()}
+  }
+};
+
+/* ---------- fila: um roteiro depois do outro -------------- */
+Guia._prometer=function(){return new Promise(r=>{this._aguardando=r})};
+Guia.fila=async function(nomes,{atraso=700}={}){
+  this._filaPulada=false;
+  for(const n of nomes){
+    if(this._filaPulada)break;
+    const abriu=await this.talvez(n,{atraso});
+    if(abriu)await this._prometer();
+    atraso=320;                    /* o primeiro espera a tela assentar; os outros, não */
+  }
+};
+
+/* ============================================================
+   OS ROTEIROS
+   ------------------------------------------------------------
+   Cada um responde a uma pergunta que a pessoa está fazendo
+   naquele instante, e para quando ela foi respondida.
+   ============================================================ */
+Guia.ROTEIROS={
+
+  /* ---- a estante ainda vazia: só uma coisa importa ---- */
+  'estante-vazia':{passos:[
+    {alvo:'#btn-import',lado:'baixo',titulo:'guia.primeiro_t',texto:'guia.primeiro_p'}
+  ]},
+
+  /* ---- chegou o primeiro livro ---- */
+  'estante-cheia':{passos:[
+    {alvo:()=>document.querySelector('.book-card'),titulo:'guia.card_t',texto:'guia.card_p'},
+    {alvo:'#btn-organize',lado:'baixo',titulo:'guia.agrupar_t',texto:'guia.agrupar_p'},
+    {alvo:'#tab-more',lado:'cima',titulo:'guia.mais_t',texto:'guia.mais_p'}
+  ]},
+
+  /* ---- entrou um PDF: a conversão vale a recomendação ---- */
+  'pdf-converter':{passos:[
+    {alvo:()=>{
+       const c=[...document.querySelectorAll('.book-card')].find(el=>el.querySelector('.convert-btn'));
+       return c?c.querySelector('.convert-btn'):null;
+     },lado:'baixo',titulo:'guia.pdf_epub_t',texto:'guia.pdf_epub_p'}
+  ]},
+
+  /* ---- o leitor, valendo para qualquer livro de texto ---- */
+  'leitor':{passos:[
+    {alvo:'#slider-book',veu:'cheio',lado:'cima',
+     gesto:()=>App.reader?.isVerticalReading()?'rolar':'passar',
+     titulo:()=>App.reader?.isVerticalReading()?'guia.rolar_t':'guia.virar_t',
+     texto:()=>App.reader?.isVerticalReading()?'guia.rolar_p':'guia.virar_p'},
+    {alvo:'#btn-close-reader',lado:'baixo',titulo:'guia.voltar_t',texto:'guia.voltar_p'},
+    {alvo:'#btn-reader-tts',lado:'baixo',titulo:'guia.ouvir_t',texto:'guia.ouvir_p'},
+    {alvo:'#btn-reader-layout',lado:'baixo',titulo:'guia.sentido_t',texto:'guia.sentido_p'},
+    {alvo:'#btn-reader-settings',lado:'cima',titulo:'guia.personalizar_t',texto:'guia.personalizar_p'}
+  ]},
+
+  /* ---- abriu um PDF ---- */
+  'leitor-pdf':{passos:[
+    {alvo:'#btn-reader-layout',lado:'baixo',titulo:'guia.pdf_sentido_t',texto:'guia.pdf_sentido_p'},
+    {alvo:'#btn-close-reader',lado:'baixo',titulo:'guia.pdf_volte_t',texto:'guia.pdf_volte_p'}
+  ]},
+
+  /* ---- abriu um quadrinho ---- */
+  'leitor-quadrinho':{passos:[
+    {alvo:'#slider-book',veu:'cheio',lado:'cima',gesto:'pinca',titulo:'guia.hq_zoom_t',texto:'guia.hq_zoom_p'},
+    {alvo:'#btn-reader-settings',lado:'cima',titulo:'guia.hq_ajustes_t',texto:'guia.hq_ajustes_p'}
+  ]},
+
+  /* ---- abriu a aparência, dentro do leitor ---- */
+  'aparencia':{passos:[
+    {alvo:'#theme-grid',titulo:'guia.tema_t',texto:'guia.tema_p'},
+    {alvo:'#set-font-size',titulo:'guia.fonte_t',texto:'guia.fonte_p'},
+    {alvo:'#reading-mode-grid',titulo:'guia.modo_t',texto:'guia.modo_p'}
+  ]},
+
+  /* ---- abriu um audiolivro ---- */
+  'audio':{passos:[
+    {alvo:'#ap-chapter-btn',lado:'baixo',titulo:'guia.audio_cap_t',texto:'guia.audio_cap_p'},
+    {alvo:'#ap-options',lado:'baixo',titulo:'guia.audio_ajustes_t',texto:'guia.audio_ajustes_p'},
+    {alvo:'#ap-collapse',lado:'baixo',titulo:'guia.audio_min_t',texto:'guia.audio_min_p'}
+  ]}
+};
+
+/* Título, texto e gesto podem depender do estado da tela — o mesmo
+   passo diz "passe o dedo" ou "role" conforme o sentido de leitura
+   daquele livro. */
+Guia._resolver=function(v){return typeof v==='function'?v():v};
+
 const VozNatural={
   REVISAO:'aafc6e32416a594460b32413efc49d7fe4ce6d46',
   BASE:'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/',
@@ -6810,7 +7218,12 @@ class ReaderEngine{
     };
     document.getElementById('btn-reader-bookmark').onclick=()=>this.toggleBookmark();
     document.getElementById('btn-reader-annotations').onclick=()=>this.showAnnotations();
-    document.getElementById('btn-reader-settings').onclick=()=>App.openPanel('panel-settings');
+    document.getElementById('btn-reader-settings').onclick=()=>{
+      App.openPanel('panel-settings');
+      /* Aqui a pessoa acabou de perguntar "como eu mudo isso?": é o
+         instante exato para mostrar tema, letra e sentido. */
+      Guia.talvez('aparencia',{atraso:520});
+    };
     document.getElementById('btn-reader-toc').onclick=()=>this.openToc();
     document.getElementById('btn-reader-layout').onclick=()=>this.toggleReadingMode();
     document.getElementById('sel-highlight').onclick=()=>this.saveSelection('highlight');
@@ -6860,7 +7273,12 @@ class ReaderEngine{
     this.selectionFrame=requestAnimationFrame(()=>this.captureSelection());
   }
   showUI(){this.ui.classList.add('visible');clearTimeout(this.uiTimer);this.uiTimer=setTimeout(()=>this.hideUI(),5000)}
-  hideUI(){clearTimeout(this.uiTimer);this.ui.classList.remove('visible')}
+  hideUI(){
+    /* Com um guia apontando para um botão da barra, esconder a barra
+       deixaria a seta mirando o vazio. */
+    if(Guia._ativo&&this.ui.querySelector('.guia')===null&&document.querySelector('.guia'))return;
+    clearTimeout(this.uiTimer);this.ui.classList.remove('visible');
+  }
   pageWidth(){
     const mobile=window.innerWidth<800||window.innerHeight>window.innerWidth;
     return (this.state.settings.orientation==='portrait'||(this.state.settings.orientation==='auto'&&mobile))
@@ -7024,7 +7442,19 @@ class ReaderEngine{
       this.openController=null;
       Utils.hideLoader();
       this.navigating=false;
+      /* As dicas do leitor só fazem sentido com o livro na tela, e
+         depois que o carregamento saiu da frente. */
+      if(this.sliderBook&&this.currentBook)this.guiarLeitura();
     }
+  }
+  /* O roteiro comum vem primeiro; o do formato completa o que só
+     aquele formato tem. Quem já viu um, não vê de novo. */
+  guiarLeitura(){
+    const f=this.currentBook?.format;
+    const fila=['leitor'];
+    if(f==='pdf')fila.push('leitor-pdf');
+    else if(BookFormats.isComic(f))fila.push('leitor-quadrinho');
+    Guia.fila(fila,{atraso:1100});
   }
   /* Qual o sentido de escrita de um livro, olhando o próprio texto.
 
@@ -9797,6 +10227,16 @@ class LibraryManager{
     }
   }
 
+/* Dicas da estante: a primeira depois do primeiro livro, e a do PDF
+   assim que entra o primeiro PDF — antes de abrir, porque converter
+   antes de começar a ler é o que poupa trabalho. */
+guiarEstante(livro){
+  const fila=[];
+  if(!Guia.viu('estante-cheia'))fila.push('estante-cheia');
+  if(livro&&livro.format==='pdf')fila.push('pdf-converter');
+  if(fila.length)Guia.fila(fila,{atraso:900});
+}
+
 async convertPdf(book){
   if(!book || book.format!=='pdf')return;
 
@@ -10392,6 +10832,7 @@ downloadConvertedEpub(result,outputName){
         :BookFormats.isComic(result.book.format)?T('app.quadrinho_importado_e_salvo_no_disposi')
         :T('app.livro_importado_e_salvo_no_dispositivo'),'check');
       await this.render();
+      this.guiarEstante(result.book);
       return;
     }
 
@@ -12173,7 +12614,7 @@ Object.assign(Backup,{
 /* Carimbo da versão dos arquivos. Serve para conferir, em qualquer
    aparelho, se o que está rodando ali é mesmo a versão mais nova —
    aparece embaixo do título em "Sobre o aplicativo". */
-const BUILD='2026-09-23 · 43';
+const BUILD='2026-09-24 · 44';
 
 const Docs={
   el:null,cache:new Map(),lastFocus:null,
@@ -12864,6 +13305,7 @@ const FirstRun={
         try{await App.persistSettings()}catch(e){console.warn(e)}
         this.hide();
         if(quer)await DeviceScan.start({auto:true});
+        this.primeirasDicas();
         return;
       }
       /* Sem convite a fazer (estante já tem livros, ou o aparelho não
@@ -12873,6 +13315,7 @@ const FirstRun={
       try{await App.persistSettings()}catch(e){console.warn(e)}
     }
     this.hide();
+    this.primeirasDicas();
   },
   askConsent(){
     this.show();
@@ -12941,6 +13384,13 @@ const FirstRun={
       };
       renderConsent();
     });
+  },
+  /* A estante vazia tem uma pergunta só: por onde eu começo? A dica
+     aponta para o botão que responde isso, e mais nada. Com livros
+     na estante, a dica de lá é outra e aparece sozinha. */
+  primeirasDicas(){
+    const vazia=!(App.library&&App.library.allBooks.length);
+    Guia.fila(vazia?['estante-vazia']:['estante-cheia'],{atraso:1200});
   },
   inviteScan(){
     this.show();
@@ -13316,6 +13766,15 @@ const App={
         };
       }
       this.syncReadingModeUi();
+      const rever=document.getElementById('btn-rever-guias');
+      if(rever)rever.onclick=async()=>{
+        await Guia.esquecerTudo();
+        this.closePanels();
+        Utils.toast(T('guia.voltaram'),'sparkles');
+        /* Começa pela dica que faz sentido onde a pessoa está agora. */
+        const naLeitura=document.getElementById('view-reader')?.classList.contains('active');
+        Guia.fila(naLeitura?['leitor']:[(App.library&&App.library.allBooks.length)?'estante-cheia':'estante-vazia'],{atraso:700});
+      };
       VozNatural.verificar().catch(()=>{});VozNaturalUI.renderizarTodos();
       if(this.reader&&this.reader.updateComicControls)this.reader.updateComicControls();
     }
